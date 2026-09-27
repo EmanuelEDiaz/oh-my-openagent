@@ -14,6 +14,10 @@ import {
 import type { ChainAvailability, ModelChainEntry } from "./agent-chains"
 import { listAvailableModels } from "./available-models"
 import type { AvailableModels } from "./available-models"
+import { loadModelCatalog } from "./model-catalog"
+import type { ModelCatalog } from "./model-catalog"
+import { rankModels } from "./model-ranking"
+import type { RankedModel } from "./model-ranking"
 import * as defaultPrompts from "./prompts"
 
 export type ConfigModelsScope = "user" | "project"
@@ -27,6 +31,8 @@ export type ConfigModelsPrompts = {
 
 export type ConfigModelsOptions = {
   readonly check?: boolean
+  readonly rank?: string
+  readonly top?: number
   readonly agent?: string
   readonly models?: readonly string[]
   readonly allowUnavailable?: boolean
@@ -38,12 +44,14 @@ export type ConfigModelsOptions = {
   readonly output?: (line: string) => void
   readonly isInteractive?: () => boolean
   readonly listModels?: () => AvailableModels
+  readonly loadCatalog?: () => ModelCatalog
   readonly prompts?: ConfigModelsPrompts
 }
 
 type OpenCodeSection = {
   readonly agents: Readonly<Record<string, unknown>>
   readonly runtimeFallback: unknown
+  readonly disabledProviders: readonly string[]
 }
 
 type ModelsContext = {
@@ -53,6 +61,7 @@ type ModelsContext = {
   readonly section: OpenCodeSection
   readonly available: AvailableModels
   readonly availableSet: ReadonlySet<string>
+  readonly catalog: ModelCatalog
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -69,13 +78,22 @@ function resolveConfigPath(scope: ConfigModelsScope, cwd: string, env: ConfigMod
 }
 
 function readOpenCodeSection(path: string): OpenCodeSection {
-  if (!existsSync(path)) return { agents: {}, runtimeFallback: undefined }
+  if (!existsSync(path)) return { agents: {}, runtimeFallback: undefined, disabledProviders: [] }
   const document = parseJsonc<Record<string, unknown>>(readFileSync(path, "utf-8"))
   const section = isRecord(document?.["[opencode]"]) ? document["[opencode]"] : {}
   return {
     agents: isRecord(section["agents"]) ? section["agents"] : {},
     runtimeFallback: section["runtime_fallback"],
+    disabledProviders: Array.isArray(section["disabled_providers"])
+      ? section["disabled_providers"].filter((entry): entry is string => typeof entry === "string")
+      : [],
   }
+}
+
+function withoutDisabledProviders(available: AvailableModels, disabled: readonly string[]): AvailableModels {
+  if (disabled.length === 0) return available
+  const blocked = new Set(disabled)
+  return { ...available, models: available.models.filter((model) => !blocked.has(model.slice(0, model.indexOf("/")))) }
 }
 
 function isRuntimeFallbackEnabled(value: unknown): boolean {
@@ -97,6 +115,9 @@ function printStatuses(context: ModelsContext, statuses: readonly ChainAvailabil
   const { output } = context
   output(`config: ${context.configPath}`)
   output(`available models: ${context.available.models.length} from ${describeSource(context.available)}`)
+  if (context.section.disabledProviders.length > 0) {
+    output(`disabled_providers (excluded): ${context.section.disabledProviders.join(", ")}`)
+  }
   output(`runtime_fallback: ${isRuntimeFallbackEnabled(context.section.runtimeFallback) ? "enabled" : "disabled"}`)
   for (const status of statuses) {
     if (status.models.length === 0) {
@@ -149,6 +170,27 @@ function runCheck(context: ModelsContext): number {
   return statuses.some((status) => status.models.length > 0 && status.firstAvailable === undefined) ? 1 : 0
 }
 
+function rankingJson(entry: RankedModel): Record<string, unknown> {
+  return {
+    model: entry.model,
+    score: entry.score,
+    recommendedRank: entry.recommendedRank,
+    warnings: entry.warnings,
+    info: entry.info,
+  }
+}
+
+function runRank(context: ModelsContext, agent: string): number {
+  const top = context.options.top ?? 20
+  const ranked = rankModels(agent, context.available.models, context.catalog)
+  if (context.options.json) {
+    context.output(JSON.stringify({ agent, ranking: ranked.slice(0, top).map(rankingJson) }, null, 2))
+    return 0
+  }
+  context.output(defaultPrompts.formatRankingTable(agent, ranked, top))
+  return 0
+}
+
 function runSet(context: ModelsContext, agent: string, models: readonly string[]): number {
   const unknown = models.filter((model) => !context.availableSet.has(model))
   if (unknown.length > 0 && !context.options.allowUnavailable) {
@@ -176,9 +218,11 @@ async function runInteractive(context: ModelsContext, prompts: ConfigModelsPromp
   for (const agent of agents) {
     const previous = readAgentChain(context.section.agents[agent])
     const current = previous.map((entry) => (typeof entry === "string" ? entry : entry.model))
-    const selected = await prompts.promptModels({ agent, available: context.available.models, current })
+    const ranked = rankModels(agent, context.available.models, context.catalog)
+    const selected = await prompts.promptModels({ agent, ranked, current })
     if (selected === null) return 1
-    const ordered = await prompts.promptOrder({ agent, selected, preferred: current })
+    const labels = new Map(ranked.map((entry) => [entry.model, defaultPrompts.formatRankedLabel(entry)]))
+    const ordered = await prompts.promptOrder({ agent, selected, preferred: current, labels })
     if (ordered === null) return 1
     edits.push(...chainEdits(agent, buildChainEntries(ordered, previous)))
     context.output(`${agent}: ${ordered.join(" -> ")}`)
@@ -207,7 +251,7 @@ export async function runConfigModels(options: ConfigModelsOptions = {}): Promis
     return 1
   }
 
-  const available = (options.listModels ?? listAvailableModels)()
+  const available = withoutDisabledProviders((options.listModels ?? listAvailableModels)(), section.disabledProviders)
   const context: ModelsContext = {
     options,
     output,
@@ -215,6 +259,7 @@ export async function runConfigModels(options: ConfigModelsOptions = {}): Promis
     section,
     available,
     availableSet: new Set(available.models),
+    catalog: (options.loadCatalog ?? loadModelCatalog)(),
   }
 
   if (options.check) return runCheck(context)
@@ -223,6 +268,8 @@ export async function runConfigModels(options: ConfigModelsOptions = {}): Promis
     output("error: no models found. Run `opencode models --refresh` or connect a provider with `opencode auth login`.")
     return 1
   }
+
+  if (options.rank !== undefined) return runRank(context, options.rank)
 
   if (options.agent !== undefined || options.models !== undefined) {
     if (options.agent === undefined || options.models === undefined || options.models.length === 0) {

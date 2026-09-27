@@ -33,6 +33,16 @@ Rutas relativas a `packages/`; `S/` = `packages/omo-opencode/src/`.
   oh-my-opencode config models --agent explore --models opencode/deepseek-v4-flash,opencode/big-pickle --enable-runtime-fallback
   ```
   `--project` escribe en `.omo/omo.jsonc` del proyecto; `--allow-unavailable` fuerza modelos no listados.
+- **Ranking e info por modelo:** antes de elegir, cada agente muestra su rol y un top 10 puntuado (0-100).
+  La puntuación combina: razonamiento, contexto (escala log), costo (gratis = máx.), antigüedad, y un bonus
+  si el modelo está en la cadena recomendada del plugin (`*`). Penaliza x0.3 si no tiene tool calling o si
+  el agente necesita imagen y el modelo no la acepta. Pesos por agente en `S/cli/config-models/agent-profiles.ts`.
+  Cada opción muestra `ctx · modalidades · reasoning · tools · costo · fecha`; al enfocarla, la descripción,
+  fecha de conocimiento y avisos. Se puede filtrar escribiendo `img`, `pdf`, `free`, `1M`...
+  `--rank <agente> [--top N] [--json]` imprime el ranking sin interacción.
+  Los modelos de `disabled_providers` se excluyen.
+- **Datos:** metadatos de `~/.cache/opencode/models.json` (models.dev). No incluye velocidad/latencia ni
+  benchmarks: la puntuación es heurística, sirve para orientar, no como verdad absoluta.
 - **Problema:** para cambiar el modelo de un agente hay que editar `~/.omo/omo.jsonc` a mano, sin saber qué
   modelos existen *ahora*. Si el modelo primario deja de existir (p. ej. un modelo `-free` retirado), el
   agente falla. Además `runtime_fallback` viene **desactivado** por defecto, así que la cadena

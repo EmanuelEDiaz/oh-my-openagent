@@ -32,6 +32,7 @@ describe("runConfigModels", () => {
       cwd: home,
       output: (line) => lines.push(line),
       listModels: () => ({ models: AVAILABLE, source: "opencode-cli" }),
+      loadCatalog: () => new Map(),
       ...options,
     })
   }
@@ -99,6 +100,25 @@ describe("runConfigModels", () => {
       expect(readOpenCode(join(home, ".omo", "omo.jsonc"))["agents"]).toMatchObject({
         explore: { models: ["opencode/not-real"] },
       })
+    })
+  })
+
+  describe("#given disabled_providers in the config", () => {
+    test("#when --rank #then models of disabled providers are not offered", async () => {
+      // given
+      writeUserConfig(home, { disabled_providers: ["openai"], agents: {} })
+
+      // when
+      const exitCode = await run({
+        rank: "oracle",
+        json: true,
+        listModels: () => ({ models: ["openai/gpt-5.6-sol", "opencode/big-pickle"], source: "opencode-cli" }),
+      })
+
+      // then
+      expect(exitCode).toBe(0)
+      const report = JSON.parse(lines.join("\n")) as { ranking: { model: string }[] }
+      expect(report.ranking.map((entry) => entry.model)).toEqual(["opencode/big-pickle"])
     })
   })
 
