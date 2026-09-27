@@ -25,7 +25,11 @@ Rutas relativas a `packages/`; `S/` = `packages/omo-opencode/src/`.
 
 ### M-001 — Selector de modelos por agente (cadena con fallback) + gratis/local
 
-- **Estado:** hecho (CLI + arreglo del plugin). Pendiente M-001b (slash command en la TUI).
+- **Estado:** hecho (CLI + arreglo del plugin + `/omo-models` en la TUI).
+- **Forma más simple — `/omo-models` dentro de OpenCode:** eliges agente → buscador con TODOS los modelos que
+  OpenCode ve ahora, agrupados: "OpenCode Zen · Free", "OpenCode Zen" y luego cada proveedor ("Free" o precio a la
+  derecha) → primario → fallbacks ("✓ Done, save" arriba) → se guarda en `~/.omo/omo.jsonc`. Reinicia OpenCode
+  para aplicarlo. Código: `S/features/omo-models/`.
 - **Uso rápido:**
   ```bash
   oh-my-opencode config models                    # menú interactivo
