@@ -7,6 +7,7 @@ import { doctor, resolveDoctorTarget } from "./doctor"
 import { createMcpOAuthCommand } from "./mcp-oauth"
 import { configureRuntimeCommands } from "./runtime-commands"
 import { runConfigMigrate } from "./config-migrate"
+import { runConfigModels } from "./config-models"
 import {
   availableInstallPlatforms,
   isNativeDevPlatformEnabled,
@@ -47,6 +48,16 @@ type RootCommandOptions = {
 
 type ConfigMigrateCommandOptions = {
   readonly dryRun?: boolean
+  readonly json?: boolean
+}
+
+type ConfigModelsCommandOptions = {
+  readonly check?: boolean
+  readonly agent?: string
+  readonly models?: string
+  readonly allowUnavailable?: boolean
+  readonly enableRuntimeFallback?: boolean
+  readonly project?: boolean
   readonly json?: boolean
 }
 
@@ -266,15 +277,48 @@ Examples:
     process.exit(exitCode)
   })
 
-program
+const configCommand = program
   .command("config")
   .description("Manage unified OMO configuration")
+
+configCommand
   .command("migrate")
   .description("Migrate legacy OMO configuration into ~/.omo/omo.jsonc")
   .option("--dry-run", "Print the transform, backup move plan, and conflicts without new migration writes")
   .option("--json", "Print machine-readable migration output")
   .action((options: ConfigMigrateCommandOptions) => {
     const exitCode = runConfigMigrate({ dryRun: options.dryRun ?? false, json: options.json ?? false })
+    process.exit(exitCode)
+  })
+
+configCommand
+  .command("models")
+  .description("Pick each agent's ordered model chain (primary + fallbacks) from the models available right now")
+  .option("--check", "Report configured models that are not available right now (exit 1 if an agent has none)")
+  .option("--agent <name>", "Agent to configure non-interactively (use with --models)")
+  .option("--models <list>", "Comma-separated ordered chain, first = primary, e.g. opencode/a,opencode/b")
+  .option("--allow-unavailable", "Write models even if they are not in the current available list")
+  .option("--enable-runtime-fallback", "Also set runtime_fallback: true so fallbacks apply mid-session")
+  .option("--project", "Write the project .omo/omo.jsonc instead of ~/.omo/omo.jsonc")
+  .option("--json", "Machine-readable output for --check")
+  .addHelpText("after", `
+Examples:
+  $ oh-my-opencode config models                  # interactive checkbox picker
+  $ oh-my-opencode config models --check          # which configured models are missing now
+  $ oh-my-opencode config models --agent explore --models opencode/big-pickle,opencode/deepseek-v4-flash
+`)
+  .action(async (options: ConfigModelsCommandOptions) => {
+    const exitCode = await runConfigModels({
+      check: options.check ?? false,
+      ...(options.agent === undefined ? {} : { agent: options.agent }),
+      ...(options.models === undefined
+        ? {}
+        : { models: options.models.split(",").map((model) => model.trim()).filter((model) => model.length > 0) }),
+      allowUnavailable: options.allowUnavailable ?? false,
+      ...(options.enableRuntimeFallback ? { enableRuntimeFallback: true } : {}),
+      scope: options.project ? "project" : "user",
+      json: options.json ?? false,
+    })
     process.exit(exitCode)
   })
 
