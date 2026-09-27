@@ -7,9 +7,11 @@ Una sola estructura que se quede con **lo mejor** de oh-my-openagent y de tu bib
 1. Un orquestador descompone cada tarea en **tareas atómicas** y las envía al **especialista** adecuado.
 2. Cada especialista está optimizado para su tipo de tarea y usa **obligatoriamente** las herramientas que esa
    tarea exige (p. ej. investigar en la web antes de usar una librería externa).
-3. Todo lo que se afirma es **citable y verificable**: archivo:línea, commit, URL o puntero de chat
+3. **Nada importante se pierde al compactar el contexto:** peticiones literales, restricciones, decisiones y
+   trabajo pendiente sobreviven a la compactación, y lo resumido conserva un puntero a su origen.
+4. Todo lo que se afirma es **citable y verificable**: archivo:línea, commit, URL o puntero de chat
    (`ses_… → msg_… → prt_…`), con un índice eficiente que controla su crecimiento y se poda.
-4. Se avanza **paso a paso**: cada paso tiene análisis, plan detallado aprobado, implementación, QA real y merge.
+5. Se avanza **paso a paso**: cada paso tiene análisis, plan detallado aprobado, implementación, QA real y merge.
 
 ## Principios (con fuente)
 - **Orquestador–trabajadores:** el orquestador divide y delega; cada subagente tiene su propio contexto y
@@ -42,6 +44,12 @@ Una sola estructura que se quede con **lo mejor** de oh-my-openagent y de tu bib
 - **Faltan especialistas:** verificador/QA de tests, revisor de seguridad, investigador solo de
   documentación oficial (el librarian mezcla docs y código de repos ajenos). Tus 4 revisores cubren parte.
 - **Sin memoria/índice entre sesiones en OpenCode** y búsqueda de sesiones por subcadena sin ranking.
+- **Compactación con pérdida posible:** el resumen lo escribe el propio modelo con una plantilla de 8
+  secciones (`S/hooks/compaction-context-injector/compaction-context-prompt.ts`), disparada al 78 % del
+  contexto (`S/hooks/preemptive-compaction-trigger.ts:15`). La plantilla pide citar al usuario "solo cuando
+  haga falta" (las peticiones pueden quedar parafraseadas), no guarda punteros a los mensajes originales y
+  **nadie verifica** que el resumen conserve lo crítico. Solo los todos y el estado del agente se preservan de
+  forma mecánica (`S/plugin/session-compacting.ts`, `S/hooks/compaction-todo-preserver/`).
 - **Bug de pérdida de datos** en worktrees del modo team (`rm -rf` sobre rutas no creadas por omo).
 - Varios `AGENTS.md` internos están desactualizados (p. ej. dicen que Atlas no puede usar `task`).
 
@@ -65,6 +73,7 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
 | 1.3 | **Citas de chat:** indexado de sesiones leyendo `opencode.db` en solo lectura (tu método validado), puntero `ses_… → msg_… → prt_…`, comando de re-auditoría, poda de sesiones borradas y "una sesión vive si algo la referencia". | pendiente |
 | 1.4 | Decisiones citadas en tu formato (`docs/decisions/` + Decisions log del plan activo). | plan listo (Pieza 2) |
 | 1.5 | Verificador de citas + "hecho exige evidencia" (modo `block`). | plan listo (Pieza 3) |
+| 1.6 | **Compactación sin pérdida.** (a) *Medir primero:* forzar compactaciones en sesiones de prueba y comprobar qué se pierde (peticiones literales, restricciones, decisiones, archivos:línea, errores vistos, preguntas abiertas). (b) *Instantánea antes de compactar:* extraer por código ese estado crítico y guardarlo en el índice con su puntero `ses_… → msg_… → prt_…` (las peticiones y restricciones del usuario, **siempre literales**). (c) *Resumen con anclas:* cada punto del resumen lleva el puntero a su origen. (d) *Verificación después:* comparar el resumen con la instantánea y reinyectar lo que falte, sin duplicar lo que ya está. (e) *Rehidratación mínima:* tras compactar, una tarjeta de estado corta + "busca en el índice para el detalle", en vez de reinyectar documentos enteros. | pendiente (depende de 1.2–1.3) |
 
 ## Fase 2 — Orquestador + especialistas con herramientas obligatorias
 | Paso | Qué | Estado |
@@ -79,7 +88,7 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
 ## Fase 3 — Medir que mejora
 | Paso | Qué | Estado |
 |---|---|---|
-| 3.1 | Banco de pruebas pequeño con tareas reales: mide citas inventadas, uso de herramientas obligatorias, costo y tiempo, antes/después de cada fase. | pendiente |
+| 3.1 | Banco de pruebas pequeño con tareas reales: mide citas inventadas, uso de herramientas obligatorias, **datos perdidos tras compactar**, costo y tiempo, antes/después de cada fase. | pendiente |
 
 ## Aparcado (decidido no hacer por ahora)
 - Reglas de lenguaje/framework cargadas bajo demanda (ahorraría gran parte de ~24.5k tokens por sesión). — 27-09-2026
@@ -88,3 +97,4 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
 - 27-09-2026 — Código dentro del plugin; decisiones versionadas en `docs/decisions/`; "hecho" exige evidencia
   (`block`); indexar sesiones: sí; todo activado por defecto.
 - 27-09-2026 — No elegir entre tus agentes y los del plugin: quedarse con el mejor de cada papel (paso 2.1).
+- 27-09-2026 — Añadido 1.6: la compactación no debe perder peticiones, restricciones, decisiones ni pendientes.
