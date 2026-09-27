@@ -24,8 +24,9 @@ async function runGit(args: string[], cwd?: string): Promise<{ code: number; std
 
 let gitCommandRunner = runGit
 
-export function setGitCommandRunnerForTests(runner: typeof runGit): void {
-  gitCommandRunner = runner
+/** Pass no runner to restore the real git runner (tests must restore it: it is module-global). */
+export function setGitCommandRunnerForTests(runner?: typeof runGit): void {
+  gitCommandRunner = runner ?? runGit
 }
 
 export async function isGitAvailable(): Promise<boolean> {

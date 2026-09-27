@@ -3,7 +3,8 @@
 // allow: SIZE_OK - team runtime creation tests share filesystem and tmux mock state; this release adds small lock/spawn coverage and future edits should split by runtime phase.
 
 import { afterAll, afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
-import { access, mkdtemp, readdir, rm } from "node:fs/promises"
+import { execFileSync } from "node:child_process"
+import { access, mkdir, mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
@@ -86,6 +87,14 @@ async function pathExists(targetPath: string): Promise<boolean> {
   } catch {
     return false
   }
+}
+
+async function initGitRepo(directory: string): Promise<void> {
+  const git = (args: string[]) => execFileSync("git", ["-c", "user.email=qa@example.com", "-c", "user.name=qa", ...args], { cwd: directory, stdio: "pipe" })
+  git(["init", "-q"])
+  await writeFile(path.join(directory, "README.md"), "fixture\n")
+  git(["add", "README.md"])
+  git(["commit", "-q", "-m", "init"])
 }
 
 async function loadSingleRuntimeState(baseDir: string) {
@@ -276,6 +285,7 @@ describe("createTeamRun", () => {
     // given
     const baseDir = await mkdtemp(path.join(tmpdir(), "team-runtime-worktree-"))
     temporaryDirectories.push(baseDir)
+    await initGitRepo(baseDir)
     let launchCount = 0
     const { manager } = createManager(baseDir, async () => {
       launchCount += 1
@@ -302,6 +312,7 @@ describe("createTeamRun", () => {
     // given
     const baseDir = await mkdtemp(path.join(tmpdir(), "team-runtime-worktree-cwd-"))
     temporaryDirectories.push(baseDir)
+    await initGitRepo(baseDir)
     let launchCount = 0
     const { manager, launchMock } = createManager(baseDir, async () => ({ id: `task-${++launchCount}`, sessionId: `session-${launchCount}`, status: "running" } as BackgroundTask))
     const spec = createSpec(2, true)
@@ -318,6 +329,39 @@ describe("createTeamRun", () => {
       expect(launchInput?.cwd).toBe(expectedWorktree)
       expect(launchInput?.prompt).toContain(`Worktree: ${expectedWorktree}`)
     }
+  })
+
+  test("#given a member worktreePath that already exists #then creation fails and the directory is untouched", async () => {
+    // given
+    const baseDir = await mkdtemp(path.join(tmpdir(), "team-runtime-worktree-existing-"))
+    temporaryDirectories.push(baseDir)
+    await initGitRepo(baseDir)
+    const existing = path.resolve(baseDir, "./worktrees/member-1")
+    await mkdir(existing, { recursive: true })
+    await writeFile(path.join(existing, "important.txt"), "user data")
+    const { manager, launchMock } = createManager(baseDir, async () => ({ id: "task-1", sessionId: "session-1", status: "running" } as BackgroundTask))
+
+    // when
+    const attempt = createTeamRun(createSpec(1, true), "lead-session", createContext(baseDir, manager), createConfig(baseDir), manager)
+
+    // then
+    await expect(attempt).rejects.toThrow("already exists")
+    expect(await readFile(path.join(existing, "important.txt"), "utf8")).toBe("user data")
+    expect(launchMock).not.toHaveBeenCalled()
+  })
+
+  test("#given a project that is not a git repository #then worktree members fail with a clear error and no folder is created", async () => {
+    // given
+    const baseDir = await mkdtemp(path.join(tmpdir(), "team-runtime-worktree-nogit-"))
+    temporaryDirectories.push(baseDir)
+    const { manager } = createManager(baseDir, async () => ({ id: "task-1", sessionId: "session-1", status: "running" } as BackgroundTask))
+
+    // when
+    const attempt = createTeamRun(createSpec(1, true), "lead-session", createContext(baseDir, manager), createConfig(baseDir), manager)
+
+    // then
+    await expect(attempt).rejects.toThrow("git repository")
+    expect(await pathExists(path.resolve(baseDir, "./worktrees/member-1"))).toBe(false)
   })
 
   test("omits cwd when the member has no worktree", async () => {

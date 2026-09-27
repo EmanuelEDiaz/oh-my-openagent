@@ -1,11 +1,10 @@
-import { rm } from "node:fs/promises"
-
 import type { TeamModeConfig } from "../../../config/schema/team-mode"
 import type { BackgroundManager } from "../../background-agent/manager"
 import type { TmuxSessionManager } from "../../tmux-subagent/manager"
 import { removeTeamLayout } from "../team-layout-tmux/layout"
 import { unregisterTeamSessionsByTeam } from "../team-session-registry"
 import { loadRuntimeState, transitionRuntimeState } from "../team-state-store/store"
+import { removeWorktree } from "../team-worktree/cleanup"
 import type { TeamRunCreateError } from "./create"
 import { unregisterTeamRunForSessionCleanup } from "./session-team-run-registry"
 
@@ -65,7 +64,7 @@ export async function cleanupTeamRunResources(args: {
 
     if (resource.worktreePath) {
       try {
-        await rm(resource.worktreePath, { recursive: true, force: true })
+        await removeWorktree(resource.worktreePath)
         cleanupReport.removedWorktrees.push(resource.worktreePath)
       } catch (cleanupError) {
         cleanupReport.errors.push(`worktree ${resource.worktreePath}: ${normalizeError(cleanupError).message}`)

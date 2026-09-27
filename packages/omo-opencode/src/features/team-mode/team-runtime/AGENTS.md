@@ -13,6 +13,7 @@ Lifecycle engine behind `team_create` / `team_status` / `team_shutdown_request`(
 | Task | Location |
 |------|----------|
 | Create a team run | `create.ts` (`createTeamRun`) — spawns members via BackgroundManager, inits mailbox/tasklist/worktrees, activates optional tmux layout |
+| Member worktrees | `create.ts` creates a real linked git worktree (`team-core` `createWorktree`) and refuses paths that already exist; cleanup (`cleanup-team-run-resources.ts`, `shutdown-helpers.ts` `removeWorktrees`) only removes what git confirms is a clean linked worktree and reports the rest as preserved. Never `rm` a member path directly. |
 | Status | `status.ts` |
 | Shutdown handshake | `shutdown.ts` + `shutdown-helpers.ts`, `shutdown-test-fixtures.ts` |
 | Delete + background cancel | `delete-team.ts`, `delete-team-bg-cancel.ts` |
