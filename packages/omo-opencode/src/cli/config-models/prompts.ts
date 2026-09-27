@@ -5,10 +5,15 @@ import { getAgentProfile } from "./agent-profiles"
 import { formatChain, formatFocusHint, formatOptionLabel, formatRankingTable } from "./format"
 import { suggestChain } from "./model-ranking"
 import type { RankedModel } from "./model-ranking"
+import { describeSource } from "./model-sources"
+import type { ModelSource } from "./model-sources"
+import type { OllamaModel } from "./ollama"
+import { PRESET_DESCRIPTIONS } from "./presets"
+import type { PresetName } from "./presets"
 
 export type PickMode = "recommended" | "guided"
 
-export type MenuAction = "fix-broken" | "one" | "all" | "save" | "exit"
+export type MenuAction = "fix-broken" | "preset" | "one" | "all" | "source" | "connect-ollama" | "save" | "exit"
 
 const SEARCH = "__search__"
 const DONE = "__done__"
@@ -33,6 +38,8 @@ function statusWord(status: ChainAvailability): string {
 export async function promptMainMenu(params: {
   readonly statuses: readonly ChainAvailability[]
   readonly pending: ReadonlyMap<string, readonly string[]>
+  readonly source: ModelSource
+  readonly unconnectedOllama: number
 }): Promise<MenuAction | null> {
   const needsFix = params.statuses.filter((status) => status.missing.length > 0 && !params.pending.has(status.agent))
   const pendingHint = params.pending.size === 0 ? "nothing changed yet" : [...params.pending.keys()].join(", ")
@@ -40,8 +47,13 @@ export async function promptMainMenu(params: {
     ...(needsFix.length > 0
       ? [{ value: "fix-broken" as const, label: `Fix ${needsFix.length} agent(s) with missing models`, hint: "suggested chains, you review before saving" }]
       : []),
+    { value: "preset", label: "Apply a preset to all agents...", hint: "all free / all local / mixed" },
     { value: "one", label: "Configure one agent..." },
     { value: "all", label: "Configure all agents, one after another" },
+    { value: "source", label: `Models to choose from: ${params.source}`, hint: describeSource(params.source) },
+    ...(params.unconnectedOllama > 0
+      ? [{ value: "connect-ollama" as const, label: `Connect ${params.unconnectedOllama} Ollama model(s) to OpenCode`, hint: "adds them to opencode.json (backup first)" }]
+      : []),
     { value: "save", label: `Save and exit (${params.pending.size} change(s))`, hint: pendingHint },
     { value: "exit", label: "Exit without saving" },
   ]
@@ -166,6 +178,42 @@ export async function promptChain(params: {
   showAgentHeader(params.agent, params.ranked, params.current)
   if (params.mode === "recommended") return recommendedChain(params.ranked)
   return guidedChain(params.ranked)
+}
+
+export async function promptSource(current: ModelSource): Promise<ModelSource | null> {
+  const value = await p.select<ModelSource>({
+    message: "Which models do you want to choose from?",
+    options: [
+      { value: "free", label: "Free", hint: "OpenCode Zen free models, :free models and local ones" },
+      { value: "local", label: "Local (Ollama)", hint: "only models running on this machine" },
+      { value: "all", label: "All", hint: "every available model, paid ones included" },
+    ],
+    initialValue: current,
+  })
+  return unlessCancelled(value)
+}
+
+export async function promptPreset(): Promise<PresetName | null> {
+  const value = await p.select<PresetName>({
+    message: "Which preset?",
+    options: [
+      { value: "free", label: "All free", hint: PRESET_DESCRIPTIONS.free },
+      { value: "local", label: "All local", hint: PRESET_DESCRIPTIONS.local },
+      { value: "mixed", label: "Mixed", hint: PRESET_DESCRIPTIONS.mixed },
+    ],
+    initialValue: "free",
+  })
+  return unlessCancelled(value)
+}
+
+export async function promptConnectOllama(models: readonly OllamaModel[], path: string): Promise<boolean | null> {
+  const lines = models.map((model) => {
+    const size = model.parameterBillions === undefined ? "" : `  ${Number(model.parameterBillions.toFixed(1))}B`
+    const caps = model.capabilities.length === 0 ? "" : `  (${model.capabilities.join(", ")})`
+    return `${model.name}${size}${caps}`
+  })
+  p.note(`${lines.join("\n")}\n\nThey will be added under provider.ollama in\n${path}`, "Ollama models to connect")
+  return unlessCancelled(await p.confirm({ message: "Add them so OpenCode can use them?", initialValue: true }))
 }
 
 export function showSuggestedFixes(summary: string): void {

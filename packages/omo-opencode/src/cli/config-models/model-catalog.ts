@@ -18,6 +18,8 @@ export type ModelInfo = {
   readonly releaseDate: string | undefined
   readonly knowledge: string | undefined
   readonly openWeights: boolean
+  /** Only known for local models (Ollama); used to warn about models too small for agent work. */
+  readonly parameterBillions?: number
 }
 
 export type ModelCatalog = ReadonlyMap<string, ModelInfo>

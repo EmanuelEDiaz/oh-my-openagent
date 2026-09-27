@@ -23,53 +23,39 @@ Estados: `idea` → `investigando` → `en progreso` → `hecho` / `descartado`.
 
 Rutas relativas a `packages/`; `S/` = `packages/omo-opencode/src/`.
 
-### M-001 — Selector interactivo de modelos por agente (cadena con fallback)
+### M-001 — Selector de modelos por agente (cadena con fallback) + gratis/local
 
-- **Estado:** hecho (CLI). Pendiente M-001b (TUI).
-- **Uso:**
+- **Estado:** hecho (CLI + arreglo del plugin). Pendiente M-001b (slash command en la TUI).
+- **Uso rápido:**
   ```bash
-  oh-my-opencode config models            # interactivo: agentes -> buscar/marcar con Tab -> ordenar
-  oh-my-opencode config models --check    # qué modelos configurados ya no existen (exit 1 si un agente no tiene ninguno)
-  oh-my-opencode config models --agent explore --models opencode/deepseek-v4-flash,opencode/big-pickle --enable-runtime-fallback
+  oh-my-opencode config models                    # menú interactivo
+  oh-my-opencode config models --check            # qué modelos configurados ya no existen + estado de Ollama
+  oh-my-opencode config models --preset free      # todo con modelos gratis (Zen free / :free)
+  oh-my-opencode config models --preset mixed     # explore/librarian en local, resto gratis en la nube
+  oh-my-opencode config models --connect-ollama   # declara tus modelos de Ollama en opencode.json (con backup)
+  oh-my-opencode config models --rank explore --source free --top 10
+  oh-my-opencode config models --agent explore --models opencode/a,opencode/b --enable-runtime-fallback
   ```
-  `--project` escribe en `.omo/omo.jsonc` del proyecto; `--allow-unavailable` fuerza modelos no listados.
-- **Modos del selector interactivo** (solo agentes de oh-my-openagent; `build`/`plan` son de OpenCode):
-  1. **Recommended:** sugiere una cadena por agente (top sin avisos; fallbacks de otros proveedores) → aceptar / editar / saltar.
-  2. **Guided:** eliges primario y luego cada fallback de una lista corta (top 8) o con "Search all models...".
-  3. **Search all:** buscador con checkbox sobre todos los modelos + paso de ordenado.
-  Antes de elegir, cada agente muestra su función, su cadena actual y una tabla alineada
-  (Score · Modelo · Contexto · Entrada · Precio). Los detalles de cada modelo aparecen solo al enfocarlo.
-  Al final se muestra un resumen y se pide confirmación antes de guardar.
-- **Ranking (0-100):** razonamiento, contexto (log), costo (gratis = máx.), antigüedad y bonus si está en la cadena
-  recomendada del plugin (`*`). Penaliza x0.3 sin tool calling, sin imagen para `multimodal-looker`, o si es un modelo
-  especializado (safety/voz/embeddings). Pesos por agente en `S/cli/config-models/agent-profiles.ts`.
-  `--rank <agente> [--top N] [--json]` lo imprime sin interacción. Se excluyen `disabled_providers`.
-- **Datos:** metadatos de `~/.cache/opencode/models.json` (models.dev). No incluye velocidad/latencia ni
-  benchmarks: la puntuación es heurística, sirve para orientar, no como verdad absoluta.
-- **Problema:** para cambiar el modelo de un agente hay que editar `~/.omo/omo.jsonc` a mano, sin saber qué
-  modelos existen *ahora*. Si el modelo primario deja de existir (p. ej. un modelo `-free` retirado), el
-  agente falla. Además `runtime_fallback` viene **desactivado** por defecto, así que la cadena
-  `fallback_models` solo se usa al resolver el modelo al arrancar, no cuando falla en mitad de la sesión.
-- **Lo que ya existe (no duplicar):**
-  - Config ya soporta cadena ordenada `agents.<name>.models: [primario, ...fallbacks]`
-    (`S/config/schema/agent-overrides.ts:8-11`); `S/config/validate.ts:98` la materializa y tiene
-    prioridad sobre `model` + `fallback_models`.
-  - Resolución al arrancar salta modelos no disponibles: `model-core/src/model-resolution-pipeline.ts:99`.
-  - Fallback reactivo (429/5xx/`model_not_found`): `S/hooks/runtime-fallback/`, **off por defecto**.
-  - Escritor de config seguro (backup + atómico): `omo-config-core/src/writer/writer.ts:122`.
-  - `@clack/prompts` 1.8.1 (tiene `autocompleteMultiselect`, aún no usado en el repo).
-- **Propuesta:** comando `oh-my-opencode config models`:
-  1. Lista los modelos disponibles ahora (`opencode models`; fallback a caches).
-  2. Muestra la cadena actual de cada agente marcando los modelos que **ya no existen**.
-  3. Checkbox con búsqueda para elegir modelos, luego paso de ordenado (primario → fallbacks).
-  4. Escribe `agents.<name>.models` (limpia `model`/`fallback_models`) y ofrece activar `runtime_fallback`.
-  5. Modos no interactivos: `--check` (solo diagnóstico) y `--agent X --models a,b,c` (scriptable).
-- **Archivos afectados:** `S/cli/config-models/*` (nuevo), `S/cli/cli-program.ts`.
-- **Cómo verificar:** `bun test packages/omo-opencode/src/cli/config-models` + ejecución real en HOME aislado.
-- **Siguiente paso (M-001b):** slash command `/omo-models` dentro de la TUI de OpenCode
-  (patrón `S/features/btw-side/tui-picker.ts:135`) y que el hook `model-fallback`
-  (`S/hooks/model-fallback/fallback-state-controller.ts:73-75`) lea la cadena del usuario antes que la
-  hardcodeada.
+  `OMO_OLLAMA_URL` (o `OLLAMA_HOST`) cambia la URL de Ollama; `OMO_OLLAMA_URL=off` desactiva la detección.
+- **Menú interactivo** (cursor `●/○` visible; solo los 11 agentes de oh-my-openagent):
+  arreglar agentes rotos · aplicar preset · configurar un agente (cadena sugerida o elegir tú: primario →
+  fallbacks, con "Search all models...") · configurar todos · filtrar origen (gratis / local / todos) ·
+  conectar modelos de Ollama · guardar (resumen + confirmación) · salir.
+- **Ranking (0-100):** razonamiento, contexto, costo, antigüedad, bonus si es recomendado por omo (`*`).
+  Penaliza sin tool calling, sin imagen para `multimodal-looker`, modelos especializados (safety/voz/embeddings).
+  Avisa de modelos locales < 7B ("often fails at tool use"). Pesos en `S/cli/config-models/agent-profiles.ts`.
+- **Presets:** `free` reparte los primarios entre modelos de puntuación parecida (los tiers gratis limitan por
+  modelo); `local` solo Ollama; `mixed` local primero en explore/librarian y un modelo local como último
+  fallback en el resto.
+- **Ollama:** lee `/api/tags` y `/api/show` (contexto real, tamaño, capacidades tools/vision/thinking).
+  Si están instalados pero no en `opencode.json`, ofrece añadirlos (`provider.ollama`, `@ai-sdk/openai-compatible`).
+- **Arreglos en el plugin (probados en OpenCode real):** antes, un primario que ya no existe se usaba igual y el
+  agente fallaba. Ahora: (1) la resolución salta el primario si su proveedor no lo lista y hay fallbacks
+  (proveedores desconocidos como ollama se respetan), (2) los agentes integrados reciben `fallback_models`,
+  (3) los overrides ya no reponen el modelo retirado, (4) `config models` siembra el caché de proveedores del
+  plugin (antes solo se creaba tras abrir la TUI, nunca en `opencode run`).
+- **Límites:** los metadatos vienen de models.dev (sin velocidad ni benchmarks): el ranking orienta, no es
+  verdad absoluta. La detección de Ollama se probó con respuestas simuladas, no contra tu Ollama real.
 
 ### M-002 — Memoria indexada para OpenCode (hoy no existe)
 

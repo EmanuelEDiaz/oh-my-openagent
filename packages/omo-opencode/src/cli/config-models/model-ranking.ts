@@ -2,6 +2,7 @@ import { AGENT_MODEL_REQUIREMENTS } from "../../shared/model-requirements"
 import { getAgentProfile } from "./agent-profiles"
 import type { AgentProfile } from "./agent-profiles"
 import { formatTokens, isFree } from "./model-catalog"
+import { SMALL_LOCAL_MODEL_BILLIONS } from "./ollama"
 import type { ModelCatalog, ModelInfo } from "./model-catalog"
 
 export type RankedModel = {
@@ -19,6 +20,7 @@ const MAX_CONTEXT = 1_000_000
 const MAX_PRICE_PER_MILLION = 100
 const RECENCY_WINDOW_MONTHS = 24
 const SUGGESTION_POOL = 10
+const NO_METADATA_WARNING = "no metadata in models.dev cache"
 const SPECIALIZED_MODEL_PATTERN = /guard|safety|moderation|embed|rerank|tts|whisper|orpheus|transcribe|image-gen/i
 
 function clamp(value: number): number {
@@ -62,11 +64,14 @@ export function recommendedRankFor(agent: string, model: string): number | undef
 }
 
 function warningsFor(profile: AgentProfile, info: ModelInfo | undefined): string[] {
-  if (info === undefined) return ["no metadata in models.dev cache"]
+  if (info === undefined) return [NO_METADATA_WARNING]
   const warnings: string[] = []
   if (SPECIALIZED_MODEL_PATTERN.test(info.id)) warnings.push("not a general chat model (safety/speech/embedding)")
   if (!info.toolCall) warnings.push("no tool calling: agents cannot use tools")
   if (profile.needsImageInput && !info.inputModalities.includes("image")) warnings.push("no image input")
+  if (info.parameterBillions !== undefined && info.parameterBillions < SMALL_LOCAL_MODEL_BILLIONS) {
+    warnings.push(`small local model (${Number(info.parameterBillions.toFixed(1))}B): often fails at tool use`)
+  }
   if (info.contextTokens !== undefined && info.contextTokens < MIN_CONTEXT) {
     warnings.push(`small context (${formatTokens(info.contextTokens)})`)
   }
@@ -114,7 +119,7 @@ function providerOf(model: string): string {
  * yet, so one provider outage or quota limit does not take down the whole chain.
  */
 export function suggestChain(ranked: readonly RankedModel[], size = 3): string[] {
-  const candidates = ranked.filter((entry) => entry.warnings.length === 0)
+  const candidates = ranked.filter((entry) => entry.warnings.every((warning) => warning === NO_METADATA_WARNING))
   const pool = (candidates.length > 0 ? candidates : ranked).slice(0, SUGGESTION_POOL)
   const chain: RankedModel[] = []
   while (chain.length < size && chain.length < pool.length) {

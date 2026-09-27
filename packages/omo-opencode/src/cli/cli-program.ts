@@ -55,6 +55,9 @@ type ConfigModelsCommandOptions = {
   readonly check?: boolean
   readonly rank?: string
   readonly top?: string
+  readonly source?: "free" | "local" | "all"
+  readonly preset?: "free" | "local" | "mixed"
+  readonly connectOllama?: boolean
   readonly agent?: string
   readonly models?: string
   readonly allowUnavailable?: boolean
@@ -299,6 +302,9 @@ configCommand
   .option("--check", "Report configured models that are not available right now (exit 1 if an agent has none)")
   .option("--rank <agent>", "Print available models ranked by fit for an agent (context, modalities, reasoning, cost, recency)")
   .option("--top <n>", "How many models --rank prints (default 20)")
+  .addOption(new Option("--source <source>", "Models to rank/choose from").choices(["free", "local", "all"]))
+  .addOption(new Option("--preset <preset>", "Set every agent's chain at once: free (OpenCode Zen free), local (Ollama) or mixed").choices(["free", "local", "mixed"]))
+  .option("--connect-ollama", "Add installed Ollama models to opencode.json so OpenCode can use them (backup first)")
   .option("--agent <name>", "Agent to configure non-interactively (use with --models)")
   .option("--models <list>", "Comma-separated ordered chain, first = primary, e.g. opencode/a,opencode/b")
   .option("--allow-unavailable", "Write models even if they are not in the current available list")
@@ -309,13 +315,18 @@ configCommand
 Examples:
   $ oh-my-opencode config models                  # interactive checkbox picker
   $ oh-my-opencode config models --check          # which configured models are missing now
-  $ oh-my-opencode config models --rank multimodal-looker --top 10
+  $ oh-my-opencode config models --rank multimodal-looker --top 10 --source free
+  $ oh-my-opencode config models --connect-ollama     # make local Ollama models usable in OpenCode
+  $ oh-my-opencode config models --preset mixed       # local for explore/librarian, free cloud elsewhere
   $ oh-my-opencode config models --agent explore --models opencode/big-pickle,opencode/deepseek-v4-flash
 `)
   .action(async (options: ConfigModelsCommandOptions) => {
     const exitCode = await runConfigModels({
       check: options.check ?? false,
       ...(options.rank === undefined ? {} : { rank: options.rank }),
+      ...(options.source === undefined ? {} : { source: options.source }),
+      ...(options.preset === undefined ? {} : { preset: options.preset }),
+      connectOllama: options.connectOllama ?? false,
       ...(options.top === undefined ? {} : { top: Number.parseInt(options.top, 10) || 20 }),
       ...(options.agent === undefined ? {} : { agent: options.agent }),
       ...(options.models === undefined
