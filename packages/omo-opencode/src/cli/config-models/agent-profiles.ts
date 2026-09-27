@@ -1,4 +1,7 @@
 export type AgentProfile = {
+  /** A few words, shown next to the agent name in lists. */
+  readonly summary: string
+  /** What the agent does and what matters when picking its model. */
   readonly role: string
   readonly needsImageInput: boolean
   readonly weights: {
@@ -9,58 +12,86 @@ export type AgentProfile = {
   }
 }
 
-const ORCHESTRATOR: AgentProfile = {
-  role: "Main orchestrator: plans, delegates and edits code across long sessions. Favor strong reasoning and big context.",
-  needsImageInput: false,
-  weights: { reasoning: 30, context: 25, cheap: 5, recent: 15 },
+const ORCHESTRATOR_WEIGHTS = { reasoning: 30, context: 25, cheap: 5, recent: 15 }
+const PLANNER_WEIGHTS = { reasoning: 35, context: 20, cheap: 5, recent: 15 }
+const SEARCHER_WEIGHTS = { reasoning: 5, context: 25, cheap: 35, recent: 10 }
+
+const PROFILES: Readonly<Record<string, AgentProfile>> = {
+  sisyphus: {
+    summary: "main orchestrator",
+    role: "Plans, delegates and edits code in long sessions. Best: strong reasoning + big context.",
+    needsImageInput: false,
+    weights: ORCHESTRATOR_WEIGHTS,
+  },
+  hephaestus: {
+    summary: "autonomous deep worker",
+    role: "Runs long unattended coding tasks. Best: top reasoning + big context.",
+    needsImageInput: false,
+    weights: ORCHESTRATOR_WEIGHTS,
+  },
+  atlas: {
+    summary: "plan executor",
+    role: "Executes a plan todo by todo and verifies each result. Best: strong reasoning + tools.",
+    needsImageInput: false,
+    weights: ORCHESTRATOR_WEIGHTS,
+  },
+  prometheus: {
+    summary: "planner",
+    role: "Interviews you and writes the work plan. Best: deep reasoning; cost matters less.",
+    needsImageInput: false,
+    weights: PLANNER_WEIGHTS,
+  },
+  metis: {
+    summary: "pre-planning analyst",
+    role: "Finds hidden requirements and risks before planning. Best: deep reasoning.",
+    needsImageInput: false,
+    weights: PLANNER_WEIGHTS,
+  },
+  momus: {
+    summary: "plan reviewer",
+    role: "Reviews plans for gaps and wrong references. Best: deep reasoning.",
+    needsImageInput: false,
+    weights: PLANNER_WEIGHTS,
+  },
+  oracle: {
+    summary: "expert consultant",
+    role: "Answers hard debugging/architecture questions. Best: the smartest model; cost matters little.",
+    needsImageInput: false,
+    weights: { reasoning: 45, context: 15, cheap: 0, recent: 15 },
+  },
+  librarian: {
+    summary: "docs & web researcher",
+    role: "Searches docs, the web and other repos, many times per task. Best: cheap + fast + tools.",
+    needsImageInput: false,
+    weights: SEARCHER_WEIGHTS,
+  },
+  explore: {
+    summary: "codebase search",
+    role: "Greps the codebase, often in parallel. Best: cheap + fast + big context.",
+    needsImageInput: false,
+    weights: SEARCHER_WEIGHTS,
+  },
+  "multimodal-looker": {
+    summary: "reads images & PDFs",
+    role: "Looks at screenshots, images and PDFs. MUST accept image input.",
+    needsImageInput: true,
+    weights: { reasoning: 10, context: 10, cheap: 25, recent: 15 },
+  },
+  "sisyphus-junior": {
+    summary: "task executor",
+    role: "Implements delegated todos with tools. Best: balance of quality and cost.",
+    needsImageInput: false,
+    weights: { reasoning: 20, context: 20, cheap: 20, recent: 15 },
+  },
 }
 
-const PLANNER: AgentProfile = {
-  role: "Planning/review agent: reads a lot, reasons deeply, writes little. Favor reasoning over cost.",
-  needsImageInput: false,
-  weights: { reasoning: 35, context: 20, cheap: 5, recent: 15 },
-}
-
-const SEARCHER: AgentProfile = {
-  role: "Fast search subagent, called many times in parallel. Favor cheap/fast models with tools and big context.",
-  needsImageInput: false,
-  weights: { reasoning: 5, context: 25, cheap: 35, recent: 10 },
-}
-
-const EXECUTOR: AgentProfile = {
-  role: "Task executor: implements delegated todos with tools. Balance quality and cost.",
+const DEFAULT_PROFILE: AgentProfile = {
+  summary: "agent",
+  role: "Custom agent.",
   needsImageInput: false,
   weights: { reasoning: 20, context: 20, cheap: 20, recent: 15 },
 }
 
-const PROFILES: Readonly<Record<string, AgentProfile>> = {
-  sisyphus: ORCHESTRATOR,
-  atlas: { ...ORCHESTRATOR, role: "Plan executor/orchestrator: drives a plan todo by todo and verifies results." },
-  build: { ...EXECUTOR, role: "OpenCode's default build agent." },
-  "OpenCode-Builder": { ...EXECUTOR, role: "OpenCode's builder agent." },
-  plan: { ...PLANNER, role: "OpenCode's default read-only plan agent." },
-  hephaestus: {
-    ...ORCHESTRATOR,
-    role: "Autonomous deep worker: long unattended coding runs. Favor top reasoning and big context.",
-  },
-  oracle: {
-    role: "High-IQ consultant for hard debugging/architecture questions. Reasoning matters most; cost matters little.",
-    needsImageInput: false,
-    weights: { reasoning: 45, context: 15, cheap: 0, recent: 15 },
-  },
-  prometheus: { ...PLANNER, role: "Planner: interviews you and writes the work plan." },
-  metis: { ...PLANNER, role: "Pre-planning analyst: finds hidden requirements and risks." },
-  momus: { ...PLANNER, role: "Plan reviewer: checks plans for gaps and bad references." },
-  librarian: { ...SEARCHER, role: "Docs/OSS researcher: searches the web, repos and docs. Favor cheap models with tools." },
-  explore: SEARCHER,
-  "multimodal-looker": {
-    role: "Looks at images, PDFs and screenshots. REQUIRES image input.",
-    needsImageInput: true,
-    weights: { reasoning: 10, context: 10, cheap: 25, recent: 15 },
-  },
-  "sisyphus-junior": EXECUTOR,
-}
-
 export function getAgentProfile(agent: string): AgentProfile {
-  return PROFILES[agent] ?? { ...EXECUTOR, role: "Custom agent." }
+  return PROFILES[agent] ?? DEFAULT_PROFILE
 }

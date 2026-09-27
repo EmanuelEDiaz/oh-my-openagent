@@ -33,14 +33,17 @@ Rutas relativas a `packages/`; `S/` = `packages/omo-opencode/src/`.
   oh-my-opencode config models --agent explore --models opencode/deepseek-v4-flash,opencode/big-pickle --enable-runtime-fallback
   ```
   `--project` escribe en `.omo/omo.jsonc` del proyecto; `--allow-unavailable` fuerza modelos no listados.
-- **Ranking e info por modelo:** antes de elegir, cada agente muestra su rol y un top 10 puntuado (0-100).
-  La puntuación combina: razonamiento, contexto (escala log), costo (gratis = máx.), antigüedad, y un bonus
-  si el modelo está en la cadena recomendada del plugin (`*`). Penaliza x0.3 si no tiene tool calling o si
-  el agente necesita imagen y el modelo no la acepta. Pesos por agente en `S/cli/config-models/agent-profiles.ts`.
-  Cada opción muestra `ctx · modalidades · reasoning · tools · costo · fecha`; al enfocarla, la descripción,
-  fecha de conocimiento y avisos. Se puede filtrar escribiendo `img`, `pdf`, `free`, `1M`...
-  `--rank <agente> [--top N] [--json]` imprime el ranking sin interacción.
-  Los modelos de `disabled_providers` se excluyen.
+- **Modos del selector interactivo** (solo agentes de oh-my-openagent; `build`/`plan` son de OpenCode):
+  1. **Recommended:** sugiere una cadena por agente (top sin avisos; fallbacks de otros proveedores) → aceptar / editar / saltar.
+  2. **Guided:** eliges primario y luego cada fallback de una lista corta (top 8) o con "Search all models...".
+  3. **Search all:** buscador con checkbox sobre todos los modelos + paso de ordenado.
+  Antes de elegir, cada agente muestra su función, su cadena actual y una tabla alineada
+  (Score · Modelo · Contexto · Entrada · Precio). Los detalles de cada modelo aparecen solo al enfocarlo.
+  Al final se muestra un resumen y se pide confirmación antes de guardar.
+- **Ranking (0-100):** razonamiento, contexto (log), costo (gratis = máx.), antigüedad y bonus si está en la cadena
+  recomendada del plugin (`*`). Penaliza x0.3 sin tool calling, sin imagen para `multimodal-looker`, o si es un modelo
+  especializado (safety/voz/embeddings). Pesos por agente en `S/cli/config-models/agent-profiles.ts`.
+  `--rank <agente> [--top N] [--json]` lo imprime sin interacción. Se excluyen `disabled_providers`.
 - **Datos:** metadatos de `~/.cache/opencode/models.json` (models.dev). No incluye velocidad/latencia ni
   benchmarks: la puntuación es heurística, sirve para orientar, no como verdad absoluta.
 - **Problema:** para cambiar el modelo de un agente hay que editar `~/.omo/omo.jsonc` a mano, sin saber qué

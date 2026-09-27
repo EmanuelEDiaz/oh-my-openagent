@@ -62,9 +62,10 @@ describe("runConfigModels", () => {
 
       // then
       expect(exitCode).toBe(1)
-      expect(lines).toContain("  [WARN] sisyphus: opencode/deepseek-v4-flash-free (missing) -> opencode/big-pickle")
-      expect(lines).toContain("  [BROKEN] oracle: opencode/gone-1 (missing) -> opencode/gone-2 (missing)")
-      expect(lines).toContain("runtime_fallback: disabled")
+      expect(lines).toContain(`${"sisyphus".padEnd(19)}${"missing".padEnd(13)}opencode/deepseek-v4-flash-free (gone)  >  opencode/big-pickle`)
+      expect(lines).toContain(`${"oracle".padEnd(19)}${"BROKEN".padEnd(13)}opencode/gone-1 (gone)  >  opencode/gone-2 (gone)`)
+      expect(lines).toContain("Mid-session fallback (runtime_fallback): off")
+      expect(lines.some((line) => line.startsWith("build "))).toBe(false)
     })
 
     test("#when --agent/--models #then writes an ordered chain, keeps entry settings and drops legacy keys", async () => {
@@ -103,6 +104,17 @@ describe("runConfigModels", () => {
     })
   })
 
+  describe("#given an OpenCode native agent", () => {
+    test("#when --agent build #then it is rejected as not an oh-my-openagent agent", async () => {
+      // when
+      const exitCode = await run({ agent: "build", models: ["opencode/big-pickle"] })
+
+      // then
+      expect(exitCode).toBe(1)
+      expect(lines.at(-1)).toContain('unknown oh-my-openagent agent "build"')
+    })
+  })
+
   describe("#given disabled_providers in the config", () => {
     test("#when --rank #then models of disabled providers are not offered", async () => {
       // given
@@ -128,16 +140,20 @@ describe("runConfigModels", () => {
       writeUserConfig(home, { agents: { explore: { model: "opencode/big-pickle" } } })
       const asked: string[] = []
       const prompts: ConfigModelsPrompts = {
+        promptMode: async () => "guided",
         promptAgents: async (statuses) => {
           asked.push(`agents:${statuses.length}`)
           return ["explore"]
         },
-        promptModels: async ({ current }) => {
-          asked.push(`current:${current.join(",")}`)
-          return ["opencode/big-pickle", "opencode/north-mini-code-free"]
+        promptChain: async ({ current, mode }) => {
+          asked.push(`current:${current.join(",")}:${mode}`)
+          return ["opencode/north-mini-code-free", "opencode/big-pickle"]
         },
-        promptOrder: async ({ selected }) => [...selected].reverse(),
         promptEnableRuntimeFallback: async () => false,
+        promptConfirmWrite: async (summary) => {
+          asked.push(`confirm:${summary}`)
+          return true
+        },
       }
 
       // when
@@ -145,7 +161,9 @@ describe("runConfigModels", () => {
 
       // then
       expect(exitCode).toBe(0)
-      expect(asked).toContain("current:opencode/big-pickle")
+      expect(asked).toContain("current:opencode/big-pickle:guided")
+      expect(asked).toContain("agents:11")
+      expect(asked.some((entry) => entry.startsWith("confirm:explore"))).toBe(true)
       const openCode = readOpenCode(join(home, ".omo", "omo.jsonc"))
       expect(openCode["agents"]).toMatchObject({
         explore: { models: ["opencode/north-mini-code-free", "opencode/big-pickle"] },
@@ -153,15 +171,16 @@ describe("runConfigModels", () => {
       expect(openCode["runtime_fallback"]).toBeUndefined()
     })
 
-    test("#when the user cancels #then nothing is written", async () => {
+    test("#when the user declines the final confirmation #then nothing is written", async () => {
       // given
       const path = writeUserConfig(home, { agents: {} })
       const before = readFileSync(path, "utf-8")
       const prompts: ConfigModelsPrompts = {
-        promptAgents: async () => null,
-        promptModels: async () => null,
-        promptOrder: async () => null,
-        promptEnableRuntimeFallback: async () => null,
+        promptMode: async () => "recommended",
+        promptAgents: async () => ["explore"],
+        promptChain: async () => ["opencode/big-pickle"],
+        promptEnableRuntimeFallback: async () => true,
+        promptConfirmWrite: async () => false,
       }
 
       // when

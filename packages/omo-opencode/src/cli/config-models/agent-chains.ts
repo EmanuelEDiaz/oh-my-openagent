@@ -1,4 +1,4 @@
-import { OverridableAgentNameSchema } from "../../config/schema/agent-names"
+import { BuiltinAgentNameSchema } from "../../config/schema/agent-names"
 
 export type ModelChainEntry = string | ({ readonly model: string } & Readonly<Record<string, unknown>>)
 
@@ -40,12 +40,15 @@ export function readAgentChain(agentConfig: unknown): ModelChainEntry[] {
   return [...toEntries(agentConfig["model"]), ...toEntries(agentConfig["fallback_models"])]
 }
 
-export function listConfigurableAgents(agents: Readonly<Record<string, unknown>>): string[] {
-  return [...new Set([...OverridableAgentNameSchema.options, ...Object.keys(agents)])]
+/** Only oh-my-openagent's own agents; OpenCode's native build/plan agents are not managed here. */
+export const CONFIGURABLE_AGENTS: readonly string[] = BuiltinAgentNameSchema.options
+
+export function isConfigurableAgent(agent: string): boolean {
+  return CONFIGURABLE_AGENTS.includes(agent)
 }
 
 export function readAgentChains(agents: Readonly<Record<string, unknown>>): AgentChain[] {
-  return listConfigurableAgents(agents).map((agent) => ({ agent, entries: readAgentChain(agents[agent]) }))
+  return CONFIGURABLE_AGENTS.map((agent) => ({ agent, entries: readAgentChain(agents[agent]) }))
 }
 
 export function checkChainAvailability(chain: AgentChain, available: ReadonlySet<string>): ChainAvailability {

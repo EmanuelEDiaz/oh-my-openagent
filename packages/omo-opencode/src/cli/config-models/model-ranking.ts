@@ -18,6 +18,8 @@ const MIN_CONTEXT = 32_000
 const MAX_CONTEXT = 1_000_000
 const MAX_PRICE_PER_MILLION = 100
 const RECENCY_WINDOW_MONTHS = 24
+const SUGGESTION_POOL = 10
+const SPECIALIZED_MODEL_PATTERN = /guard|safety|moderation|embed|rerank|tts|whisper|orpheus|transcribe|image-gen/i
 
 function clamp(value: number): number {
   return Math.min(1, Math.max(0, value))
@@ -62,6 +64,7 @@ export function recommendedRankFor(agent: string, model: string): number | undef
 function warningsFor(profile: AgentProfile, info: ModelInfo | undefined): string[] {
   if (info === undefined) return ["no metadata in models.dev cache"]
   const warnings: string[] = []
+  if (SPECIALIZED_MODEL_PATTERN.test(info.id)) warnings.push("not a general chat model (safety/speech/embedding)")
   if (!info.toolCall) warnings.push("no tool calling: agents cannot use tools")
   if (profile.needsImageInput && !info.inputModalities.includes("image")) warnings.push("no image input")
   if (info.contextTokens !== undefined && info.contextTokens < MIN_CONTEXT) {
@@ -86,7 +89,7 @@ export function scoreModel(agent: string, model: string, info: ModelInfo | undef
       + weights.recent * recencyScore(info.releaseDate, now)
       + bonus
 
-  const unsuitable = info !== undefined && warnings.some((warning) => warning.startsWith("no "))
+  const unsuitable = info !== undefined && warnings.some((warning) => warning.startsWith("no ") || warning.startsWith("not "))
   const score = Math.round((points / maxPoints) * 100 * (unsuitable ? UNSUITABLE_FACTOR : 1))
   return { model, score, info, recommendedRank, warnings }
 }
@@ -100,4 +103,26 @@ export function rankModels(
   return models
     .map((model) => scoreModel(agent, model, catalog.get(model), now))
     .sort((left, right) => right.score - left.score || left.model.localeCompare(right.model))
+}
+
+function providerOf(model: string): string {
+  return model.slice(0, model.indexOf("/"))
+}
+
+/**
+ * Best models without warnings; within the top of the ranking, fallbacks prefer providers not used
+ * yet, so one provider outage or quota limit does not take down the whole chain.
+ */
+export function suggestChain(ranked: readonly RankedModel[], size = 3): string[] {
+  const candidates = ranked.filter((entry) => entry.warnings.length === 0)
+  const pool = (candidates.length > 0 ? candidates : ranked).slice(0, SUGGESTION_POOL)
+  const chain: RankedModel[] = []
+  while (chain.length < size && chain.length < pool.length) {
+    const used = new Set(chain.map((entry) => providerOf(entry.model)))
+    const next = pool.find((entry) => !chain.includes(entry) && !used.has(providerOf(entry.model)))
+      ?? pool.find((entry) => !chain.includes(entry))
+    if (next === undefined) break
+    chain.push(next)
+  }
+  return chain.map((entry) => entry.model)
 }

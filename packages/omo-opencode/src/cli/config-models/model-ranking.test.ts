@@ -2,8 +2,9 @@
 
 import { describe, expect, test } from "bun:test"
 
-import { describeModelShort, parseModelCatalog } from "./model-catalog"
-import { rankModels, recommendedRankFor } from "./model-ranking"
+import { formatInputs, formatRankingTable } from "./format"
+import { parseModelCatalog } from "./model-catalog"
+import { rankModels, recommendedRankFor, suggestChain } from "./model-ranking"
 
 const NOW = new Date("2026-09-27T00:00:00Z")
 
@@ -62,7 +63,7 @@ describe("parseModelCatalog", () => {
 
     // then
     expect(info?.contextTokens).toBe(1_100_000)
-    expect(describeModelShort(info)).toBe("1.1M ctx · text+img+pdf · reasoning · tools · $2/$10 per 1M · 2026-07")
+    expect(formatInputs(info)).toBe("text, images, PDF")
   })
 })
 
@@ -113,5 +114,50 @@ describe("recommendedRankFor", () => {
     // then
     expect(recommendedRankFor("sisyphus", "opencode/big-pickle")).toBe(4)
     expect(recommendedRankFor("sisyphus", "opencode/unrelated")).toBeUndefined()
+  })
+})
+
+describe("suggestChain", () => {
+  test("skips models with warnings and prefers a different provider for fallbacks", () => {
+    // given
+    const ranked = rankModels("explore", ["opencode/big-pickle", "opencode/vision-free", "opencode/chatty", "openrouter/openai/gpt-5.6-sol"], CATALOG, NOW)
+
+    // when
+    const chain = suggestChain(ranked, 2)
+
+    // then
+    expect(chain).not.toContain("opencode/chatty")
+    expect(chain.map((model) => model.split("/")[0])).toEqual(expect.arrayContaining(["opencode", "openrouter"]))
+  })
+})
+
+describe("formatRankingTable", () => {
+  test("prints a header and one aligned row per model", () => {
+    // when
+    const table = formatRankingTable(rankModels("oracle", ["openrouter/openai/gpt-5.6-sol"], CATALOG, NOW), 5)
+
+    // then
+    const [header, row] = table.split("\n")
+    expect(header).toContain("Score")
+    expect(row).toContain("openrouter/openai/gpt-5.6-sol")
+    expect(row).toContain("text, images, PDF")
+    expect(header?.indexOf("Context")).toBe(row?.indexOf("1.1M"))
+  })
+})
+
+describe("specialized models", () => {
+  test("safety/speech models are flagged and never suggested", () => {
+    // given
+    const catalog = parseModelCatalog(JSON.stringify({
+      groq: { models: { "openai/gpt-oss-safeguard-20b": { reasoning: true, tool_call: true, limit: { context: 131_000 }, cost: { input: 0, output: 0 } } } },
+      opencode: { models: { "big-pickle": { reasoning: true, tool_call: true, limit: { context: 200_000 }, cost: { input: 0, output: 0 } } } },
+    }))
+
+    // when
+    const ranked = rankModels("explore", ["groq/openai/gpt-oss-safeguard-20b", "opencode/big-pickle"], catalog, NOW)
+
+    // then
+    expect(ranked.find((entry) => entry.model.startsWith("groq/"))?.warnings[0]).toContain("not a general chat model")
+    expect(suggestChain(ranked, 3)).toEqual(["opencode/big-pickle"])
   })
 })

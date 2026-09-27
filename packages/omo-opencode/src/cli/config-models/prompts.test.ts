@@ -24,7 +24,7 @@ describe("promptOrder", () => {
       })
 
     // when
-    const ordered = await promptOrder({ agent: "explore", selected: ["a", "b", "c"], preferred: ["b", "a"] })
+    const ordered = await promptOrder({ selected: ["a", "b", "c"], preferred: ["b", "a"] })
 
     // then
     expect(ordered).toEqual(["c", "a", "b"])
@@ -36,7 +36,7 @@ describe("promptOrder", () => {
     const selectSpy = spyOn(p, "select")
 
     // when
-    const ordered = await promptOrder({ agent: "explore", selected: ["a"], preferred: [] })
+    const ordered = await promptOrder({ selected: ["a"], preferred: [] })
 
     // then
     expect(ordered).toEqual(["a"])

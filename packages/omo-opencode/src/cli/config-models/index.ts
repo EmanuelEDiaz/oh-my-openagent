@@ -8,12 +8,14 @@ import { parseJsonc } from "../../shared"
 import {
   buildChainEntries,
   checkChainAvailability,
+  isConfigurableAgent,
   readAgentChain,
   readAgentChains,
 } from "./agent-chains"
 import type { ChainAvailability, ModelChainEntry } from "./agent-chains"
 import { listAvailableModels } from "./available-models"
 import type { AvailableModels } from "./available-models"
+import { formatRankingTable } from "./format"
 import { loadModelCatalog } from "./model-catalog"
 import type { ModelCatalog } from "./model-catalog"
 import { rankModels } from "./model-ranking"
@@ -23,10 +25,11 @@ import * as defaultPrompts from "./prompts"
 export type ConfigModelsScope = "user" | "project"
 
 export type ConfigModelsPrompts = {
+  readonly promptMode: typeof defaultPrompts.promptMode
   readonly promptAgents: typeof defaultPrompts.promptAgents
-  readonly promptModels: typeof defaultPrompts.promptModels
-  readonly promptOrder: typeof defaultPrompts.promptOrder
+  readonly promptChain: typeof defaultPrompts.promptChain
   readonly promptEnableRuntimeFallback: typeof defaultPrompts.promptEnableRuntimeFallback
+  readonly promptConfirmWrite: typeof defaultPrompts.promptConfirmWrite
 }
 
 export type ConfigModelsOptions = {
@@ -111,23 +114,28 @@ function statusesFor(context: ModelsContext): ChainAvailability[] {
   return readAgentChains(context.section.agents).map((chain) => checkChainAvailability(chain, context.availableSet))
 }
 
+function statusLabel(status: ChainAvailability): string {
+  if (status.models.length === 0) return "omo default"
+  if (status.firstAvailable === undefined) return "BROKEN"
+  return status.missing.length > 0 ? "missing" : "ok"
+}
+
 function printStatuses(context: ModelsContext, statuses: readonly ChainAvailability[]): void {
   const { output } = context
-  output(`config: ${context.configPath}`)
-  output(`available models: ${context.available.models.length} from ${describeSource(context.available)}`)
-  if (context.section.disabledProviders.length > 0) {
-    output(`disabled_providers (excluded): ${context.section.disabledProviders.join(", ")}`)
-  }
-  output(`runtime_fallback: ${isRuntimeFallbackEnabled(context.section.runtimeFallback) ? "enabled" : "disabled"}`)
+  const excluded = context.section.disabledProviders
+  output(`Config:  ${context.configPath}`)
+  output(`Models:  ${context.available.models.length} available now, from ${describeSource(context.available)}`)
+  if (excluded.length > 0) output(`         excluded by disabled_providers: ${excluded.join(", ")}`)
+  output(`Mid-session fallback (runtime_fallback): ${isRuntimeFallbackEnabled(context.section.runtimeFallback) ? "on" : "off"}`)
+  output("")
+  output(`${"Agent".padEnd(19)}${"Status".padEnd(13)}Model chain (first = primary)`)
   for (const status of statuses) {
-    if (status.models.length === 0) {
-      output(`  ${status.agent}: (built-in default chain)`)
-      continue
-    }
-    const marker = status.firstAvailable === undefined ? "BROKEN" : status.missing.length > 0 ? "WARN" : "ok"
-    const chain = status.models.map((model) => (status.missing.includes(model) ? `${model} (missing)` : model))
-    output(`  [${marker}] ${status.agent}: ${chain.join(" -> ")}`)
+    const chain = status.models.length === 0
+      ? "-"
+      : status.models.map((model) => (status.missing.includes(model) ? `${model} (gone)` : model)).join("  >  ")
+    output(`${status.agent.padEnd(19)}${statusLabel(status).padEnd(13)}${chain}`)
   }
+  output("")
 }
 
 function chainEdits(agent: string, entries: readonly ModelChainEntry[]): OmoConfigEdit[] {
@@ -187,7 +195,7 @@ function runRank(context: ModelsContext, agent: string): number {
     context.output(JSON.stringify({ agent, ranking: ranked.slice(0, top).map(rankingJson) }, null, 2))
     return 0
   }
-  context.output(defaultPrompts.formatRankingTable(agent, ranked, top))
+  context.output(formatRankingTable(ranked, top))
   return 0
 }
 
@@ -211,30 +219,40 @@ async function runInteractive(context: ModelsContext, prompts: ConfigModelsPromp
   const statuses = statusesFor(context)
   printStatuses(context, statuses)
 
+  const mode = await prompts.promptMode()
+  if (mode === null) return 1
   const agents = await prompts.promptAgents(statuses)
   if (agents === null) return 1
 
   const edits: OmoConfigEdit[] = []
+  const summary: string[] = []
   for (const agent of agents) {
     const previous = readAgentChain(context.section.agents[agent])
     const current = previous.map((entry) => (typeof entry === "string" ? entry : entry.model))
     const ranked = rankModels(agent, context.available.models, context.catalog)
-    const selected = await prompts.promptModels({ agent, ranked, current })
-    if (selected === null) return 1
-    const labels = new Map(ranked.map((entry) => [entry.model, defaultPrompts.formatRankedLabel(entry)]))
-    const ordered = await prompts.promptOrder({ agent, selected, preferred: current, labels })
-    if (ordered === null) return 1
-    edits.push(...chainEdits(agent, buildChainEntries(ordered, previous)))
-    context.output(`${agent}: ${ordered.join(" -> ")}`)
+    const chain = await prompts.promptChain({ agent, mode, ranked, current })
+    if (chain === null) return 1
+    if (chain.length === 0) continue
+    edits.push(...chainEdits(agent, buildChainEntries(chain, previous)))
+    summary.push(`${agent.padEnd(19)}${chain.join("  >  ")}`)
   }
 
   if (!isRuntimeFallbackEnabled(context.section.runtimeFallback)) {
     const enable = context.options.enableRuntimeFallback ?? await prompts.promptEnableRuntimeFallback()
     if (enable === null) return 1
-    if (enable) edits.push(runtimeFallbackEdit())
+    if (enable) {
+      edits.push(runtimeFallbackEdit())
+      summary.push("runtime_fallback  on")
+    }
   }
 
-  if (edits.length > 0) writeEdits(context, edits)
+  if (edits.length === 0) {
+    context.output("Nothing changed.")
+    return 0
+  }
+  const confirmed = await prompts.promptConfirmWrite(summary.join("\n"))
+  if (confirmed !== true) return 1
+  writeEdits(context, edits)
   return 0
 }
 
@@ -266,6 +284,12 @@ export async function runConfigModels(options: ConfigModelsOptions = {}): Promis
 
   if (available.models.length === 0) {
     output("error: no models found. Run `opencode models --refresh` or connect a provider with `opencode auth login`.")
+    return 1
+  }
+
+  const requestedAgent = options.rank ?? options.agent
+  if (requestedAgent !== undefined && !isConfigurableAgent(requestedAgent)) {
+    output(`error: unknown oh-my-openagent agent "${requestedAgent}". Known: ${readAgentChains({}).map((chain) => chain.agent).join(", ")}`)
     return 1
   }
 

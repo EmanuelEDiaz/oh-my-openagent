@@ -105,22 +105,3 @@ export function formatCost(info: ModelInfo): string {
   if (isFree(info)) return "free"
   return `$${info.costInput}/$${info.costOutput ?? "?"} per 1M`
 }
-
-export function formatModalities(info: ModelInfo): string {
-  const extra = info.inputModalities.filter((modality) => modality !== "text")
-  return extra.length === 0 ? "text" : `text+${extra.join("+")}`
-}
-
-/** One-line summary used as the searchable option label (so typing `img`, `free`, `1M` filters too). */
-export function describeModelShort(info: ModelInfo | undefined): string {
-  if (info === undefined) return "no metadata"
-  const tags = [
-    `${formatTokens(info.contextTokens)} ctx`,
-    formatModalities(info).replace("image", "img"),
-    info.reasoning ? "reasoning" : undefined,
-    info.toolCall ? "tools" : "NO-tools",
-    formatCost(info),
-    info.releaseDate?.slice(0, 7),
-  ]
-  return tags.filter((tag) => tag !== undefined).join(" · ")
-}
