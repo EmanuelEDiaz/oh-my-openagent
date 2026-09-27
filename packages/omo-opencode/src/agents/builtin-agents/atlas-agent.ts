@@ -5,7 +5,7 @@ import type { AvailableAgent, AvailableSkill } from "../dynamic-agent-prompt-bui
 import { AGENT_MODEL_REQUIREMENTS } from "../../shared"
 import { log } from "../../shared/logger"
 import { applyOverrides } from "./agent-overrides"
-import { applyModelResolution } from "./model-resolution"
+import { applyModelResolution, keepFallbackOverRetiredModel, userFallbackModelIds } from "./model-resolution"
 import { createAtlasAgent } from "../atlas"
 
 export function maybeCreateAtlasConfig(input: {
@@ -42,6 +42,7 @@ export function maybeCreateAtlasConfig(input: {
   let atlasResolution = applyModelResolution({
     uiSelectedModel: orchestratorOverride?.model !== undefined ? undefined : uiSelectedModel,
     userModel: orchestratorOverride?.model,
+    userFallbackModels: userFallbackModelIds(orchestratorOverride?.fallback_models),
     requirement: atlasRequirement,
     availableModels,
     systemDefaultModel,
@@ -74,6 +75,7 @@ export function maybeCreateAtlasConfig(input: {
   }
 
   orchestratorConfig = applyOverrides(orchestratorConfig, orchestratorOverride, mergedCategories, directory)
+  orchestratorConfig = keepFallbackOverRetiredModel(orchestratorConfig, atlasResolution, orchestratorOverride?.model)
 
   return orchestratorConfig
 }

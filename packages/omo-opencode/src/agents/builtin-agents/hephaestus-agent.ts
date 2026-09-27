@@ -7,7 +7,7 @@ import { log } from "../../shared/logger"
 import { createHephaestusAgent, isHephaestusSupportedModel } from "../hephaestus"
 import { applyEnvironmentContext } from "./environment-context"
 import { applyCategoryOverride, mergeAgentConfig } from "./agent-overrides"
-import { applyModelResolution, getFirstFallbackModel } from "./model-resolution"
+import { applyModelResolution, keepFallbackOverRetiredModel, userFallbackModelIds, getFirstFallbackModel } from "./model-resolution"
 import { applyFrontierToolSchemaPermission } from "../frontier-tool-schema-guard"
 
 export function maybeCreateHephaestusConfig(input: {
@@ -61,6 +61,7 @@ export function maybeCreateHephaestusConfig(input: {
 
   let hephaestusResolution = applyModelResolution({
     userModel: hephaestusOverride?.model,
+    userFallbackModels: userFallbackModelIds(hephaestusOverride?.fallback_models),
     requirement: hephaestusRequirement,
     availableModels,
     systemDefaultModel,
@@ -114,6 +115,7 @@ export function maybeCreateHephaestusConfig(input: {
 
   if (hephaestusOverride) {
     hephaestusConfig = mergeAgentConfig(hephaestusConfig, hephaestusOverride, directory)
+    hephaestusConfig = keepFallbackOverRetiredModel(hephaestusConfig, hephaestusResolution, hephaestusOverride.model)
     if (!isHephaestusSupportedModel(hephaestusConfig.model)) {
       log("[agent-registration] Agent skipped: unsupported Hephaestus override model", {
         agent: "hephaestus",

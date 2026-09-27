@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process"
 import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 
@@ -19,8 +20,8 @@ const MODEL_ID_PATTERN = /^[\w.@-]+\/\S+$/
 
 function defaultRunOpenCodeModels(): string | null {
   try {
-    const result = Bun.spawnSync(["opencode", "models"], { stdout: "pipe", stderr: "ignore", timeout: 60_000 })
-    return result.exitCode === 0 ? result.stdout.toString() : null
+    const result = spawnSync("opencode", ["models"], { encoding: "utf-8", stdio: ["ignore", "pipe", "ignore"], timeout: 60_000 })
+    return result.status === 0 ? result.stdout : null
   } catch {
     return null
   }

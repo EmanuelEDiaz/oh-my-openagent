@@ -8,6 +8,7 @@ import { join } from "node:path"
 import { parseJsonc } from "../../shared"
 import { runConfigModels } from "."
 import type { ConfigModelsOptions, ConfigModelsPrompts } from "."
+import type { MenuAction } from "./prompts"
 
 const AVAILABLE = ["opencode/big-pickle", "opencode/deepseek-v4-flash", "opencode/north-mini-code-free"]
 
@@ -33,6 +34,7 @@ describe("runConfigModels", () => {
       output: (line) => lines.push(line),
       listModels: () => ({ models: AVAILABLE, source: "opencode-cli" }),
       loadCatalog: () => new Map(),
+      seedCache: () => 0,
       ...options,
     })
   }
@@ -135,35 +137,48 @@ describe("runConfigModels", () => {
   })
 
   describe("#given the interactive picker", () => {
-    test("#when the user selects and orders models #then the chosen order is written", async () => {
-      // given
-      writeUserConfig(home, { agents: { explore: { model: "opencode/big-pickle" } } })
-      const asked: string[] = []
-      const prompts: ConfigModelsPrompts = {
-        promptMode: async () => "guided",
-        promptAgents: async (statuses) => {
-          asked.push(`agents:${statuses.length}`)
-          return ["explore"]
+    function scriptedPrompts(overrides: Partial<ConfigModelsPrompts>, log: string[]): ConfigModelsPrompts {
+      const menu: MenuAction[] = ["one", "save"]
+      return {
+        promptMainMenu: async ({ pending }) => {
+          log.push(`menu:pending=${pending.size}`)
+          return menu.shift() ?? "exit"
         },
+        promptAgent: async ({ statuses }) => {
+          log.push(`agents:${statuses.map((status) => status.agent).join(",")}`)
+          return "explore"
+        },
+        promptMode: async () => "guided",
         promptChain: async ({ current, mode }) => {
-          asked.push(`current:${current.join(",")}:${mode}`)
+          log.push(`current:${current.join(",")}:${mode}`)
           return ["opencode/north-mini-code-free", "opencode/big-pickle"]
         },
+        showSuggestedFixes: (summary) => {
+          log.push(`fixes:${summary}`)
+        },
+        promptAcceptFixes: async () => true,
         promptEnableRuntimeFallback: async () => false,
         promptConfirmWrite: async (summary) => {
-          asked.push(`confirm:${summary}`)
+          log.push(`confirm:${summary}`)
           return true
         },
+        ...overrides,
       }
+    }
+
+    test("#when the user configures one agent and saves #then the chosen chain is written", async () => {
+      // given
+      writeUserConfig(home, { agents: { explore: { model: "opencode/big-pickle" } } })
+      const log: string[] = []
 
       // when
-      const exitCode = await run({ isInteractive: () => true, prompts })
+      const exitCode = await run({ isInteractive: () => true, prompts: scriptedPrompts({}, log) })
 
       // then
       expect(exitCode).toBe(0)
-      expect(asked).toContain("current:opencode/big-pickle:guided")
-      expect(asked).toContain("agents:11")
-      expect(asked.some((entry) => entry.startsWith("confirm:explore"))).toBe(true)
+      expect(log).toContain("current:opencode/big-pickle:guided")
+      expect(log.find((entry) => entry.startsWith("agents:"))).not.toContain("build")
+      expect(log).toContain("menu:pending=1")
       const openCode = readOpenCode(join(home, ".omo", "omo.jsonc"))
       expect(openCode["agents"]).toMatchObject({
         explore: { models: ["opencode/north-mini-code-free", "opencode/big-pickle"] },
@@ -171,24 +186,61 @@ describe("runConfigModels", () => {
       expect(openCode["runtime_fallback"]).toBeUndefined()
     })
 
+    test("#when fixing broken agents #then only agents with missing models get suggested chains", async () => {
+      // given
+      writeUserConfig(home, {
+        agents: {
+          explore: { model: "opencode/retired-free" },
+          oracle: { model: "opencode/big-pickle" },
+        },
+      })
+      const log: string[] = []
+      const menu: MenuAction[] = ["fix-broken", "save"]
+
+      // when
+      const exitCode = await run({
+        isInteractive: () => true,
+        prompts: scriptedPrompts({ promptMainMenu: async () => menu.shift() ?? "exit" }, log),
+      })
+
+      // then
+      expect(exitCode).toBe(0)
+      const fixes = log.find((entry) => entry.startsWith("fixes:")) ?? ""
+      expect(fixes).toContain("explore")
+      expect(fixes).not.toContain("oracle")
+      const agents = readOpenCode(join(home, ".omo", "omo.jsonc"))["agents"] as Record<string, Record<string, unknown>>
+      expect(agents["explore"]?.["models"]).toBeDefined()
+      expect(agents["oracle"]).toEqual({ model: "opencode/big-pickle" })
+    })
+
     test("#when the user declines the final confirmation #then nothing is written", async () => {
       // given
       const path = writeUserConfig(home, { agents: {} })
       const before = readFileSync(path, "utf-8")
-      const prompts: ConfigModelsPrompts = {
-        promptMode: async () => "recommended",
-        promptAgents: async () => ["explore"],
-        promptChain: async () => ["opencode/big-pickle"],
-        promptEnableRuntimeFallback: async () => true,
-        promptConfirmWrite: async () => false,
-      }
 
       // when
-      const exitCode = await run({ isInteractive: () => true, prompts })
+      const exitCode = await run({
+        isInteractive: () => true,
+        prompts: scriptedPrompts({ promptConfirmWrite: async () => false }, []),
+      })
 
       // then
       expect(exitCode).toBe(1)
       expect(readFileSync(path, "utf-8")).toBe(before)
+    })
+
+    test("#given a live model list #then the plugin cache is seeded with it", async () => {
+      // given
+      const seeded: string[][] = []
+
+      // when
+      await run({ check: true, seedCache: (models) => {
+        seeded.push([...models])
+        return 1
+      } })
+
+      // then
+      expect(seeded).toEqual([AVAILABLE])
     })
 
     test("#when there is no TTY #then it explains the non-interactive flags", async () => {

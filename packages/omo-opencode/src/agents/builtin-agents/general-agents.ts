@@ -8,7 +8,7 @@ import { buildAgent, isFactory } from "../agent-builder"
 import { resolveAgentSkills } from "../agent-skill-resolution"
 import { applyOverrides } from "./agent-overrides"
 import { applyEnvironmentContext } from "./environment-context"
-import { applyModelResolution, getFirstFallbackModel } from "./model-resolution"
+import { applyModelResolution, keepFallbackOverRetiredModel, userFallbackModelIds, getFirstFallbackModel } from "./model-resolution"
 import { log } from "../../shared/logger"
 
 export function collectPendingBuiltinAgents(input: {
@@ -79,6 +79,7 @@ export function collectPendingBuiltinAgents(input: {
     let resolution = applyModelResolution({
       uiSelectedModel: (isPrimaryAgent && override?.model === undefined) ? uiSelectedModel : undefined,
       userModel: override?.model,
+      userFallbackModels: userFallbackModelIds(override?.fallback_models),
       requirement,
       availableModels,
       systemDefaultModel,
@@ -117,6 +118,7 @@ export function collectPendingBuiltinAgents(input: {
     }
 
     config = applyOverrides(config, override, mergedCategories, directory)
+    config = keepFallbackOverRetiredModel(config, resolution, override?.model)
     config = resolveAgentSkills(config, { gitMasterConfig, browserProvider, disabledSkills, teamModeEnabled })
 
     // Store for later - will be added after sisyphus and hephaestus

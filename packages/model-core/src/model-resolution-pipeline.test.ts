@@ -119,3 +119,50 @@ test("inherits the fallback variant for an explicit transformed gateway model", 
 	expect(result?.provenance).toBe("override")
 	expect(variant).toBe("high")
 })
+
+describe("resolveModelPipeline user primary availability", () => {
+	test("skips a configured primary that its provider no longer lists and uses the user fallback", () => {
+		// given
+		const result = resolveModelPipeline({
+			intent: {
+				userModel: "opencode/deepseek-v4-flash-free",
+				userFallbackModels: ["opencode/nemotron-3.5-lightning-free"],
+			},
+			constraints: {
+				availableModels: new Set(["opencode/big-pickle", "opencode/nemotron-3.5-lightning-free"]),
+			},
+		})
+
+		// then
+		expect(result?.model).toBe("opencode/nemotron-3.5-lightning-free")
+		expect(result?.provenance).toBe("provider-fallback")
+		expect(result?.attempted).toContain("opencode/deepseek-v4-flash-free")
+	})
+
+	test("keeps a configured primary from a provider missing in the cache (custom/local providers)", () => {
+		// given
+		const result = resolveModelPipeline({
+			intent: {
+				userModel: "ollama/qwen3.5:4b",
+				userFallbackModels: ["opencode/big-pickle"],
+			},
+			constraints: {
+				availableModels: new Set(["opencode/big-pickle"]),
+			},
+		})
+
+		// then
+		expect(result).toEqual({ model: "ollama/qwen3.5:4b", provenance: "override" })
+	})
+
+	test("keeps a missing primary when the user configured no fallbacks", () => {
+		// given
+		const result = resolveModelPipeline({
+			intent: { userModel: "opencode/retired-free" },
+			constraints: { availableModels: new Set(["opencode/big-pickle"]) },
+		})
+
+		// then
+		expect(result).toEqual({ model: "opencode/retired-free", provenance: "override" })
+	})
+})

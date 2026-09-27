@@ -231,6 +231,7 @@ export function createConnectedProvidersCacheStore(
 	return {
 		readConnectedProvidersCache,
 		hasConnectedProvidersCache,
+		writeConnectedProvidersCache,
 		readProviderModelsCache,
 		hasProviderModelsCache,
 		writeProviderModelsCache,
@@ -272,6 +273,7 @@ const defaultConnectedProvidersCacheStore = createConnectedProvidersCacheStore(
 export const {
 	readConnectedProvidersCache,
 	hasConnectedProvidersCache,
+	writeConnectedProvidersCache,
 	readProviderModelsCache,
 	hasProviderModelsCache,
 	writeProviderModelsCache,

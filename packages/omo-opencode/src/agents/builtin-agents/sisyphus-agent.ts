@@ -6,7 +6,7 @@ import { AGENT_MODEL_REQUIREMENTS, isAnyFallbackModelAvailable } from "../../sha
 import { log } from "../../shared/logger"
 import { applyEnvironmentContext } from "./environment-context"
 import { applyOverrides } from "./agent-overrides"
-import { applyModelResolution, getFirstFallbackModel } from "./model-resolution"
+import { applyModelResolution, keepFallbackOverRetiredModel, userFallbackModelIds, getFirstFallbackModel } from "./model-resolution"
 import { createSisyphusAgent } from "../sisyphus"
 import { applyFrontierToolSchemaPermission } from "../frontier-tool-schema-guard"
 import { setSisyphusRuntimePromptContext } from "../sisyphus-runtime-prompt-reconciler"
@@ -62,6 +62,7 @@ export function maybeCreateSisyphusConfig(input: {
   let sisyphusResolution = applyModelResolution({
     uiSelectedModel: sisyphusOverride?.model !== undefined ? undefined : uiSelectedModel,
     userModel: sisyphusOverride?.model,
+    userFallbackModels: userFallbackModelIds(sisyphusOverride?.fallback_models),
     requirement: sisyphusRequirement,
     availableModels,
     systemDefaultModel,
@@ -94,6 +95,7 @@ export function maybeCreateSisyphusConfig(input: {
   }
 
   sisyphusConfig = applyOverrides(sisyphusConfig, sisyphusOverride, mergedCategories, directory)
+  sisyphusConfig = keepFallbackOverRetiredModel(sisyphusConfig, sisyphusResolution, sisyphusOverride?.model)
 
   const resolvedModel = sisyphusConfig.model ?? ""
   sisyphusConfig.permission = applyFrontierToolSchemaPermission(

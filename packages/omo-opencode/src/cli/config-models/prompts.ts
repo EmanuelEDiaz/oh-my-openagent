@@ -6,7 +6,9 @@ import { formatChain, formatFocusHint, formatOptionLabel, formatRankingTable } f
 import { suggestChain } from "./model-ranking"
 import type { RankedModel } from "./model-ranking"
 
-export type PickMode = "recommended" | "guided" | "search"
+export type PickMode = "recommended" | "guided"
+
+export type MenuAction = "fix-broken" | "one" | "all" | "save" | "exit"
 
 const SEARCH = "__search__"
 const DONE = "__done__"
@@ -28,29 +30,52 @@ function statusWord(status: ChainAvailability): string {
   return "ok"
 }
 
-export async function promptMode(): Promise<PickMode | null> {
-  const value = await p.select<PickMode>({
-    message: "How do you want to choose the models?",
-    options: [
-      { value: "recommended", label: "Recommended", hint: "I suggest a chain per agent, you accept or edit it" },
-      { value: "guided", label: "Guided", hint: "pick the primary, then each fallback, from a short ranked list" },
-      { value: "search", label: "Search all", hint: "search the full list and tick several models" },
-    ],
-    initialValue: "recommended",
+export async function promptMainMenu(params: {
+  readonly statuses: readonly ChainAvailability[]
+  readonly pending: ReadonlyMap<string, readonly string[]>
+}): Promise<MenuAction | null> {
+  const needsFix = params.statuses.filter((status) => status.missing.length > 0 && !params.pending.has(status.agent))
+  const pendingHint = params.pending.size === 0 ? "nothing changed yet" : [...params.pending.keys()].join(", ")
+  const options: { value: MenuAction; label: string; hint?: string }[] = [
+    ...(needsFix.length > 0
+      ? [{ value: "fix-broken" as const, label: `Fix ${needsFix.length} agent(s) with missing models`, hint: "suggested chains, you review before saving" }]
+      : []),
+    { value: "one", label: "Configure one agent..." },
+    { value: "all", label: "Configure all agents, one after another" },
+    { value: "save", label: `Save and exit (${params.pending.size} change(s))`, hint: pendingHint },
+    { value: "exit", label: "Exit without saving" },
+  ]
+  const value = await p.select<MenuAction>({
+    message: "What do you want to do?",
+    options,
+    initialValue: needsFix.length > 0 ? "fix-broken" : params.pending.size > 0 ? "save" : "one",
   })
   return unlessCancelled(value)
 }
 
-export async function promptAgents(statuses: readonly ChainAvailability[]): Promise<string[] | null> {
-  const value = await p.multiselect<string>({
-    message: "Which agents? (space to tick, enter to continue; broken ones are pre-ticked)",
-    options: statuses.map((status) => ({
+export async function promptAgent(params: {
+  readonly statuses: readonly ChainAvailability[]
+  readonly pending: ReadonlyMap<string, readonly string[]>
+}): Promise<string | null> {
+  const value = await p.select<string>({
+    message: "Which agent?",
+    options: params.statuses.map((status) => ({
       value: status.agent,
       label: `${status.agent.padEnd(18)} ${getAgentProfile(status.agent).summary}`,
-      hint: statusWord(status),
+      hint: params.pending.has(status.agent) ? "changed (not saved yet)" : statusWord(status),
     })),
-    initialValues: statuses.filter((status) => status.missing.length > 0).map((status) => status.agent),
-    required: true,
+  })
+  return unlessCancelled(value)
+}
+
+export async function promptMode(agent: string): Promise<PickMode | null> {
+  const value = await p.select<PickMode>({
+    message: `How do you want to choose the models for ${agent}?`,
+    options: [
+      { value: "recommended", label: "Use a suggested chain", hint: "best 3 models, you accept or edit" },
+      { value: "guided", label: "Pick them myself", hint: "primary first, then each fallback; search available" },
+    ],
+    initialValue: "recommended",
   })
   return unlessCancelled(value)
 }
@@ -110,20 +135,6 @@ async function guidedChain(ranked: readonly RankedModel[]): Promise<string[] | n
   return chain
 }
 
-async function searchChain(ranked: readonly RankedModel[], current: readonly string[]): Promise<string[] | null> {
-  const available = new Set(ranked.map((entry) => entry.model))
-  const selected = unlessCancelled(await p.autocompleteMultiselect<string>({
-    message: "Tick the models to use (type to search, Tab to tick, Enter to confirm)",
-    options: ranked.map((entry) => ({ value: entry.model, label: formatOptionLabel(entry), hint: formatFocusHint(entry) })),
-    initialValues: current.filter((model) => available.has(model)),
-    placeholder: "e.g. claude, gpt, free",
-    maxItems: 10,
-    required: true,
-  }))
-  if (selected === null) return null
-  return promptOrder({ selected, preferred: current })
-}
-
 async function recommendedChain(ranked: readonly RankedModel[]): Promise<string[] | null> {
   const suggestion = suggestChain(ranked)
   p.note(
@@ -154,35 +165,15 @@ export async function promptChain(params: {
 }): Promise<string[] | null> {
   showAgentHeader(params.agent, params.ranked, params.current)
   if (params.mode === "recommended") return recommendedChain(params.ranked)
-  if (params.mode === "guided") return guidedChain(params.ranked)
-  return searchChain(params.ranked, params.current)
+  return guidedChain(params.ranked)
 }
 
-/** Clack multiselect returns options in list order, so the chain order is asked explicitly. */
-export async function promptOrder(params: {
-  readonly selected: readonly string[]
-  readonly preferred: readonly string[]
-}): Promise<string[] | null> {
-  const rank = (model: string): number => {
-    const index = params.preferred.indexOf(model)
-    return index === -1 ? Number.MAX_SAFE_INTEGER : index
-  }
-  const remaining = [...params.selected].sort((left, right) => rank(left) - rank(right))
-  const ordered: string[] = []
+export function showSuggestedFixes(summary: string): void {
+  p.note(summary, "Suggested chains")
+}
 
-  while (remaining.length > 1) {
-    const position = ordered.length === 0 ? "Primary model (used first)" : `Fallback ${ordered.length}`
-    const choice = unlessCancelled(await p.select<string>({
-      message: position,
-      options: remaining.map((model) => ({ value: model, label: model })),
-      initialValue: remaining[0],
-    }))
-    if (choice === null) return null
-    ordered.push(choice)
-    remaining.splice(remaining.indexOf(choice), 1)
-  }
-
-  return [...ordered, ...remaining]
+export async function promptAcceptFixes(): Promise<boolean | null> {
+  return unlessCancelled(await p.confirm({ message: "Use these chains? (you can still change single agents before saving)", initialValue: true }))
 }
 
 export async function promptConfirmWrite(summary: string): Promise<boolean | null> {

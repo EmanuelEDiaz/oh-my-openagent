@@ -18,16 +18,20 @@ import type { AvailableModels } from "./available-models"
 import { formatRankingTable } from "./format"
 import { loadModelCatalog } from "./model-catalog"
 import type { ModelCatalog } from "./model-catalog"
-import { rankModels } from "./model-ranking"
+import { rankModels, suggestChain } from "./model-ranking"
+import { seedPluginModelCache } from "./plugin-model-cache"
 import type { RankedModel } from "./model-ranking"
 import * as defaultPrompts from "./prompts"
 
 export type ConfigModelsScope = "user" | "project"
 
 export type ConfigModelsPrompts = {
+  readonly promptMainMenu: typeof defaultPrompts.promptMainMenu
+  readonly promptAgent: typeof defaultPrompts.promptAgent
   readonly promptMode: typeof defaultPrompts.promptMode
-  readonly promptAgents: typeof defaultPrompts.promptAgents
   readonly promptChain: typeof defaultPrompts.promptChain
+  readonly showSuggestedFixes: typeof defaultPrompts.showSuggestedFixes
+  readonly promptAcceptFixes: typeof defaultPrompts.promptAcceptFixes
   readonly promptEnableRuntimeFallback: typeof defaultPrompts.promptEnableRuntimeFallback
   readonly promptConfirmWrite: typeof defaultPrompts.promptConfirmWrite
 }
@@ -48,6 +52,7 @@ export type ConfigModelsOptions = {
   readonly isInteractive?: () => boolean
   readonly listModels?: () => AvailableModels
   readonly loadCatalog?: () => ModelCatalog
+  readonly seedCache?: (models: readonly string[]) => number
   readonly prompts?: ConfigModelsPrompts
 }
 
@@ -215,25 +220,56 @@ function runSet(context: ModelsContext, agent: string, models: readonly string[]
   return 0
 }
 
-async function runInteractive(context: ModelsContext, prompts: ConfigModelsPrompts): Promise<number> {
-  const statuses = statusesFor(context)
-  printStatuses(context, statuses)
+function currentModels(context: ModelsContext, agent: string): string[] {
+  return readAgentChain(context.section.agents[agent]).map((entry) => (typeof entry === "string" ? entry : entry.model))
+}
 
-  const mode = await prompts.promptMode()
-  if (mode === null) return 1
-  const agents = await prompts.promptAgents(statuses)
-  if (agents === null) return 1
+async function configureAgent(
+  context: ModelsContext,
+  prompts: ConfigModelsPrompts,
+  agent: string,
+  pending: Map<string, readonly string[]>,
+): Promise<boolean> {
+  const mode = await prompts.promptMode(agent)
+  if (mode === null) return false
+  const ranked = rankModels(agent, context.available.models, context.catalog)
+  const current = pending.get(agent) ?? currentModels(context, agent)
+  const chain = await prompts.promptChain({ agent, mode, ranked, current })
+  if (chain === null) return false
+  if (chain.length > 0) pending.set(agent, chain)
+  return true
+}
 
+async function fixBrokenAgents(
+  context: ModelsContext,
+  prompts: ConfigModelsPrompts,
+  statuses: readonly ChainAvailability[],
+  pending: Map<string, readonly string[]>,
+): Promise<boolean> {
+  const suggestions = statuses
+    .filter((status) => status.missing.length > 0 && !pending.has(status.agent))
+    .map((status) => ({
+      agent: status.agent,
+      chain: suggestChain(rankModels(status.agent, context.available.models, context.catalog)),
+    }))
+    .filter((suggestion) => suggestion.chain.length > 0)
+  if (suggestions.length === 0) return true
+  prompts.showSuggestedFixes(suggestions.map(({ agent, chain }) => `${agent.padEnd(19)}${chain.join("  >  ")}`).join("\n"))
+  const accepted = await prompts.promptAcceptFixes()
+  if (accepted === null) return false
+  if (accepted) for (const { agent, chain } of suggestions) pending.set(agent, chain)
+  return true
+}
+
+async function saveChanges(
+  context: ModelsContext,
+  prompts: ConfigModelsPrompts,
+  pending: ReadonlyMap<string, readonly string[]>,
+): Promise<number> {
   const edits: OmoConfigEdit[] = []
   const summary: string[] = []
-  for (const agent of agents) {
-    const previous = readAgentChain(context.section.agents[agent])
-    const current = previous.map((entry) => (typeof entry === "string" ? entry : entry.model))
-    const ranked = rankModels(agent, context.available.models, context.catalog)
-    const chain = await prompts.promptChain({ agent, mode, ranked, current })
-    if (chain === null) return 1
-    if (chain.length === 0) continue
-    edits.push(...chainEdits(agent, buildChainEntries(chain, previous)))
+  for (const [agent, chain] of pending) {
+    edits.push(...chainEdits(agent, buildChainEntries(chain, readAgentChain(context.section.agents[agent]))))
     summary.push(`${agent.padEnd(19)}${chain.join("  >  ")}`)
   }
 
@@ -242,7 +278,7 @@ async function runInteractive(context: ModelsContext, prompts: ConfigModelsPromp
     if (enable === null) return 1
     if (enable) {
       edits.push(runtimeFallbackEdit())
-      summary.push("runtime_fallback  on")
+      summary.push("runtime_fallback   on")
     }
   }
 
@@ -254,6 +290,32 @@ async function runInteractive(context: ModelsContext, prompts: ConfigModelsPromp
   if (confirmed !== true) return 1
   writeEdits(context, edits)
   return 0
+}
+
+async function runInteractive(context: ModelsContext, prompts: ConfigModelsPrompts): Promise<number> {
+  const statuses = statusesFor(context)
+  printStatuses(context, statuses)
+  const pending = new Map<string, readonly string[]>()
+
+  for (;;) {
+    const action = await prompts.promptMainMenu({ statuses, pending })
+    if (action === null || action === "exit") return action === null ? 1 : 0
+    if (action === "save") return saveChanges(context, prompts, pending)
+
+    let completed = true
+    if (action === "fix-broken") completed = await fixBrokenAgents(context, prompts, statuses, pending)
+    if (action === "one") {
+      const agent = await prompts.promptAgent({ statuses, pending })
+      completed = agent !== null && await configureAgent(context, prompts, agent, pending)
+    }
+    if (action === "all") {
+      for (const status of statuses) {
+        completed = await configureAgent(context, prompts, status.agent, pending)
+        if (!completed) break
+      }
+    }
+    if (!completed) return 1
+  }
 }
 
 export async function runConfigModels(options: ConfigModelsOptions = {}): Promise<number> {
@@ -269,7 +331,13 @@ export async function runConfigModels(options: ConfigModelsOptions = {}): Promis
     return 1
   }
 
-  const available = withoutDisabledProviders((options.listModels ?? listAvailableModels)(), section.disabledProviders)
+  if (!options.json) output("Listing the models available right now (opencode models), this can take a few seconds...")
+  const listed = (options.listModels ?? listAvailableModels)()
+  if (listed.source === "opencode-cli") {
+    const providers = (options.seedCache ?? seedPluginModelCache)(listed.models)
+    if (providers > 0 && !options.json) output(`Plugin model cache refreshed (${providers} providers), so missing models are skipped at startup.`)
+  }
+  const available = withoutDisabledProviders(listed, section.disabledProviders)
   const context: ModelsContext = {
     options,
     output,
