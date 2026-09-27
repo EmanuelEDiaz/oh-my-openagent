@@ -30,6 +30,18 @@ Rutas relativas a `packages/`; `S/` = `packages/omo-opencode/src/`.
   OpenCode ve ahora, agrupados: "OpenCode Zen · Free", "OpenCode Zen" y luego cada proveedor ("Free" o precio a la
   derecha) → primario → fallbacks ("✓ Done, save" arriba) → se guarda en `~/.omo/omo.jsonc`. Reinicia OpenCode
   para aplicarlo. Código: `S/features/omo-models/`.
+- **Información para decidir (en `/omo-models`):** cada modelo muestra en la lista un resumen
+  (`1M ctx · thinks · img · code 45`) y, al pulsar Enter, una ficha "¿seguro?" con: encaje para el agente
+  (avisos: sin tools, sin imagen, contexto pequeño, deprecated), qué es, familia, lanzamiento, knowledge cutoff,
+  open weights, contexto, salida máxima, precio (y caché), capacidades, benchmarks independientes, fiabilidad y
+  notas del tier gratis. Cada dato indica su fuente:
+  - OpenCode + models.dev (local, exacto): límites, precio, capacidades, descripción, cutoff.
+  - OpenRouter API pública (caché 24 h): descripción de modelos `openrouter/*` y uptime real 24 h por proveedor.
+  - Artificial Analysis (opcional, `ARTIFICIAL_ANALYSIS_API_KEY`, gratis, 100 req/día; caché 24 h): índices de
+    programación/agente/inteligencia, tokens/s y tiempo al primer token. Solo se muestra con coincidencia exacta de nombre.
+  - Notas de tier gratis copiadas de la documentación oficial con fecha: límites de OpenRouter `:free`
+    (20/min, 50/día) y política de datos de cada modelo gratis de Zen (`free-model-notes.ts`; revisar cuando cambien).
+  - Descartado: el leaderboard de Aider (sin datos nuevos desde 2025-10).
 - **Uso rápido:**
   ```bash
   oh-my-opencode config models                    # menú interactivo

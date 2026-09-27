@@ -1,8 +1,21 @@
 export type ProviderModelView = {
   readonly id: string
   readonly name?: string
-  readonly cost?: { readonly input?: number; readonly output?: number }
-  readonly limit?: { readonly context?: number }
+  readonly family?: string
+  readonly cost?: {
+    readonly input?: number
+    readonly output?: number
+    readonly cache?: { readonly read?: number; readonly write?: number }
+  }
+  readonly limit?: { readonly context?: number; readonly output?: number }
+  readonly capabilities?: {
+    readonly reasoning?: boolean
+    readonly toolcall?: boolean
+    readonly attachment?: boolean
+    readonly input?: Readonly<Partial<Record<"text" | "audio" | "image" | "video" | "pdf", boolean>>>
+  }
+  readonly status?: string
+  readonly release_date?: string
 }
 
 export type ProviderView = {
@@ -61,7 +74,11 @@ function categoryRank(category: string): number {
  */
 export function buildModelOptions(
   providers: readonly ProviderView[],
-  options: { readonly disabledProviders?: readonly string[]; readonly exclude?: readonly string[] } = {},
+  options: {
+    readonly disabledProviders?: readonly string[]
+    readonly exclude?: readonly string[]
+    readonly describe?: (provider: string, model: ProviderModelView) => string
+  } = {},
 ): ModelOption[] {
   const disabled = new Set(options.disabledProviders ?? [])
   const exclude = new Set(options.exclude ?? [])
@@ -74,7 +91,7 @@ export function buildModelOptions(
       result.push({
         title: model.id || key,
         value: id,
-        description: formatContext(model.limit?.context) ?? "",
+        description: options.describe?.(provider.id, model) ?? formatContext(model.limit?.context) ?? "",
         footer: formatFooter(model),
         category: categoryFor(provider, model),
       })

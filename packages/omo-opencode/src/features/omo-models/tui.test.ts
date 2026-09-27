@@ -6,7 +6,7 @@ import type { OpenCodeSection } from "../../cli/config-models/context"
 import { buildModelOptions, ZEN_CATEGORY, ZEN_FREE_CATEGORY } from "./model-options"
 import type { ProviderView } from "./model-options"
 import { openOmoModels, registerOmoModelsTui } from "./tui"
-import type { OmoModelsConfigIo, OmoModelsTuiApi } from "./tui"
+import type { OmoModelsConfigIo, OmoModelsDeps, OmoModelsTuiApi } from "./tui"
 
 const PROVIDERS: ProviderView[] = [
   {
@@ -65,6 +65,14 @@ function io(saved: { agent: string; chain: readonly string[] }[]): OmoModelsConf
   } }
 }
 
+function deps(saved: { agent: string; chain: readonly string[] }[]): OmoModelsDeps {
+  return {
+    io: io(saved),
+    catalog: () => new Map(),
+    external: { load: async () => ({ fetchedAt: "", benchmarks: {}, openRouter: {} }), reliability: async () => undefined },
+  }
+}
+
 describe("buildModelOptions", () => {
   test("lists OpenCode Zen free first, then the rest of Zen, then other providers; honors disabled providers", () => {
     // when
@@ -92,24 +100,28 @@ describe("/omo-models", () => {
     } } }
 
     // when
-    registerOmoModelsTui(api, io([]))
+    registerOmoModelsTui(api, deps([]))
 
     // then
     expect(registered).toMatchObject([{ slash: { name: "omo-models" } }])
   })
 
-  test("agent -> primary -> fallback -> done saves the ordered chain", () => {
+  test("agent -> primary -> fallback -> done saves the ordered chain", async () => {
     // given
     const saved: { agent: string; chain: readonly string[] }[] = []
     const { api, dialogs, toasts, choose } = fakeApi()
 
     // when
-    openOmoModels(api, io(saved))
+    openOmoModels(api, deps(saved))
     const agents = dialogs[0]
     choose("explore")
     const primaryDialog = dialogs.at(-1)
     choose("opencode/nemotron-free")
+    const details = dialogs.at(-1)
+    choose("__omo_models_confirm__")
     choose("openrouter/qwen/qwen3:free")
+    await Bun.sleep(0)
+    choose("__omo_models_confirm__")
     choose("__omo_models_done__")
 
     // then
@@ -119,25 +131,49 @@ describe("/omo-models", () => {
     expect(primaryDialog?.options.some((option) => option.value.startsWith("openai/"))).toBe(false)
     expect(saved).toEqual([{ agent: "explore", chain: ["opencode/nemotron-free", "openrouter/qwen/qwen3:free"] }])
     expect(toasts.at(-1)).toContain("Restart OpenCode to apply")
+    expect(details?.title).toBe("opencode/nemotron-free for explore?")
+    expect(details?.options.some((option) => option.category === "Fit for explore")).toBe(true)
+    expect(details?.options.some((option) => option.title.startsWith("Free on OpenCode Zen only") && option.category === "Free tier")).toBe(true)
   })
 
-  test("fallback dialogs hide models already in the chain and stop at the maximum length", () => {
+  test("fallback dialogs hide models already in the chain and stop at the maximum length", async () => {
     // given
     const saved: { agent: string; chain: readonly string[] }[] = []
     const { api, dialogs, choose } = fakeApi()
 
     // when
-    openOmoModels(api, io(saved))
+    openOmoModels(api, deps(saved))
     choose("oracle")
     choose("opencode/big-pickle")
+    choose("__omo_models_confirm__")
     const fallbackDialog = dialogs.at(-1)
-    choose("opencode/nemotron-free")
-    choose("opencode/claude-opus-5")
-    choose("openrouter/qwen/qwen3:free")
+    for (const model of ["opencode/nemotron-free", "opencode/claude-opus-5", "openrouter/qwen/qwen3:free"]) {
+      choose(model)
+      await Bun.sleep(0)
+      choose("__omo_models_confirm__")
+    }
 
     // then
     expect(fallbackDialog?.options[0]?.value).toBe("__omo_models_done__")
     expect(fallbackDialog?.options.map((option) => option.value)).not.toContain("opencode/big-pickle")
     expect(saved).toEqual([{ agent: "oracle", chain: ["opencode/big-pickle", "opencode/nemotron-free", "opencode/claude-opus-5", "openrouter/qwen/qwen3:free"] }])
+  })
+})
+
+describe("model details screen", () => {
+  test("going back returns to the list without adding the model", () => {
+    // given
+    const saved: { agent: string; chain: readonly string[] }[] = []
+    const { api, dialogs, choose } = fakeApi()
+
+    // when
+    openOmoModels(api, deps(saved))
+    choose("explore")
+    choose("opencode/claude-opus-5")
+    choose("__omo_models_back__")
+
+    // then
+    expect(dialogs.at(-1)?.title).toBe("explore: primary model")
+    expect(saved).toEqual([])
   })
 })
