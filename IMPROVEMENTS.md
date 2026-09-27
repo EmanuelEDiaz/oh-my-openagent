@@ -21,6 +21,8 @@ Estados: `idea` → `investigando` → `en progreso` → `hecho` / `descartado`.
 
 ## Mejoras
 
+> Plan maestro paso a paso: [`docs/fork/roadmap.md`](docs/fork/roadmap.md). Planes detallados en `docs/fork/plans/`.
+
 Rutas relativas a `packages/`; `S/` = `packages/omo-opencode/src/`.
 
 ### M-001 — Selector de modelos por agente (cadena con fallback) + gratis/local
