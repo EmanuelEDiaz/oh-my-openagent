@@ -1,6 +1,6 @@
 # Pasos 1.4b y 1.4c — Decisiones que escalan: almacenamiento, vistas y decisiones que encuentran al agente
 
-Parte del roadmap: `docs/fork/roadmap.md`. Estado: **plan aprobado 28-09-2026** (no implementado).
+Parte del roadmap: `docs/fork/roadmap.md`. Estado: **plan aprobado 28-09-2026**; 1.4b hecho (28-09-2026), 1.4c pendiente.
 Rutas: `S/` = `packages/omo-opencode/src/`.
 
 ## 1. Pregunta de partida
@@ -37,21 +37,21 @@ problema real es navegarlas a mano, y eso lo resuelven las vistas.
 ## 4. Paso 1.4b — Enlaces en vez de copias, vistas y esquema
 
 ### Subtareas
-- [ ] 1. **Bloque generado en el plan.** El `## Decisions log` del plan contiene un bloque entre marcadores
+- [x] 1. **Bloque generado en el plan.** El `## Decisions log` del plan contiene un bloque entre marcadores
   `<!-- omo:decisions:start (generado, no editar) -->` … `<!-- omo:decisions:end -->` con una línea por decisión:
   `- D-… — título · estado · reversibilidad` (tachado y "superseded by D-…" si fue reemplazada). El plugin lo regenera al
   registrar o reemplazar una decisión y en cada sincronización del índice. El texto del plan fuera de los marcadores no se toca.
-- [ ] 2. **Campo `plans` en la decisión.** El registro guarda qué planes la referencian, para poder regenerar sus bloques.
-- [ ] 3. **Migración.** Las entradas completas ya escritas por 1.4 en planes (`### D-…:` con campos) se sustituyen por el
+- [x] 2. **Campo `plans` en la decisión.** El registro guarda qué planes la referencian, para poder regenerar sus bloques.
+- [x] 3. **Migración.** Las entradas completas ya escritas por 1.4 en planes (`### D-…:` con campos) se sustituyen por el
   bloque de enlaces, sin perder información (el detalle ya está en `docs/decisions/`).
-- [ ] 4. **Vista generada:** `oh-my-opencode knowledge decisions [--status active|superseded|all] [--area X] [--file path] [--json]`
+- [x] 4. **Vista generada:** `oh-my-opencode knowledge decisions [--status active|superseded|all] [--area X] [--file path] [--json]`
   → tabla (id, fecha, título, estado, reversibilidad, área), línea temporal y cadena de reemplazos. No se escribe ningún archivo.
-- [ ] 5. **Campo `area`** (opcional, p. ej. `cache`, `auth`) en `decision_record` y filtro en `decision_search`.
-- [ ] 6. **Validación del esquema.** Al indexar, un encabezado mal formado o sin campos obligatorios (`id`, `title`, `status`,
+- [x] 5. **Campo `area`** (opcional, p. ej. `cache`, `auth`) en `decision_record` y filtro en `decision_search`.
+- [x] 6. **Validación del esquema.** Al indexar, un encabezado mal formado o sin campos obligatorios (`id`, `title`, `status`,
   `date`, `reversibility`, `evidence`) se reporta en `knowledge report` y en `decision_search` en vez de indexarse como si fuera válido.
-- [ ] 7. **Escalado.** Con más de ~200 decisiones, las nuevas se guardan en `docs/decisions/<año>/`; lectura y búsqueda
+- [x] 7. **Escalado.** Con más de ~200 decisiones, las nuevas se guardan en `docs/decisions/<año>/`; lectura y búsqueda
   soportan ambos esquemas. Las reemplazadas se conservan como historia y se ocultan por defecto.
-- [ ] 8. Tests + QA real: registrar, reemplazar y ver el bloque del plan actualizado; ejecutar la vista.
+- [x] 8. Tests + QA real: registrar, reemplazar y ver el bloque del plan actualizado; ejecutar la vista.
 
 ### Criterios de aceptación
 ```gherkin
