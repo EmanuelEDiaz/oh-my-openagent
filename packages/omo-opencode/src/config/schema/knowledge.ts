@@ -17,6 +17,8 @@ export const KnowledgeConfigSchema = z.object({
   evidence_gate: z.enum(["block", "warn", "off"]).default("block"),
   /** Append a [citation check] to subagent reports whose citations do not verify (default: true) */
   check_citations: z.boolean().default(true),
+  /** Keep the user's literal messages, decisions, files and errors across compaction (default: true) */
+  lossless_compaction: z.boolean().default(true),
   /** Size budget for the session index; oldest unreferenced sessions are pruned first (default: 200) */
   max_index_mb: z.number().min(10).default(200),
 })

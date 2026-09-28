@@ -18,6 +18,7 @@ export const HookNameSchema = z.enum([
   "decision-injector",
   "evidence-gate",
   "citation-check",
+  "lossless-compaction",
   "background-notification",
   "auto-update-checker",
   "ast-grep-sg-provision",

@@ -11515,6 +11515,10 @@
               "default": true,
               "type": "boolean"
             },
+            "lossless_compaction": {
+              "default": true,
+              "type": "boolean"
+            },
             "max_index_mb": {
               "default": 200,
               "type": "number",
@@ -11529,6 +11533,7 @@
             "inject_decisions",
             "evidence_gate",
             "check_citations",
+            "lossless_compaction",
             "max_index_mb"
           ],
           "additionalProperties": false
@@ -29522,6 +29527,10 @@
                     "default": true,
                     "type": "boolean"
                   },
+                  "lossless_compaction": {
+                    "default": true,
+                    "type": "boolean"
+                  },
                   "max_index_mb": {
                     "default": 200,
                     "type": "number",
@@ -29536,6 +29545,7 @@
                   "inject_decisions",
                   "evidence_gate",
                   "check_citations",
+                  "lossless_compaction",
                   "max_index_mb"
                 ],
                 "additionalProperties": false
