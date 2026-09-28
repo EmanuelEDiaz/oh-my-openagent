@@ -1,6 +1,6 @@
 # Pasos 1.4b y 1.4c — Decisiones que escalan: almacenamiento, vistas y decisiones que encuentran al agente
 
-Parte del roadmap: `docs/fork/roadmap.md`. Estado: **plan aprobado 28-09-2026**; 1.4b hecho (28-09-2026), 1.4c pendiente.
+Parte del roadmap: `docs/fork/roadmap.md`. Estado: **plan aprobado 28-09-2026**; 1.4b y 1.4c hechos (28-09-2026).
 Rutas: `S/` = `packages/omo-opencode/src/`.
 
 ## 1. Pregunta de partida
@@ -89,15 +89,15 @@ decisión **activa**, el plugin le inyecta una línea breve:
 Así no depende de que el modelo recuerde buscar. Mecanismo análogo al `rules-injector` existente, que inyecta reglas al leer archivos.
 
 ### Subtareas
-- [ ] 1. Mapa archivo → decisiones activas, construido desde las evidencias `file` del índice (se actualiza en cada sincronización).
-- [ ] 2. Hook `tool.execute.after` sobre `read`, `edit`, `write` y `multiedit`: añade las líneas de decisiones activas que citan ese
+- [x] 1. Mapa archivo → decisiones activas, construido desde las evidencias `file` del índice (se actualiza en cada sincronización).
+- [x] 2. Hook `tool.execute.after` sobre `read`, `edit`, `write` y `multiedit`: añade las líneas de decisiones activas que citan ese
   archivo (o la carpeta que lo contiene, si la evidencia cita un directorio).
-- [ ] 3. **Sin repetir:** cada decisión se inyecta una vez por sesión (se reinicia tras compactar, como las reglas); máximo 3 por
+- [x] 3. **Sin repetir:** cada decisión se inyecta una vez por sesión (se reinicia tras compactar, como las reglas); máximo 3 por
   archivo, priorizando las más recientes y `hard`.
-- [ ] 4. **Aviso de deriva:** si las líneas citadas cambiaron desde que se registró (la huella no coincide), la línea lo dice:
+- [x] 4. **Aviso de deriva:** si las líneas citadas cambiaron desde que se registró (la huella no coincide), la línea lo dice:
   "evidence changed since recorded — re-check before relying on it".
-- [ ] 5. Config: `knowledge.inject_decisions` (activado por defecto) y el hook desactivable desde `disabled_hooks`.
-- [ ] 6. Tests + QA real: registrar una decisión que cita `src/cache.ts`; en otra sesión, pedir una edición de ese archivo y
+- [x] 5. Config: `knowledge.inject_decisions` (activado por defecto) y el hook desactivable desde `disabled_hooks`.
+- [x] 6. Tests + QA real: registrar una decisión que cita `src/cache.ts`; en otra sesión, pedir una edición de ese archivo y
   comprobar que el agente recibe y respeta la decisión.
 
 ### Criterios de aceptación
