@@ -10,6 +10,7 @@ export const KIND_WEIGHT: Readonly<Record<KnowledgeKind, number>> = {
   plan: 2.2,
   agents_md: 2,
   changelog: 1.8,
+  doc: 1.5,
   user: 1.8,
   summary: 1.5,
   assistant: 1.4,

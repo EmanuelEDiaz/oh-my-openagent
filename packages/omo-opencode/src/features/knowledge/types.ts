@@ -6,6 +6,7 @@ export type KnowledgeKind =
   | "agents_md"
   | "notepad"
   | "changelog"
+  | "doc"
   | "commit"
   | "user"
   | "assistant"
