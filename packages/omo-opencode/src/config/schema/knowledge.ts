@@ -11,6 +11,8 @@ export const KnowledgeConfigSchema = z.object({
   index_sessions: z.boolean().default(true),
   /** Unreferenced sessions older than this leave the index (the OpenCode database is never modified) */
   session_retention_days: z.number().int().min(1).default(180),
+  /** Append active decisions to reads/edits of the files they cite as evidence (default: true) */
+  inject_decisions: z.boolean().default(true),
   /** Size budget for the session index; oldest unreferenced sessions are pruned first (default: 200) */
   max_index_mb: z.number().min(10).default(200),
 })

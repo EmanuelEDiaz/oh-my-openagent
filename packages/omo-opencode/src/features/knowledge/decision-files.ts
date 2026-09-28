@@ -22,6 +22,8 @@ export type DecisionRecord = {
   readonly supersededBy?: string
   readonly plans: readonly string[]
   readonly evidence: readonly DecisionEvidence[]
+  /** The "- **Decision:** …" line of the body, when present. */
+  readonly decision?: string
 }
 
 export type InvalidDecision = { readonly path: string; readonly problems: readonly string[] }
@@ -71,7 +73,9 @@ export function parseDecision(path: string, content: string): DecisionRecord | I
   const invalidEvidence = evidence.filter((item) => !item["type"] || !item["ref"]).length
   if (invalidEvidence > 0) problems.push(`${invalidEvidence} evidence item(s) without type/ref`)
   if (problems.length > 0) return { path, problems }
+  const decisionLine = /^- \*\*Decision:\*\* (.+)$/m.exec(content.slice(match[0].length))?.[1]
   return {
+    ...(decisionLine ? { decision: decisionLine.trim() } : {}),
     path,
     id: scalars["id"]!,
     title: scalars["title"]!,
