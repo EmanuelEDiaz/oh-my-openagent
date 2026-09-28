@@ -69,7 +69,7 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
 ## Fase 1 — Fundamento: índice, citas de chat y decisiones
 | Paso | Qué | Estado |
 |---|---|---|
-| 1.1 | **Diseño del índice y su ciclo de vida** (solo análisis + plan): qué se indexa, formato de locator, presupuesto de tamaño, poda (capas resume/cold/orphan de tu biblioteca), `optimize`/`VACUUM`, qué pasa al borrar sesiones, rendimiento medido. | pendiente |
+| 1.1 | **Diseño del índice y su ciclo de vida** (solo análisis + plan): qué se indexa, formato de locator, presupuesto de tamaño, poda (capas resume/cold/orphan de tu biblioteca), `optimize`/`VACUUM`, qué pasa al borrar sesiones, rendimiento medido. | **análisis hecho**, plan en revisión: `plans/knowledge-index.md` |
 | 1.2 | Índice del proyecto (`.omo/knowledge.db`, FTS5 + BM25) + herramienta `knowledge_search` con locators citables. | pendiente |
 | 1.3 | **Citas de chat:** indexado de sesiones leyendo `opencode.db` en solo lectura (tu método validado), puntero `ses_… → msg_… → prt_…`, comando de re-auditoría, poda de sesiones borradas y "una sesión vive si algo la referencia". | pendiente |
 | 1.4 | Decisiones citadas en tu formato (`docs/decisions/` + Decisions log del plan activo). | plan listo (Pieza 2) |
