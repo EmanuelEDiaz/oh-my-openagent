@@ -1,5 +1,6 @@
 import type { DefaultModeConfig } from "../config/schema/default-mode"
 import { reconcileSisyphusRuntimePrompt } from "../agents/sisyphus-runtime-prompt-reconciler"
+import { GROUNDING_TAG } from "../features/knowledge/grounding"
 
 const ULTRAWORK_MODE_TAG = "<ultrawork-mode>"
 
@@ -25,6 +26,7 @@ export function createSystemTransformHandler(
   defaultMode?: DefaultModeConfig,
   getUltraworkMessage?: (agentName?: string, modelID?: string) => string,
   ultraworkRestoration?: UltraworkRestoration | null,
+  groundingGuidance?: string,
 ): (
   input: { sessionID?: string; model: { id: string; providerID: string; [key: string]: unknown } },
   output: { system: string[] },
@@ -35,6 +37,10 @@ export function createSystemTransformHandler(
     // is the only seam that knows the model actually selected at runtime, so
     // rebuild the whole body for the runtime model here (issue #5297/#6966).
     reconcileSisyphusRuntimePrompt(output.system, toCanonicalModel(input.model))
+
+    if (groundingGuidance && !output.system.some((part) => part.includes(GROUNDING_TAG))) {
+      output.system.push(groundingGuidance)
+    }
 
     const restoredGuidance = input.sessionID
       ? ultraworkRestoration?.getSystemTransformGuidance?.(input.sessionID, input.model?.id)
