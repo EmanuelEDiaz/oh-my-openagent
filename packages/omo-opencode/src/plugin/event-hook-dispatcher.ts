@@ -51,6 +51,7 @@ export function createEventHookDispatcher(hooks: CreatedHooks, runEventHookSafel
     await runEventHookSafely("rulesInjector", hooks.rulesInjector?.event, input);
     await runEventHookSafely("knowledgeIndexer", hooks.knowledgeIndexer?.event, input);
     await runEventHookSafely("decisionInjector", hooks.decisionInjector?.event, input);
+    await runEventHookSafely("losslessCompaction", hooks.losslessCompaction?.event, input);
     await runEventHookSafely("keywordDetector", hooks.keywordDetector?.event, input);
     await runEventHookSafely("hephaestusAgentsMdInjector", hooks.hephaestusAgentsMdInjector?.event, input);
     await runEventHookSafely("thinkMode", hooks.thinkMode?.event, input);

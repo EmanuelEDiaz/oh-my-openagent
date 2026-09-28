@@ -43,6 +43,10 @@ type CompactionHookDependencies = {
     capture?: (sessionID: string) => Promise<void>
     restore?: (sessionID: string) => Promise<void>
   } | null
+  losslessCompaction?: {
+    capture?: (sessionID: string) => Promise<void>
+    inject?: (sessionID: string) => string | undefined
+  } | null
   claudeCodeHooks?: {
     "experimental.session.compacting"?: SessionCompactingHook
   } | null
@@ -113,6 +117,9 @@ export function createSessionCompactingHandler(
         await capture(input.sessionID)
       }
     })
+    await runCompactionStep("losslessCompaction.capture", input.sessionID, async () => {
+      await hooks.losslessCompaction?.capture?.(input.sessionID)
+    })
     await runCompactionStep("claudeCodeHooks.experimental.session.compacting", input.sessionID, async () => {
       await hooks.claudeCodeHooks?.["experimental.session.compacting"]?.(input, output)
     })
@@ -122,6 +129,10 @@ export function createSessionCompactingHandler(
       if (context) {
         output.context.push(context)
       }
+    })
+    await runCompactionStep("losslessCompaction.inject", input.sessionID, () => {
+      const guidance = hooks.losslessCompaction?.inject?.(input.sessionID)
+      if (guidance) output.context.push(guidance)
     })
   }
 }

@@ -11,12 +11,14 @@ import {
   createAtlasHook,
 } from "../../hooks"
 import { safeCreateHook } from "../../shared/safe-create-hook"
+import { createLosslessCompactionHook } from "../../hooks/lossless-compaction"
 import { createUnstableAgentBabysitter } from "../unstable-agent-babysitter"
 
 export type ContinuationHooks = {
   stopContinuationGuard: ReturnType<typeof createStopContinuationGuardHook> | null
   compactionContextInjector: ReturnType<typeof createCompactionContextInjector> | null
   compactionTodoPreserver: ReturnType<typeof createCompactionTodoPreserverHook> | null
+  losslessCompaction: ReturnType<typeof createLosslessCompactionHook> | null
   todoContinuationEnforcer: ReturnType<typeof createTodoContinuationEnforcer> | null
   unstableAgentBabysitter: ReturnType<typeof createUnstableAgentBabysitter> | null
   backgroundNotificationHook: ReturnType<typeof createBackgroundNotificationHook> | null
@@ -86,10 +88,15 @@ export function createContinuationHooks(args: {
         }))
     : null
 
+  const losslessCompaction = isHookEnabled("lossless-compaction") && pluginConfig.knowledge?.enabled !== false && pluginConfig.knowledge?.lossless_compaction !== false
+    ? safeHook("lossless-compaction", () => createLosslessCompactionHook(ctx))
+    : null
+
   return {
     stopContinuationGuard,
     compactionContextInjector,
     compactionTodoPreserver,
+    losslessCompaction,
     todoContinuationEnforcer,
     unstableAgentBabysitter,
     backgroundNotificationHook,

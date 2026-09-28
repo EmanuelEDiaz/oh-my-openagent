@@ -46,6 +46,33 @@ describe("experimental.session.compacting handler", () => {
     expect(output.context).toEqual(["context-for-ses_test"])
   })
 
+  //#given the lossless-compaction hook is enabled
+  //#when compacting handler is invoked
+  //#then it captures before PreCompact and its guidance is appended after the context injector
+  it("captures the lossless snapshot and appends its guidance last", async () => {
+    const callOrder: string[] = []
+    const handler = createSessionCompactingHandler({
+      compactionContextInjector: { inject: () => "checkpoint-context" },
+      losslessCompaction: {
+        capture: mock(async () => {
+          callOrder.push("losslessCapture")
+        }),
+        inject: (sessionID: string) => `verbatim-for-${sessionID}`,
+      },
+      claudeCodeHooks: {
+        "experimental.session.compacting": mock(async () => {
+          callOrder.push("preCompact")
+        }),
+      },
+    })
+
+    const output = { context: [] as string[], prompt: undefined as string | undefined }
+    await handler({ sessionID: "ses_test" }, output)
+
+    expect(callOrder).toEqual(["losslessCapture", "preCompact"])
+    expect(output.context).toEqual(["checkpoint-context", "verbatim-for-ses_test"])
+  })
+
   //#given claudeCodeHooks injects context during PreCompact
   //#when compacting handler is invoked
   //#then injected context from PreCompact is preserved in output
