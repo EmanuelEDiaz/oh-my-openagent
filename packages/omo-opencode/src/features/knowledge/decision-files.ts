@@ -24,6 +24,8 @@ export type DecisionRecord = {
   readonly evidence: readonly DecisionEvidence[]
   /** The "- **Decision:** …" line of the body, when present. */
   readonly decision?: string
+  /** ses_…/msg_… where the decision was recorded, when known. */
+  readonly session?: string
 }
 
 export type InvalidDecision = { readonly path: string; readonly problems: readonly string[] }
@@ -85,6 +87,7 @@ export function parseDecision(path: string, content: string): DecisionRecord | I
     ...(scalars["area"] ? { area: scalars["area"] } : {}),
     ...(scalars["supersedes"] ? { supersedes: scalars["supersedes"] } : {}),
     ...(scalars["superseded_by"] ? { supersededBy: scalars["superseded_by"] } : {}),
+    ...(scalars["session"] ? { session: scalars["session"] } : {}),
     plans,
     evidence: evidence.map((item) => ({
       type: item["type"]!,

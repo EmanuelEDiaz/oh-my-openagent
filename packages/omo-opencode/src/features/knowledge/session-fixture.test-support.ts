@@ -3,7 +3,7 @@ import { loadSqlite } from "../../shared/bun-sqlite-shim"
 export type FixturePart =
   | { readonly type: "text"; readonly text: string; readonly synthetic?: boolean }
   | { readonly type: "reasoning"; readonly text: string }
-  | { readonly type: "tool"; readonly tool: string; readonly input: Record<string, unknown>; readonly output?: string }
+  | { readonly type: "tool"; readonly tool: string; readonly input: Record<string, unknown>; readonly output?: string; readonly error?: string }
 
 export type FixtureMessage = {
   readonly id: string
@@ -45,7 +45,9 @@ export async function createOpencodeDbFixture(path: string, sessions: readonly F
       ])
       message.parts.forEach((part, index) => {
         const data = part.type === "tool"
-          ? { type: "tool", tool: part.tool, state: { status: "completed", input: part.input, output: part.output ?? "" } }
+          ? { type: "tool", tool: part.tool, state: part.error === undefined
+            ? { status: "completed", input: part.input, output: part.output ?? "" }
+            : { status: "error", input: part.input, error: part.error } }
           : part
         db.run("INSERT INTO part VALUES (?, ?, ?, ?, ?)", [part.id, message.id, session.id, message.created + index, JSON.stringify(data)])
       })

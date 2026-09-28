@@ -23,6 +23,8 @@ export type SessionPart = {
   readonly synthetic: boolean
   readonly tool: string | null
   readonly toolInput: string | null
+  readonly toolStatus: string | null
+  readonly toolError: string | null
 }
 
 export type SessionReader = {
@@ -31,6 +33,8 @@ export type SessionReader = {
   readonly messageIdsOf: (sessionId: string) => string[]
   readonly partsOfMessage: (messageId: string) => SessionPart[]
   readonly session: (sessionId: string) => SessionRow | undefined
+  /** Text of the most recent compaction summary message of a session ("" when none). */
+  readonly latestSummaryText: (sessionId: string) => string
   /** OpenCode project id for a directory; non-git ("global") directories are scoped by their path. */
   readonly projectIdFor: (directory: string) => string
   readonly close: () => void
@@ -73,7 +77,8 @@ const PART_COLUMNS = `p.id AS partId, p.message_id AS messageId, p.time_created 
   json_extract(m.data, '$.role') AS role, json_extract(m.data, '$.summary') AS summary,
   json_extract(p.data, '$.type') AS type, json_extract(p.data, '$.text') AS text,
   json_extract(p.data, '$.synthetic') AS synthetic, json_extract(p.data, '$.tool') AS tool,
-  json_extract(p.data, '$.state.input') AS toolInput`
+  json_extract(p.data, '$.state.input') AS toolInput,
+  json_extract(p.data, '$.state.status') AS toolStatus, json_extract(p.data, '$.state.error') AS toolError`
 
 type RawPart = Omit<SessionPart, "summary" | "synthetic"> & { summary: unknown; synthetic: unknown }
 
@@ -116,6 +121,11 @@ export async function openSessionReader(path: string): Promise<SessionReader | n
     session: (sessionId) => {
       const row = db.query(`SELECT ${sessionColumns} FROM session WHERE id = ?`).get(sessionId) as SessionRow | null
       return row === null ? undefined : { ...row, projectId: scope(row.projectId, row.directory) }
+    },
+    latestSummaryText: (sessionId) => {
+      const row = db.query("SELECT id FROM message WHERE session_id = ? AND json_extract(data, '$.summary') = 1 ORDER BY time_created DESC, id DESC LIMIT 1").get(sessionId) as { id: string } | null
+      if (row === null) return ""
+      return (partsByMessage.all(row.id) as RawPart[]).map(toPart).filter((part) => part.type === "text" && part.text).map((part) => part.text).join("\n")
     },
     projectIdFor: (directory) => {
       const match = roots
