@@ -30,6 +30,7 @@ import {
 } from "../../shared"
 import { safeCreateHook } from "../../shared/safe-create-hook"
 import { createKnowledgeIndexerHook } from "../../hooks/knowledge-indexer"
+import { createDecisionInjectorHook } from "../../hooks/decision-injector"
 
 export type ToolGuardHooks = {
   commentChecker: ReturnType<typeof createCommentCheckerHooks> | null
@@ -39,6 +40,7 @@ export type ToolGuardHooks = {
   emptyTaskResponseDetector: ReturnType<typeof createEmptyTaskResponseDetectorHook> | null
   rulesInjector: ReturnType<typeof createRulesInjectorHook> | null
   knowledgeIndexer: ReturnType<typeof createKnowledgeIndexerHook> | null
+  decisionInjector: ReturnType<typeof createDecisionInjectorHook> | null
   tasksTodowriteDisabler: ReturnType<typeof createTasksTodowriteDisablerHook> | null
   writeExistingFileGuard: ReturnType<typeof createWriteExistingFileGuardHook> | null
   bashFileReadGuard: ReturnType<typeof createBashFileReadGuardHook> | null
@@ -114,6 +116,10 @@ export function createToolGuardHooks(args: {
     ? safeHook("knowledge-indexer", () => createKnowledgeIndexerHook(ctx, pluginConfig.knowledge))
     : null
 
+  const decisionInjector = isHookEnabled("decision-injector") && pluginConfig.knowledge?.enabled !== false && pluginConfig.knowledge?.inject_decisions !== false
+    ? safeHook("decision-injector", () => createDecisionInjectorHook(ctx, pluginConfig.knowledge))
+    : null
+
   const tasksTodowriteDisabler = isHookEnabled("tasks-todowrite-disabler")
     ? safeHook("tasks-todowrite-disabler", () =>
         createTasksTodowriteDisablerHook({ experimental: pluginConfig.experimental }))
@@ -171,6 +177,7 @@ export function createToolGuardHooks(args: {
     emptyTaskResponseDetector,
     rulesInjector,
     knowledgeIndexer,
+    decisionInjector,
     tasksTodowriteDisabler,
     writeExistingFileGuard,
     bashFileReadGuard,

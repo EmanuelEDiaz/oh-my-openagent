@@ -11498,6 +11498,10 @@
               "minimum": 1,
               "maximum": 9007199254740991
             },
+            "inject_decisions": {
+              "default": true,
+              "type": "boolean"
+            },
             "max_index_mb": {
               "default": 200,
               "type": "number",
@@ -11509,6 +11513,7 @@
             "git_commits",
             "index_sessions",
             "session_retention_days",
+            "inject_decisions",
             "max_index_mb"
           ],
           "additionalProperties": false
@@ -29485,6 +29490,10 @@
                     "minimum": 1,
                     "maximum": 9007199254740991
                   },
+                  "inject_decisions": {
+                    "default": true,
+                    "type": "boolean"
+                  },
                   "max_index_mb": {
                     "default": 200,
                     "type": "number",
@@ -29496,6 +29505,7 @@
                   "git_commits",
                   "index_sessions",
                   "session_retention_days",
+                  "inject_decisions",
                   "max_index_mb"
                 ],
                 "additionalProperties": false
