@@ -25,6 +25,9 @@ export type KnowledgeStore = {
   readonly search: (query: string, options?: SearchOptions) => KnowledgeHit[]
   readonly getMeta: (key: string) => string | undefined
   readonly setMeta: (key: string, value: string) => void
+  readonly listMeta: (prefix: string) => [string, string][]
+  /** Bodies containing a literal substring (used to find ses_… references in plans and decisions). */
+  readonly bodiesContaining: (needle: string) => { readonly source: string; readonly body: string }[]
   readonly maintain: (options: { readonly now: number; readonly force?: boolean }) => void
   readonly stats: () => { readonly documents: number; readonly sources: number; readonly bytes: number }
   readonly close: () => void
@@ -142,6 +145,9 @@ export async function openKnowledgeStore(path: string): Promise<KnowledgeStore |
       return []
     },
     getMeta,
+    listMeta: (prefix) => (db.query("SELECT key, value FROM meta WHERE key LIKE ? ESCAPE '\\'")
+      .all(`${prefix.replace(/[\\%_]/g, (char) => `\\${char}`)}%`) as { key: string; value: string }[]).map((row) => [row.key, row.value]),
+    bodiesContaining: (needle) => db.query("SELECT source, body FROM documents WHERE instr(body, ?) > 0").all(needle) as { source: string; body: string }[],
     setMeta: (key, value) => db.run("INSERT OR REPLACE INTO meta(key, value) VALUES (?, ?)", [key, value]),
     maintain: ({ now, force }) => {
       const last = Number(getMeta("last_optimize") ?? 0)

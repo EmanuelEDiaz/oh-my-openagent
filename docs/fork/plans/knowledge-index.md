@@ -1,6 +1,6 @@
 # Paso 1.1 — Diseño del índice, citas de chat y ciclo de vida
 
-Parte del roadmap: `docs/fork/roadmap.md` (pasos 1.1 → 1.2 y 1.3). Estado: **plan aprobado 27-09-2026**; 1.2 hecho (28-09-2026), siguiente 1.3. Rutas: `S/` = `packages/omo-opencode/src/`.
+Parte del roadmap: `docs/fork/roadmap.md` (pasos 1.1 → 1.2 y 1.3). Estado: **plan aprobado 27-09-2026**; 1.2 y 1.3 hechos (28-09-2026). Rutas: `S/` = `packages/omo-opencode/src/`.
 
 ## 1. Mediciones reales (27-09-2026, tu máquina, solo lectura)
 
@@ -113,14 +113,14 @@ búsqueda p95 < 20 ms (hoy ≤ 12 ms) · nunca bloquea el arranque de OpenCode.
 - [x] 9. QA real en sandbox: una pregunta que solo se responde con un plan o commit → el agente usa la herramienta y cita el locator.
 
 ### Paso 1.3 — Índice de sesiones y citas de chat
-- [ ] 1. Lector de solo lectura de `opencode.db` con marca de agua por sesión (D2), tolerante a cambios de esquema (si faltan columnas, desactiva el indexado de sesiones con un aviso, sin romper nada).
-- [ ] 2. Extracción según D3 + redacción de secretos (D7).
-- [ ] 3. Poda D6: sesiones borradas, retención de 180 días salvo referenciadas, presupuesto de tamaño.
-- [ ] 4. `knowledge_search` añade `scope: project|all` y devuelve locators de chat con título, fecha y comando de re-auditoría.
-- [ ] 5. `oh-my-opencode knowledge report`: tamaño del índice, sesiones podadas, espacio recuperable en `opencode.db`.
-- [ ] 6. QA real: buscar una frase dicha en una sesión antigua → locator correcto y re-auditoría que abre ese mensaje.
-- [ ] 7. `knowledge_open(locator, around=N)`: texto original exacto del mensaje citado (con su razonamiento si lo hay) y N mensajes vecinos, solo lectura.
-- [ ] 8. `knowledge report --vacuum`: ofrece `VACUUM` de `opencode.db` con confirmación, OpenCode cerrado y copia previa.
+- [x] 1. Lector de solo lectura de `opencode.db` con marca de agua por sesión (D2), tolerante a cambios de esquema (si faltan columnas, desactiva el indexado de sesiones con un aviso, sin romper nada).
+- [x] 2. Extracción según D3 + redacción de secretos (D7).
+- [x] 3. Poda D6: sesiones borradas, retención de 180 días salvo referenciadas, presupuesto de tamaño.
+- [x] 4. `knowledge_search` añade `scope: project|all` y devuelve locators de chat con título, fecha y comando de re-auditoría.
+- [x] 5. `oh-my-opencode knowledge report`: tamaño del índice, sesiones podadas, espacio recuperable en `opencode.db`.
+- [x] 6. QA real: buscar una frase dicha en una sesión antigua → locator correcto y re-auditoría que abre ese mensaje.
+- [x] 7. `knowledge_open(locator, around=N)`: texto original exacto del mensaje citado (con su razonamiento si lo hay) y N mensajes vecinos, solo lectura.
+- [x] 8. `knowledge report --vacuum`: ofrece `VACUUM` de `opencode.db` con confirmación, OpenCode cerrado y copia previa.
 
 ## 4. Criterios de aceptación
 

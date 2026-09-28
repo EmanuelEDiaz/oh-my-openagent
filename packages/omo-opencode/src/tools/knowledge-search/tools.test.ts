@@ -6,7 +6,7 @@ import type { KnowledgeService } from "../../features/knowledge/service"
 import { createKnowledgeSearchTool } from "./tools"
 
 function service(hits: Awaited<ReturnType<KnowledgeService["search"]>>): KnowledgeService {
-  return { scheduleSync: () => undefined, syncNow: async () => undefined, search: async () => hits, close: () => undefined }
+  return { scheduleSync: () => undefined, syncNow: async () => undefined, search: async () => hits, open: async (locator) => `opened ${locator}`, close: () => undefined }
 }
 
 const context = {} as Parameters<ReturnType<typeof createKnowledgeSearchTool>["execute"]>[1]

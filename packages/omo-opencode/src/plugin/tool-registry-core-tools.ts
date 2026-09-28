@@ -1,5 +1,5 @@
 import { getKnowledgeService } from "../features/knowledge/service"
-import { createKnowledgeSearchTool } from "../tools/knowledge-search"
+import { createKnowledgeOpenTool, createKnowledgeSearchTool } from "../tools/knowledge-search"
 import type { ToolDefinition } from "@opencode-ai/plugin"
 import type { AvailableCategory } from "../agents/dynamic-agent-prompt-builder"
 import type { OhMyOpenCodeConfig } from "../config"
@@ -141,7 +141,9 @@ export function createCoreTools(args: {
     tools.look_at = factories.createLookAt(ctx)
   }
   if (pluginConfig.knowledge?.enabled !== false) {
-    tools.knowledge_search = createKnowledgeSearchTool(getKnowledgeService(ctx.directory, pluginConfig.knowledge))
+    const knowledge = getKnowledgeService(ctx.directory, pluginConfig.knowledge)
+    tools.knowledge_search = createKnowledgeSearchTool(knowledge)
+    if (pluginConfig.knowledge?.index_sessions !== false) tools.knowledge_open = createKnowledgeOpenTool(knowledge)
   }
   tools.task = delegateTask
   tools.skill_mcp = skillMcpTool
