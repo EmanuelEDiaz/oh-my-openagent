@@ -83,16 +83,18 @@ describe("recordDecision", () => {
     expect(second.notes).toContain("D-20260928-1 is now marked superseded by D-20260928-2.")
   })
 
-  test("appends the entry at the end of the plan's Decisions log, before the next section", () => {
+  test("links the decision in the plan's generated block instead of copying it, before the next section", () => {
     // when
     const result = recordDecision(input({ planPath: "plans/cache.md" }), { sessionId: "ses_Abc00001" }, context(), NOW)
 
     // then
     if (!result.ok) throw new Error(result.problems.join("\n"))
     const plan = readFileSync(join(project, "plans", "cache.md"), "utf-8")
-    expect(plan.indexOf("### D-20260928-1: Usar Valkey")).toBeGreaterThan(plan.indexOf("### D1: old"))
-    expect(plan.indexOf("### D-20260928-1: Usar Valkey")).toBeLessThan(plan.indexOf("## Blockers / open questions"))
-    expect(plan).toContain("- **Record:** `docs/decisions/D-20260928-1-usar-valkey-para-la-cache.md`")
+    expect(plan).toContain("### D1: old")
+    expect(plan).toContain("- D-20260928-1 — Usar Valkey para la caché · active · costly · `docs/decisions/D-20260928-1-usar-valkey-para-la-cache.md`")
+    expect(plan.indexOf("omo:decisions:end")).toBeLessThan(plan.indexOf("## Blockers / open questions"))
+    expect(plan).not.toContain("Necesitamos una caché compatible")
+    expect(readFileSync(join(project, result.path), "utf-8")).toContain('plans:\n  - "plans/cache.md"')
   })
 
   test("hard-to-reverse decisions are flagged as ADR candidates; bad plan paths are rejected", () => {

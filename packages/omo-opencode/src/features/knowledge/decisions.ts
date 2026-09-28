@@ -1,10 +1,12 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
-import { isAbsolute, join, relative, resolve } from "node:path"
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from "node:fs"
+import { basename, isAbsolute, join, relative, resolve } from "node:path"
 
 import { verifyCitation } from "./citations"
 import type { CitationContext, EvidenceType, VerifiedCitation } from "./citations"
+import { decisionDirectoryFor, decisionPaths, DECISIONS_DIR } from "./decision-files"
+import { refreshPlanLinks } from "./plan-links"
 
-export const DECISIONS_DIR = "docs/decisions"
+export { DECISIONS_DIR } from "./decision-files"
 
 export type Reversibility = "easy" | "costly" | "hard"
 
@@ -18,6 +20,8 @@ export type DecisionInput = {
   readonly evidence: readonly { readonly type: EvidenceType; readonly ref: string; readonly note?: string }[]
   readonly supersedes?: string
   readonly planPath?: string
+  /** Optional grouping such as "cache" or "auth", used to filter views and searches. */
+  readonly area?: string
 }
 
 export type DecisionOrigin = { readonly sessionId?: string; readonly messageId?: string; readonly agent?: string }
@@ -34,23 +38,17 @@ function quote(value: string): string {
   return JSON.stringify(value)
 }
 
-function decisionFiles(projectDir: string): string[] {
-  const directory = join(projectDir, DECISIONS_DIR)
-  return existsSync(directory) ? readdirSync(directory).filter((name) => /^D-\d{8}-\d+-.*\.md$/.test(name)) : []
-}
-
 function nextId(projectDir: string, now: Date): string {
   const day = now.toISOString().slice(0, 10).replaceAll("-", "")
-  const taken = decisionFiles(projectDir)
-    .map((name) => new RegExp(`^D-${day}-(\\d+)-`).exec(name)?.[1])
+  const taken = decisionPaths(projectDir)
+    .map((path) => new RegExp(`^D-${day}-(\\d+)-`).exec(basename(path))?.[1])
     .filter((value): value is string => value !== undefined)
     .map(Number)
   return `D-${day}-${Math.max(0, ...taken) + 1}`
 }
 
 export function findDecisionFile(projectDir: string, id: string): string | undefined {
-  const name = decisionFiles(projectDir).find((file) => file.startsWith(`${id}-`))
-  return name === undefined ? undefined : join(DECISIONS_DIR, name)
+  return decisionPaths(projectDir).find((path) => basename(path).startsWith(`${id}-`))
 }
 
 export function decisionStatus(projectDir: string, relativePath: string): string | undefined {
@@ -74,7 +72,7 @@ function sessionPointer(origin: DecisionOrigin): string | undefined {
   return origin.messageId ? `${origin.sessionId} → ${origin.messageId}` : origin.sessionId
 }
 
-function renderRecord(id: string, date: string, input: DecisionInput, evidence: readonly (VerifiedCitation & { note?: string })[], origin: DecisionOrigin): string {
+function renderRecord(id: string, date: string, input: DecisionInput, evidence: readonly (VerifiedCitation & { note?: string })[], origin: DecisionOrigin, planPath?: string): string {
   const pointer = sessionPointer(origin)
   const frontmatter = [
     "---",
@@ -83,9 +81,11 @@ function renderRecord(id: string, date: string, input: DecisionInput, evidence: 
     "status: active",
     `date: ${date}`,
     `reversibility: ${input.reversibility}`,
+    ...(input.area ? [`area: ${quote(input.area)}`] : []),
     ...(input.supersedes ? [`supersedes: ${input.supersedes}`] : []),
     ...(origin.agent ? [`agent: ${quote(origin.agent)}`] : []),
     ...(origin.sessionId ? [`session: ${[origin.sessionId, origin.messageId].filter(Boolean).join("/")}`] : []),
+    ...(planPath ? ["plans:", `  - ${quote(planPath)}`] : []),
     "evidence:",
     ...evidence.flatMap((item) => [
       `  - type: ${item.citation.type}`,
@@ -110,36 +110,6 @@ function renderRecord(id: string, date: string, input: DecisionInput, evidence: 
     ...(input.supersedes ? [`- **Supersedes:** ${input.supersedes}`] : []),
   ]
   return `${frontmatter.join("\n")}\n${body.join("\n")}\n`
-}
-
-function renderPlanEntry(id: string, recordPath: string, input: DecisionInput, evidence: readonly VerifiedCitation[], origin: DecisionOrigin): string {
-  const pointer = sessionPointer(origin)
-  return [
-    `### ${id}: ${input.title}`,
-    `- **Context:** ${input.context}`,
-    `- **Options considered:** ${input.options.join(" · ")}`,
-    `- **Decision:** ${input.decision}`,
-    `- **Reason:** ${input.reason}`,
-    `- **Reversibility:** ${input.reversibility}`,
-    `- **Evidence:** ${evidence.map((item) => `\`${item.ref}\``).join(", ")}`,
-    ...(pointer ? [`- **Evidence session:** \`${pointer}\``] : []),
-    `- **Record:** \`${recordPath}\``,
-    "",
-  ].join("\n")
-}
-
-/** Inserts the entry at the end of the plan's "## Decisions log" section (created if missing). */
-function appendToPlan(planFile: string, entry: string): void {
-  const lines = readFileSync(planFile, "utf-8").split("\n")
-  const heading = lines.findIndex((line) => /^##\s+Decisions log\s*$/i.test(line))
-  if (heading === -1) {
-    writeFileSync(planFile, `${lines.join("\n").replace(/\n*$/, "")}\n\n## Decisions log\n\n${entry}`)
-    return
-  }
-  const next = lines.findIndex((line, index) => index > heading && /^##\s/.test(line))
-  const insertAt = next === -1 ? lines.length : next
-  lines.splice(insertAt, 0, entry)
-  writeFileSync(planFile, lines.join("\n"))
 }
 
 function markSuperseded(projectDir: string, oldPath: string, newId: string): void {
@@ -173,15 +143,17 @@ export function recordDecision(input: DecisionInput, origin: DecisionOrigin, con
   if (problems.length > 0) return { ok: false, problems }
 
   const id = nextId(context.projectDir, now)
-  const path = join(DECISIONS_DIR, `${id}-${slugify(input.title)}.md`)
-  mkdirSync(join(context.projectDir, DECISIONS_DIR), { recursive: true })
-  writeFileSync(join(context.projectDir, path), renderRecord(id, now.toISOString().slice(0, 10), input, verified, origin))
+  const directory = decisionDirectoryFor(context.projectDir, now.toISOString().slice(0, 4))
+  const path = join(directory, `${id}-${slugify(input.title)}.md`)
+  const planPath = typeof plan === "string" ? relative(context.projectDir, plan) : undefined
+  mkdirSync(join(context.projectDir, directory), { recursive: true })
+  writeFileSync(join(context.projectDir, path), renderRecord(id, now.toISOString().slice(0, 10), input, verified, origin, planPath))
   if (oldPath) markSuperseded(context.projectDir, oldPath, id)
-  if (typeof plan === "string") appendToPlan(plan, renderPlanEntry(id, path, input, verified, origin))
+  refreshPlanLinks(context.projectDir)
 
   const notes: string[] = []
   if (input.reversibility === "hard") notes.push("Reversibility is hard: this is an ADR candidate (promote it to docs/adr/ when the task closes).")
   if (oldPath) notes.push(`${input.supersedes} is now marked superseded by ${id}.`)
   if (!origin.sessionId) notes.push("No session pointer was available for this decision.")
-  return { ok: true, id, path, ...(typeof plan === "string" ? { planPath: relative(context.projectDir, plan) } : {}), notes }
+  return { ok: true, id, path, ...(planPath ? { planPath } : {}), notes }
 }
