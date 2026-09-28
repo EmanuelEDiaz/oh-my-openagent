@@ -1,5 +1,6 @@
 import { tool, type ToolDefinition } from "@opencode-ai/plugin/tool"
 
+import { loadDecisions } from "../../features/knowledge/decision-files"
 import { decisionStatus, recordDecision } from "../../features/knowledge/decisions"
 import type { DecisionInput } from "../../features/knowledge/decisions"
 import { formatHits } from "../../features/knowledge/format"
@@ -24,6 +25,7 @@ type DecisionRecordArgs = {
   evidence: { type: "file" | "commit" | "url" | "session"; ref: string; note?: string }[]
   supersedes?: string
   plan_path?: string
+  area?: string
 }
 
 export function createDecisionTools(service: KnowledgeService): Record<string, ToolDefinition> {
@@ -42,7 +44,8 @@ export function createDecisionTools(service: KnowledgeService): Record<string, T
         note: tool.schema.string().optional(),
       })).min(1).describe("Verifiable sources backing the decision"),
       supersedes: tool.schema.string().optional().describe("Id of the decision this replaces, e.g. D-20260928-1"),
-      plan_path: tool.schema.string().optional().describe("Plan file whose Decisions log should get this entry, e.g. plans/cache.md"),
+      plan_path: tool.schema.string().optional().describe("Plan file whose Decisions log should link this decision, e.g. plans/cache.md"),
+      area: tool.schema.string().optional().describe("Optional area, e.g. cache, auth, billing"),
     },
     execute: async (args: DecisionRecordArgs, context) => {
       const projectDir = context.worktree || context.directory
@@ -58,11 +61,12 @@ export function createDecisionTools(service: KnowledgeService): Record<string, T
           evidence: args.evidence,
           ...(args.supersedes ? { supersedes: args.supersedes } : {}),
           ...(args.plan_path ? { planPath: args.plan_path } : {}),
+          ...(args.area ? { area: args.area } : {}),
         }, { sessionId: context.sessionID, messageId: context.messageID, agent: context.agent }, { projectDir, sessionReader })
         if (!result.ok) return `Decision NOT recorded. Fix these and retry:\n- ${result.problems.join("\n- ")}`
         service.scheduleSync("decision_record")
         return [
-          `Recorded ${result.id} in ${result.path}${result.planPath ? ` and in the Decisions log of ${result.planPath}` : ""}.`,
+          `Recorded ${result.id} in ${result.path}${result.planPath ? ` and linked it in the Decisions log of ${result.planPath}` : ""}.`,
           ...result.notes,
           "Commit it with the change it explains.",
         ].join("\n")
@@ -77,20 +81,27 @@ export function createDecisionTools(service: KnowledgeService): Record<string, T
     args: {
       query: tool.schema.string().describe("What the decision is about"),
       include_superseded: tool.schema.boolean().optional(),
+      area: tool.schema.string().optional().describe("Only decisions of this area"),
       limit: tool.schema.number().int().min(1).max(20).optional(),
     },
-    execute: async (args: { query: string; include_superseded?: boolean; limit?: number }, context) => {
+    execute: async (args: { query: string; include_superseded?: boolean; area?: string; limit?: number }, context) => {
       const projectDir = context.worktree || context.directory
       const hits = await service.search(args.query, { kinds: ["decision", "adr"], limit: (args.limit ?? 8) * 2 })
       if (hits === null) return "Knowledge index is unavailable in this runtime."
+      const { valid, invalid } = loadDecisions(projectDir)
+      const areaByPath = new Map(valid.map((record) => [record.path, record.area]))
+      const invalidNote = invalid.length === 0
+        ? ""
+        : `\n\n${invalid.length} decision record(s) are malformed and may be missing from results: ${invalid.map((record) => `${record.path} (${record.problems.join("; ")})`).join(", ")}`
       const annotated = hits
         .map((hit) => {
           const status = hit.kind === "decision" ? decisionStatus(projectDir, hit.locator.replace(/:\d+$/, "")) : undefined
           return { ...hit, title: status ? `${hit.title} [${status}]` : hit.title, status }
         })
         .filter((hit) => args.include_superseded || hit.status !== "superseded")
+        .filter((hit) => !args.area || areaByPath.get(hit.locator.replace(/:\d+$/, "")) === args.area)
         .slice(0, args.limit ?? 8)
-      return annotated.length === 0 ? `No recorded decision matches "${args.query}".` : formatHits(args.query, annotated)
+      return (annotated.length === 0 ? `No recorded decision matches "${args.query}".` : formatHits(args.query, annotated)) + invalidNote
     },
   })
 
