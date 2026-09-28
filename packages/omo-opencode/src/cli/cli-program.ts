@@ -8,7 +8,7 @@ import { createMcpOAuthCommand } from "./mcp-oauth"
 import { configureRuntimeCommands } from "./runtime-commands"
 import { runConfigMigrate } from "./config-migrate"
 import { runConfigModels } from "./config-models"
-import { runKnowledgeDecisions, runKnowledgeReport } from "./knowledge-report"
+import { runKnowledgeCheck, runKnowledgeDecisions, runKnowledgeReport } from "./knowledge-report"
 import {
   availableInstallPlatforms,
   isNativeDevPlatformEnabled,
@@ -359,6 +359,14 @@ knowledgeCommand
       ...(options.file ? { file: options.file } : {}),
       json: options.json ?? false,
     }))
+  })
+
+knowledgeCommand
+  .command("check")
+  .description("Verify the evidence of every active decision (exit 1 if any cited line, file, commit or chat changed or vanished)")
+  .option("--json", "Machine-readable output")
+  .action(async (options: { json?: boolean }) => {
+    process.exit(await runKnowledgeCheck({ json: options.json ?? false }))
   })
 
 knowledgeCommand

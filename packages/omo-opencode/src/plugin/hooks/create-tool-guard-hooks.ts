@@ -31,6 +31,8 @@ import {
 import { safeCreateHook } from "../../shared/safe-create-hook"
 import { createKnowledgeIndexerHook } from "../../hooks/knowledge-indexer"
 import { createDecisionInjectorHook } from "../../hooks/decision-injector"
+import { createEvidenceGateHook } from "../../hooks/evidence-gate"
+import { createCitationCheckHook } from "../../hooks/citation-check"
 
 export type ToolGuardHooks = {
   commentChecker: ReturnType<typeof createCommentCheckerHooks> | null
@@ -41,6 +43,8 @@ export type ToolGuardHooks = {
   rulesInjector: ReturnType<typeof createRulesInjectorHook> | null
   knowledgeIndexer: ReturnType<typeof createKnowledgeIndexerHook> | null
   decisionInjector: ReturnType<typeof createDecisionInjectorHook> | null
+  evidenceGate: ReturnType<typeof createEvidenceGateHook> | null
+  citationCheck: ReturnType<typeof createCitationCheckHook> | null
   tasksTodowriteDisabler: ReturnType<typeof createTasksTodowriteDisablerHook> | null
   writeExistingFileGuard: ReturnType<typeof createWriteExistingFileGuardHook> | null
   bashFileReadGuard: ReturnType<typeof createBashFileReadGuardHook> | null
@@ -120,6 +124,14 @@ export function createToolGuardHooks(args: {
     ? safeHook("decision-injector", () => createDecisionInjectorHook(ctx, pluginConfig.knowledge))
     : null
 
+  const knowledgeOn = pluginConfig.knowledge?.enabled !== false
+  const evidenceGate = isHookEnabled("evidence-gate") && knowledgeOn && pluginConfig.knowledge?.evidence_gate !== "off"
+    ? safeHook("evidence-gate", () => createEvidenceGateHook(ctx, pluginConfig.knowledge))
+    : null
+  const citationCheck = isHookEnabled("citation-check") && knowledgeOn && pluginConfig.knowledge?.check_citations !== false
+    ? safeHook("citation-check", () => createCitationCheckHook(ctx))
+    : null
+
   const tasksTodowriteDisabler = isHookEnabled("tasks-todowrite-disabler")
     ? safeHook("tasks-todowrite-disabler", () =>
         createTasksTodowriteDisablerHook({ experimental: pluginConfig.experimental }))
@@ -178,6 +190,8 @@ export function createToolGuardHooks(args: {
     rulesInjector,
     knowledgeIndexer,
     decisionInjector,
+    evidenceGate,
+    citationCheck,
     tasksTodowriteDisabler,
     writeExistingFileGuard,
     bashFileReadGuard,

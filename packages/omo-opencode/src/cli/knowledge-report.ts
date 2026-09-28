@@ -3,12 +3,14 @@ import { join } from "node:path"
 
 import * as p from "@clack/prompts"
 
+import { findDecisionDrift, formatDrift } from "../features/knowledge/decision-drift"
 import { loadDecisions } from "../features/knowledge/decision-files"
 import { filterDecisions, formatDecisionView } from "../features/knowledge/decision-view"
 import type { DecisionFilter } from "../features/knowledge/decision-view"
 import { formatReport, inspectOpencodeDb, pinnedIds, vacuumOpencodeDb } from "../features/knowledge/report"
 import type { KnowledgeReport } from "../features/knowledge/report"
 import { opencodeDbPath } from "../features/knowledge/service"
+import { openSessionReader } from "../features/knowledge/session-reader"
 import { openKnowledgeStore } from "../features/knowledge/store"
 import { getDataDir } from "../shared/data-path"
 
@@ -47,6 +49,8 @@ export async function runKnowledgeReport(options: KnowledgeReportOptions = {}): 
       opencodeDb: await inspectOpencodeDb(opencodeDbPath(), pinned, options.retentionDays ?? 180, Date.now()),
     }
     output(formatReport(report))
+    const drift = findDecisionDrift({ projectDir: options.cwd ?? process.cwd() })
+    if (drift.length > 0) output(`\nDecision evidence: ${drift.length} problem(s); run \`oh-my-opencode knowledge check\` for details.`)
     const { invalid } = loadDecisions(options.cwd ?? process.cwd())
     if (invalid.length > 0) {
       output(`\nMalformed decision records (${invalid.length}):`)
@@ -91,4 +95,17 @@ export function runKnowledgeDecisions(options: KnowledgeDecisionsOptions = {}): 
   const shown = filterDecisions(valid, options)
   output(options.json ? JSON.stringify({ decisions: shown, invalid }, null, 2) : formatDecisionView(valid, shown, invalid))
   return invalid.length > 0 ? 1 : 0
+}
+
+/** Exit 1 when any active decision's evidence vanished or changed (usable in CI). */
+export async function runKnowledgeCheck(options: { readonly cwd?: string; readonly json?: boolean; readonly output?: (line: string) => void } = {}): Promise<number> {
+  const output = options.output ?? console.log
+  const reader = await openSessionReader(opencodeDbPath())
+  try {
+    const findings = findDecisionDrift({ projectDir: options.cwd ?? process.cwd(), sessionReader: reader })
+    output(options.json ? JSON.stringify({ findings }, null, 2) : formatDrift(findings))
+    return findings.length > 0 ? 1 : 0
+  } finally {
+    reader?.close()
+  }
 }

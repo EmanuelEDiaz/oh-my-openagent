@@ -67,6 +67,25 @@ function resolvePlan(projectDir: string, planPath: string): string | string[] {
   return absolute
 }
 
+/** Evidence citing the plan's own "## Decisions log" section justifies the decision with itself. */
+function circularEvidence(projectDir: string, planFile: string, evidence: readonly VerifiedCitation[]): string[] {
+  const planPath = relative(projectDir, planFile)
+  const lines = readFileSync(planFile, "utf-8").split("\n")
+  const start = lines.findIndex((line) => /^##\s+Decisions log\s*$/i.test(line))
+  if (start === -1) return []
+  const next = lines.findIndex((line, index) => index > start && /^##\s/.test(line))
+  const end = next === -1 ? lines.length : next
+  return evidence
+    .filter((item) => item.citation.type === "file" && item.citation.path === planPath)
+    .filter((item) => {
+      if (item.citation.type !== "file") return false
+      const from = item.citation.startLine ?? 1
+      const to = item.citation.endLine ?? lines.length
+      return from <= end && to >= start + 1
+    })
+    .map((item) => `evidence file "${item.ref}": circular — it cites the Decisions log this decision is linked into; cite the code, test, commit, chat or source that justifies it`)
+}
+
 function sessionPointer(origin: DecisionOrigin): string | undefined {
   if (!origin.sessionId) return undefined
   return origin.messageId ? `${origin.sessionId} → ${origin.messageId}` : origin.sessionId
@@ -136,9 +155,11 @@ export function recordDecision(input: DecisionInput, origin: DecisionOrigin, con
     else problems.push(`evidence ${item.type} "${result.ref}": ${result.reason}`)
   }
 
+  const plan = input.planPath ? resolvePlan(context.projectDir, input.planPath) : undefined
+  if (typeof plan === "string") problems.push(...circularEvidence(context.projectDir, plan, verified))
+
   const oldPath = input.supersedes ? findDecisionFile(context.projectDir, input.supersedes) : undefined
   if (input.supersedes && !oldPath) problems.push(`supersedes ${input.supersedes}: no such decision in ${DECISIONS_DIR}`)
-  const plan = input.planPath ? resolvePlan(context.projectDir, input.planPath) : undefined
   if (Array.isArray(plan)) problems.push(...plan)
   if (problems.length > 0) return { ok: false, problems }
 
