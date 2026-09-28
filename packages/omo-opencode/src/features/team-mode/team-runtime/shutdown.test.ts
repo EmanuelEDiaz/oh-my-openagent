@@ -1,7 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterEach, describe, expect, mock, spyOn, test } from "bun:test"
-import { access, mkdir, rm } from "node:fs/promises"
+import { access, mkdir, readFile, rm, writeFile } from "node:fs/promises"
 import path from "node:path"
 
 import { sendMessage } from "../team-mailbox/send"
@@ -11,6 +11,7 @@ import { loadRuntimeState, transitionRuntimeState } from "../team-state-store/st
 import type { DeleteTeamDeps } from "./delete-team"
 import {
   createFixture,
+  createGitWorktrees,
   createTestMessage,
   readInboxMessages,
   updateMemberStatuses,
@@ -164,9 +165,7 @@ describe("team-runtime shutdown", () => {
       "member-a": "shutdown_approved",
       "member-b": "shutdown_approved",
     })
-    await Promise.all(fixture.worktreePaths.map(async (worktreePath) => {
-      await mkdir(worktreePath, { recursive: true })
-    }))
+    await createGitWorktrees(fixture.baseDir, fixture.worktreePaths)
     // when
     const result = await deleteTeam(fixture.teamRunId, fixture.config)
 
@@ -184,6 +183,27 @@ describe("team-runtime shutdown", () => {
       () => { throw new Error(`expected ${runtimeStateDirectory} to be removed`) },
       () => undefined,
     )
+  })
+
+  test("#given a member worktreePath that is a plain user directory #when deleteTeam runs #then the directory and its files are kept", async () => {
+    // given
+    const fixture = await createFixture()
+    temporaryDirectories.push(fixture.baseDir)
+    await updateMemberStatuses(fixture.teamRunId, fixture.config, {
+      "member-a": "shutdown_approved",
+      "member-b": "shutdown_approved",
+    })
+    const [userDirectory] = fixture.worktreePaths
+    await mkdir(userDirectory!, { recursive: true })
+    await writeFile(path.join(userDirectory!, "important.txt"), "user data")
+
+    // when
+    const result = await deleteTeam(fixture.teamRunId, fixture.config, undefined, undefined, { force: true })
+
+    // then
+    expect(await readFile(path.join(userDirectory!, "important.txt"), "utf8")).toBe("user data")
+    expect(result.removedWorktrees).not.toContain(userDirectory)
+    expect(result.preservedWorktrees?.map((entry) => entry.path)).toContain(userDirectory)
   })
 
   test("#given a team run is tracked for session cleanup #when deleteTeam succeeds #then it unregisters the run", async () => {
@@ -211,9 +231,7 @@ describe("team-runtime shutdown", () => {
       "member-a": "running",
       "member-b": "running",
     })
-    await Promise.all(fixture.worktreePaths.map(async (worktreePath) => {
-      await mkdir(worktreePath, { recursive: true })
-    }))
+    await createGitWorktrees(fixture.baseDir, fixture.worktreePaths)
 
     // when
     const result = await deleteTeam(fixture.teamRunId, fixture.config, undefined, undefined, { force: true })
@@ -301,10 +319,7 @@ describe("team-runtime shutdown", () => {
         ? { ...member, worktreePath: leadWorktreePath }
         : member),
     }), fixture.config)
-    await mkdir(leadWorktreePath, { recursive: true })
-    await Promise.all(fixture.worktreePaths.map(async (worktreePath) => {
-      await mkdir(worktreePath, { recursive: true })
-    }))
+    await createGitWorktrees(fixture.baseDir, [leadWorktreePath, ...fixture.worktreePaths])
     await updateMemberStatuses(fixture.teamRunId, fixture.config, {
       "member-a": "running",
       "member-b": "running",
@@ -342,9 +357,7 @@ describe("team-runtime shutdown", () => {
       "member-a": "running",
       "member-b": "idle",
     })
-    await Promise.all(fixture.worktreePaths.map(async (worktreePath) => {
-      await mkdir(worktreePath, { recursive: true })
-    }))
+    await createGitWorktrees(fixture.baseDir, fixture.worktreePaths)
 
     // when
     const result = await deleteTeam(

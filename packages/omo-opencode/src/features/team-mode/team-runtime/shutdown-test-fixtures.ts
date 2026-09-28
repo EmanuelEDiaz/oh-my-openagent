@@ -1,4 +1,5 @@
-import { mkdir, mkdtemp, readdir, readFile } from "node:fs/promises"
+import { execFileSync } from "node:child_process"
+import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import path from "node:path"
 
@@ -143,4 +144,22 @@ export function createTestMessage(overrides?: Partial<Parameters<typeof sendMess
     timestamp: Date.now(),
     ...overrides,
   })
+}
+
+function git(args: string[], cwd: string): void {
+  execFileSync("git", ["-c", "user.email=qa@example.com", "-c", "user.name=qa", ...args], { cwd, stdio: "pipe" })
+}
+
+/** Creates a git repo under baseDir and real linked worktrees at the given paths (what team-mode creates). */
+export async function createGitWorktrees(baseDir: string, worktreePaths: string[]): Promise<void> {
+  const repo = path.join(baseDir, "fixture-repo")
+  await mkdir(repo, { recursive: true })
+  git(["init", "-q"], repo)
+  await writeFile(path.join(repo, "README.md"), "fixture\n")
+  git(["add", "."], repo)
+  git(["commit", "-q", "-m", "init"], repo)
+  for (const worktreePath of worktreePaths) {
+    await mkdir(path.dirname(worktreePath), { recursive: true })
+    git(["worktree", "add", "-q", "--detach", worktreePath], repo)
+  }
 }

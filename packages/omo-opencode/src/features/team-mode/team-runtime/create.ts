@@ -19,6 +19,7 @@ import { shouldReuseCallerLeadSession } from "../resolve-caller-team-lead"
 import { sweepStaleTeamSessions } from "../team-layout-tmux/sweep-stale-team-sessions"
 import { registerTeamRunForSessionCleanup } from "./session-team-run-registry"
 import { assertNoUnresolvedTeamMembers, hasUnresolvedTeamMembers } from "./unresolved-team-members"
+import { createWorktree, validateWorktreeSpec } from "../team-worktree/manager"
 
 const SESSION_ID_POLL_MS = 25
 
@@ -73,10 +74,22 @@ async function findExistingRuntime(spec: TeamSpec, leadSessionId: string, config
   }
 }
 
+/**
+ * Members get a real linked git worktree. Existing paths are refused: whatever is created here is
+ * removed when the team is deleted, so it must never be a directory the user already had.
+ */
 async function createMemberWorktree(memberWorktreePath: string, projectRoot: string): Promise<string> {
+  validateWorktreeSpec(memberWorktreePath)
   const absolutePath = path.isAbsolute(memberWorktreePath) ? memberWorktreePath : path.resolve(projectRoot, memberWorktreePath)
-  await mkdir(absolutePath, { recursive: true })
-  return absolutePath
+  if (await pathExists(absolutePath)) {
+    throw new Error(`worktreePath ${absolutePath} already exists; refusing to reuse it because team cleanup would remove it`)
+  }
+  try {
+    return await createWorktree(projectRoot, "", "", absolutePath, {})
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error)
+    throw new Error(`could not create a git worktree at ${absolutePath} (team worktrees need the project to be a git repository): ${reason}`)
+  }
 }
 
 async function waitForTaskSessionId(bgMgr: BackgroundManager, task: BackgroundTask, deadlineAt: number): Promise<string> {

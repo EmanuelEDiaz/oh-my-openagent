@@ -1,6 +1,8 @@
 import { randomUUID } from "node:crypto"
 import { rm } from "node:fs/promises"
+import path from "node:path"
 
+import { removeWorktree } from "../team-worktree/cleanup"
 import type { Message, RuntimeState } from "../types"
 
 export const DELETABLE_MEMBER_STATUSES = new Set<RuntimeState["members"][number]["status"]>([
@@ -65,14 +67,33 @@ export function findLatestShutdownRequestIndex(
   return -1
 }
 
-export async function removeWorktrees(memberPaths: Array<string | undefined>): Promise<string[]> {
-  const removedWorktrees: string[] = []
+export type WorktreeRemovalReport = {
+  readonly removed: string[]
+  readonly preserved: { readonly path: string; readonly reason: string }[]
+}
+
+/** Removes member worktrees through git; anything git does not confirm as a clean linked worktree is kept. */
+export async function removeWorktrees(memberPaths: Array<string | undefined>): Promise<WorktreeRemovalReport> {
+  const report: WorktreeRemovalReport = { removed: [], preserved: [] }
 
   for (const memberPath of new Set(memberPaths)) {
     if (!memberPath) continue
-    await rm(memberPath, { recursive: true, force: true })
-    removedWorktrees.push(memberPath)
+    try {
+      await removeWorktree(memberPath)
+      report.removed.push(memberPath)
+    } catch (error) {
+      report.preserved.push({ path: memberPath, reason: error instanceof Error ? error.message : String(error) })
+    }
   }
 
-  return removedWorktrees
+  return report
+}
+
+/** Deletes the plugin-owned runtime state directory, refusing any path outside the team-mode base dir. */
+export async function removeRuntimeStateDir(runtimeStateDir: string, baseDir: string): Promise<void> {
+  const relative = path.relative(path.resolve(baseDir), path.resolve(runtimeStateDir))
+  if (relative.length === 0 || relative.startsWith("..") || path.isAbsolute(relative)) {
+    throw new Error(`refusing to delete ${runtimeStateDir}: it is not inside the team-mode base dir ${baseDir}`)
+  }
+  await rm(runtimeStateDir, { recursive: true, force: true })
 }

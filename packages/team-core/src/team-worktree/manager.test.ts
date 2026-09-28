@@ -1,6 +1,6 @@
 /// <reference types="bun-types" />
 
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test"
+import { afterAll, afterEach, beforeAll, describe, expect, mock, test } from "bun:test"
 import { randomUUID } from "node:crypto"
 import fs from "node:fs/promises"
 import { tmpdir } from "node:os"
@@ -39,6 +39,10 @@ afterAll(async () => {
 })
 
 describe("team-worktree manager", () => {
+  afterEach(() => {
+    setGitCommandRunnerForTests()
+  })
+
   test("given tmp git repo when createWorktree then registers detached worktree", async () => {
     // given
     const repositoryRoot = await initGitRepo()
@@ -88,13 +92,6 @@ describe("team-worktree manager", () => {
 
     // then
     await expect(create).rejects.toBeInstanceOf(GitUnavailableError)
-    setGitCommandRunnerForTests(async (args) => {
-      if (args[0] === "--version") {
-        return { code: 0, stderr: "" }
-      }
-
-      return { code: 0, stderr: "" }
-    })
   })
 
   test("given created worktree when removeWorktree then directory disappears", async () => {
@@ -107,5 +104,7 @@ describe("team-worktree manager", () => {
 
     // then
     await expect(fs.stat(worktreePath)).rejects.toThrow()
+    const listResult = Bun.spawnSync(["git", "worktree", "list", "--porcelain"], { cwd: repositoryRoot, stdout: "pipe", stderr: "pipe" })
+    expect(new TextDecoder().decode(listResult.stdout)).not.toContain(path.basename(worktreePath))
   })
 })
