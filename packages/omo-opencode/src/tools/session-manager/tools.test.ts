@@ -19,8 +19,9 @@ const mockContext: ToolContext = {
   ask: async () => {},
 }
 
-function createTestTools() {
+function createTestTools(extra: Partial<Parameters<typeof createSessionManagerTools>[1]> = {}) {
   return createSessionManagerTools(mockCtx, {
+    ...extra,
     setStorageClient: () => {},
     getMainSessions: async (): Promise<SessionMetadata[]> => [
       {
@@ -204,5 +205,52 @@ describe("session-manager tools", () => {
     const result = await session_info.execute({ session_id: "ses_test123" }, mockContext)
     
     expect(typeof result).toBe("string")
+  })
+})
+
+describe("session_search with the knowledge index", () => {
+  test("#given ranked index results #then returns them instead of the substring scan", async () => {
+    // given
+    const queries: string[] = []
+    const { session_search } = createTestTools({
+      rankedSearch: async (query) => {
+        queries.push(query)
+        return "1. [user] ses_a/msg_b/prt_c — Billing (2026-09-28)"
+      },
+    })
+
+    // when
+    const output = await session_search.execute({ query: "billing codename" }, mockContext)
+
+    // then
+    expect(queries).toEqual(["billing codename"])
+    expect(output).toContain("ses_a/msg_b/prt_c")
+    expect(output).not.toContain("results:")
+  })
+
+  test("#given no ranked hits #then falls back to the substring scan", async () => {
+    // given
+    const { session_search } = createTestTools({ rankedSearch: async () => null })
+
+    // when
+    const output = await session_search.execute({ query: "hello" }, mockContext)
+
+    // then
+    expect(output).toBe("results:2")
+  })
+
+  test("#given a session_id or case-sensitive search #then the exact substring scan is used", async () => {
+    // given
+    let rankedCalls = 0
+    const { session_search } = createTestTools({ rankedSearch: async () => { rankedCalls++; return "ranked" } })
+
+    // when
+    const inSession = await session_search.execute({ query: "hello", session_id: "ses_test123" }, mockContext)
+    const caseSensitive = await session_search.execute({ query: "Hello", case_sensitive: true }, mockContext)
+
+    // then
+    expect(inSession).toBe("results:1")
+    expect(caseSensitive).toBe("results:2")
+    expect(rankedCalls).toBe(0)
   })
 })

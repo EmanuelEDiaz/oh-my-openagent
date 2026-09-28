@@ -41,6 +41,8 @@ type SessionManagerToolDeps = {
   formatSessionMessages: typeof formatSessionMessages
   formatSearchResults: typeof formatSearchResults
   searchInSession: typeof searchInSession
+  /** Ranked search over the knowledge index (returns formatted hits, or null when unavailable/no hits). */
+  rankedSearch?: (query: string, limit: number) => Promise<string | null>
 }
 
 const defaultSessionManagerToolDeps: SessionManagerToolDeps = {
@@ -146,6 +148,11 @@ export function createSessionManagerTools(
     execute: async (args: SessionSearchArgs, _context) => {
       try {
         const resultLimit = args.limit && args.limit > 0 ? args.limit : 20
+
+        if (resolvedDeps.rankedSearch && !args.session_id && !args.case_sensitive) {
+          const ranked = await resolvedDeps.rankedSearch(args.query, resultLimit)
+          if (ranked !== null) return ranked
+        }
 
         const searchOperation = async (): Promise<SearchResult[]> => {
           if (args.session_id) {

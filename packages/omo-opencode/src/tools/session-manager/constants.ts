@@ -42,7 +42,7 @@ Of course! Let me help you with...`
 
 export const SESSION_SEARCH_DESCRIPTION = `Search for content within OpenCode session messages.
 
-Performs full-text search across session messages and returns matching excerpts with context.
+When the knowledge index is available, results are ranked (BM25) across sessions and each one has an exact ses_…/msg_…/prt_… citation you can open with knowledge_open; otherwise (or with session_id / case_sensitive) it scans messages for the literal text.
 
 Arguments:
 - query (required): Search query string
