@@ -62,6 +62,8 @@ qa-evidence/
 session-ses_*.md
 pr-*.md
 plans/
+# fork: versioned step-by-step plans live here (see docs/fork/roadmap.md)
+!docs/fork/plans/
 .ulw/
 .claude/*
 !.claude/skills

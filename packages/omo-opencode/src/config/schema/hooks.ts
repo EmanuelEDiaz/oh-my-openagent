@@ -14,6 +14,7 @@ export const HookNameSchema = z.enum([
   "anthropic-context-window-limit-recovery",
   "preemptive-compaction",
   "rules-injector",
+  "knowledge-indexer",
   "background-notification",
   "auto-update-checker",
   "ast-grep-sg-provision",
