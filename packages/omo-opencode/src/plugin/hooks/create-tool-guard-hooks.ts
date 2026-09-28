@@ -29,6 +29,7 @@ import {
   OPENCODE_NATIVE_AGENTS_INJECTION_VERSION,
 } from "../../shared"
 import { safeCreateHook } from "../../shared/safe-create-hook"
+import { createKnowledgeIndexerHook } from "../../hooks/knowledge-indexer"
 
 export type ToolGuardHooks = {
   commentChecker: ReturnType<typeof createCommentCheckerHooks> | null
@@ -37,6 +38,7 @@ export type ToolGuardHooks = {
   directoryReadmeInjector: ReturnType<typeof createDirectoryReadmeInjectorHook> | null
   emptyTaskResponseDetector: ReturnType<typeof createEmptyTaskResponseDetectorHook> | null
   rulesInjector: ReturnType<typeof createRulesInjectorHook> | null
+  knowledgeIndexer: ReturnType<typeof createKnowledgeIndexerHook> | null
   tasksTodowriteDisabler: ReturnType<typeof createTasksTodowriteDisablerHook> | null
   writeExistingFileGuard: ReturnType<typeof createWriteExistingFileGuardHook> | null
   bashFileReadGuard: ReturnType<typeof createBashFileReadGuardHook> | null
@@ -108,6 +110,10 @@ export function createToolGuardHooks(args: {
         }))
     : null
 
+  const knowledgeIndexer = isHookEnabled("knowledge-indexer") && pluginConfig.knowledge?.enabled !== false
+    ? safeHook("knowledge-indexer", () => createKnowledgeIndexerHook(ctx, pluginConfig.knowledge))
+    : null
+
   const tasksTodowriteDisabler = isHookEnabled("tasks-todowrite-disabler")
     ? safeHook("tasks-todowrite-disabler", () =>
         createTasksTodowriteDisablerHook({ experimental: pluginConfig.experimental }))
@@ -164,6 +170,7 @@ export function createToolGuardHooks(args: {
     directoryReadmeInjector,
     emptyTaskResponseDetector,
     rulesInjector,
+    knowledgeIndexer,
     tasksTodowriteDisabler,
     writeExistingFileGuard,
     bashFileReadGuard,

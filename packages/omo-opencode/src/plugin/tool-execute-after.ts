@@ -101,6 +101,7 @@ export function createToolExecuteAfterHandler(args: {
       await hooks.directoryAgentsInjector?.["tool.execute.after"]?.(hookInput, output)
       await hooks.directoryReadmeInjector?.["tool.execute.after"]?.(hookInput, output)
       await hooks.rulesInjector?.["tool.execute.after"]?.(hookInput, output)
+      hooks.knowledgeIndexer?.["tool.execute.after"]?.(hookInput)
       await hooks.emptyTaskResponseDetector?.["tool.execute.after"]?.(hookInput, output)
       await hooks.agentUsageReminder?.["tool.execute.after"]?.(hookInput, output)
       await hooks.categorySkillReminder?.["tool.execute.after"]?.(hookInput, output)
