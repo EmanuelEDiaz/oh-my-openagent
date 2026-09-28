@@ -13,6 +13,10 @@ export const KnowledgeConfigSchema = z.object({
   session_retention_days: z.number().int().min(1).default(180),
   /** Append active decisions to reads/edits of the files they cite as evidence (default: true) */
   inject_decisions: z.boolean().default(true),
+  /** Marking a plan checkbox done requires a verifiable citation: block (default), warn or off */
+  evidence_gate: z.enum(["block", "warn", "off"]).default("block"),
+  /** Append a [citation check] to subagent reports whose citations do not verify (default: true) */
+  check_citations: z.boolean().default(true),
   /** Size budget for the session index; oldest unreferenced sessions are pruned first (default: 200) */
   max_index_mb: z.number().min(10).default(200),
 })

@@ -112,3 +112,48 @@ describe("slugify", () => {
     expect(slugify("¿Usar Valkey?")).toBe("usar-valkey")
   })
 })
+
+describe("circular evidence and drift", () => {
+  test("rejects evidence that cites the plan's own Decisions log", () => {
+    // given
+    const project = mkdtempSync(join(tmpdir(), "omo-decisions-circular-"))
+    mkdirSync(join(project, "plans"))
+    mkdirSync(join(project, "src"))
+    writeFileSync(join(project, "src", "a.ts"), "x\n")
+    writeFileSync(join(project, "plans", "p.md"), "# P\n\n## Decisions log\n\n- old\n\n## Blockers\n- none\n")
+
+    // when
+    const result = recordDecision({
+      title: "T", context: "c", options: ["a"], decision: "a", reason: "r", reversibility: "easy", planPath: "plans/p.md",
+      evidence: [{ type: "file", ref: "plans/p.md:3" }, { type: "file", ref: "src/a.ts:1" }],
+    }, {}, { projectDir: project, sessionReader: null }, NOW)
+
+    // then
+    expect(result).toMatchObject({ ok: false, problems: [expect.stringContaining("circular")] })
+    rmSync(project, { recursive: true, force: true })
+  })
+
+  test("knowledge check finds decisions whose cited lines changed or vanished", async () => {
+    // given
+    const { findDecisionDrift } = await import("./decision-drift")
+    const project = mkdtempSync(join(tmpdir(), "omo-decisions-drift-"))
+    mkdirSync(join(project, "src"))
+    writeFileSync(join(project, "src", "a.ts"), "one\ntwo\n")
+    const recorded = recordDecision({ title: "Keep two", context: "c", options: ["a"], decision: "a", reason: "r", reversibility: "easy",
+      evidence: [{ type: "file", ref: "src/a.ts:2" }] }, {}, { projectDir: project, sessionReader: null }, NOW)
+    if (!recorded.ok) throw new Error("record failed")
+
+    // when
+    const clean = findDecisionDrift({ projectDir: project })
+    writeFileSync(join(project, "src", "a.ts"), "one\nTWO CHANGED\n")
+    const changed = findDecisionDrift({ projectDir: project })
+    writeFileSync(join(project, "src", "a.ts"), "one\n")
+    const vanished = findDecisionDrift({ projectDir: project })
+
+    // then
+    expect(clean).toEqual([])
+    expect(changed[0]?.problem).toBe("cited lines changed since the decision was recorded")
+    expect(vanished[0]?.problem).toBe("line range out of bounds (the file has 1 lines)")
+    rmSync(project, { recursive: true, force: true })
+  })
+})

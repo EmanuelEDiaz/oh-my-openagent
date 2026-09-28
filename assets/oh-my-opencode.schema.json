@@ -9186,6 +9186,19 @@
           "default": true,
           "type": "boolean"
         },
+        "evidence_gate": {
+          "default": "block",
+          "type": "string",
+          "enum": [
+            "block",
+            "warn",
+            "off"
+          ]
+        },
+        "check_citations": {
+          "default": true,
+          "type": "boolean"
+        },
         "max_index_mb": {
           "default": 200,
           "type": "number",
@@ -9198,6 +9211,8 @@
         "index_sessions",
         "session_retention_days",
         "inject_decisions",
+        "evidence_gate",
+        "check_citations",
         "max_index_mb"
       ],
       "additionalProperties": false
