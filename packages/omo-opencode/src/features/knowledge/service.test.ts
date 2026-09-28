@@ -31,7 +31,7 @@ describe("knowledge service", () => {
 
   test("the first search waits for the initial sync and finds project documents", async () => {
     // given
-    const service = createKnowledgeService(project, undefined)
+    const service = createKnowledgeService(project, undefined, { openSessionStore: async () => null })
 
     // when
     const hits = await service.search("worktrees tarea")
@@ -43,7 +43,7 @@ describe("knowledge service", () => {
 
   test("later edits are picked up after a scheduled sync", async () => {
     // given
-    const service = createKnowledgeService(project, undefined, { debounceMs: 5 })
+    const service = createKnowledgeService(project, undefined, { debounceMs: 5, openSessionStore: async () => null })
     await service.search("worktrees")
 
     // when
@@ -59,7 +59,7 @@ describe("knowledge service", () => {
 
   test("returns null (feature off) when SQLite is unavailable, without throwing", async () => {
     // given
-    const service = createKnowledgeService(project, undefined, { openStore: async () => null })
+    const service = createKnowledgeService(project, undefined, { openStore: async () => null, openSessionStore: async () => null })
 
     // then
     expect(await service.search("anything")).toBeNull()

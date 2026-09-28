@@ -10,6 +10,7 @@ function fakeService(reasons: string[]): KnowledgeService {
     scheduleSync: (reason) => reasons.push(reason),
     syncNow: async () => undefined,
     search: async () => [],
+    open: async () => "",
     close: () => undefined,
   }
 }
