@@ -27,11 +27,18 @@ function registeredWorktrees(porcelain: string): string[] {
     .map((line) => line.slice("worktree ".length).trim())
 }
 
+/** Untracked state the plugin itself writes into member worktrees; it is not user work. */
+const PLUGIN_OWNED_DIRECTORY = ".omo/"
+
+function isPluginOwnedUntracked(porcelainLine: string): boolean {
+  return porcelainLine.startsWith("?? ") && porcelainLine.slice(3).replace(/^"/, "").startsWith(PLUGIN_OWNED_DIRECTORY)
+}
+
 /**
  * Removes a linked git worktree. Decisions come from git state, never from parsing (localized) git
  * messages, and nothing is deleted unless git confirms the path is a linked worktree of a repo:
  * plain directories and a repo's main working tree are refused, and worktrees with uncommitted
- * changes are preserved.
+ * changes (other than the plugin's own untracked .omo/ state) are preserved.
  */
 export async function removeWorktree(worktreePath: string): Promise<void> {
   if (!(await pathExists(worktreePath))) return
@@ -55,11 +62,13 @@ export async function removeWorktree(worktreePath: string): Promise<void> {
     throw new NotAWorktreeError(target, "not registered as a linked worktree")
   }
 
-  const status = await runGit(["-C", target, "status", "--porcelain"])
+  const status = await runGit(["-C", target, "status", "--porcelain", "--untracked-files=all"])
   if (status.code !== 0) throw new NotAWorktreeError(target, "git status failed")
-  if (status.stdout.trim().length > 0) throw new WorktreeHasChangesError(target)
+  const changes = status.stdout.split("\n").filter((line) => line.trim().length > 0)
+  if (changes.some((line) => !isPluginOwnedUntracked(line))) throw new WorktreeHasChangesError(target)
 
-  const removal = await runGit(["-C", repoRoot, "worktree", "remove", target])
+  // --force is only needed (and only used) to drop the plugin's own untracked .omo/ state.
+  const removal = await runGit(["-C", repoRoot, "worktree", "remove", ...(changes.length > 0 ? ["--force"] : []), target])
   if (removal.code !== 0) throw new Error(removal.stderr.trim() || `git worktree remove failed for ${target}`)
   await runGit(["-C", repoRoot, "worktree", "prune"])
 }

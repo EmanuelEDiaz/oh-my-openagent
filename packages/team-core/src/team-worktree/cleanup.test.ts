@@ -105,6 +105,40 @@ describe("removeWorktree safety", () => {
     expect(await fs.readFile(path.join(worktree, "work-in-progress.ts"), "utf8")).toBe("export {}\n")
   })
 
+  test("#given a worktree whose only untracked files are the plugin's own .omo state #then it is removed", async () => {
+    // given
+    const repo = await createRepo()
+    const worktree = path.join(repo, "..", `${path.basename(repo)}-wt-omo`)
+    temporaryDirectories.push(worktree)
+    await git(["worktree", "add", "-q", "--detach", worktree], repo)
+    await fs.mkdir(path.join(worktree, ".omo", "notepads"), { recursive: true })
+    await fs.writeFile(path.join(worktree, ".omo", "notepads", "learnings.md"), "plugin state\n")
+
+    // when
+    await removeWorktree(worktree)
+
+    // then
+    await expect(fs.access(worktree)).rejects.toBeDefined()
+  })
+
+  test("#given plugin .omo state plus a real change #then the worktree is still preserved", async () => {
+    // given
+    const repo = await createRepo()
+    const worktree = path.join(repo, "..", `${path.basename(repo)}-wt-omo-dirty`)
+    temporaryDirectories.push(worktree)
+    await git(["worktree", "add", "-q", "--detach", worktree], repo)
+    await fs.mkdir(path.join(worktree, ".omo"), { recursive: true })
+    await fs.writeFile(path.join(worktree, ".omo", "state.json"), "{}")
+    await fs.writeFile(path.join(worktree, "README.md"), "edited by a member\n")
+
+    // when
+    const attempt = removeWorktree(worktree)
+
+    // then
+    await expect(attempt).rejects.toBeInstanceOf(WorktreeHasChangesError)
+    expect(await fs.readFile(path.join(worktree, "README.md"), "utf8")).toBe("edited by a member\n")
+  })
+
   test("#given a path that no longer exists #then it is a no-op", async () => {
     // when / then
     await removeWorktree(path.join(tmpdir(), "team-worktree-missing-path-xyz"))
