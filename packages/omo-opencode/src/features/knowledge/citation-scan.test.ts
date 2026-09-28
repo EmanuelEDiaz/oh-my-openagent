@@ -26,6 +26,15 @@ describe("scanCitations", () => {
     ])
   })
 
+  test("multi-dot files with a line number are one citation, never a truncated plain path (live QA bug)", () => {
+    // then
+    expect(scanCitations("evidence: tests/cache.test.ts:2 and src/app.config.js#L4", { includePlainFiles: true })).toEqual([
+      { type: "file", ref: "tests/cache.test.ts:2" },
+      { type: "file", ref: "src/app.config.js:4" },
+    ])
+    expect(scanCitations("see docs/guide.md.", { includePlainFiles: true })).toEqual([{ type: "file", ref: "docs/guide.md" }])
+  })
+
   test("optionally accepts plain file paths (evidence files on disk)", () => {
     // then
     expect(scanCitations("evidence: `.omo/evidence/x/summary.md` and tests/cache.test.ts", { includePlainFiles: true })).toEqual([

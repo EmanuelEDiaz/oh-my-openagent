@@ -5,7 +5,7 @@ export type FoundCitation = { readonly type: EvidenceType; readonly ref: string 
 export type CitationCheck = { readonly ref: string; readonly ok: boolean; readonly reason?: string }
 
 const FILE_WITH_LINES = /(?<![\w/.-])((?:\.{0,2}\/)?[\w.@-]+(?:\/[\w.@-]+)+\.[A-Za-z0-9]{1,10})(?::(\d+)(?:-(\d+))?|#L(\d+)(?:-L?(\d+))?)(?![\w:])/g
-const PLAIN_FILE = /(?<![\w/.:-])((?:\.{0,2}\/)?[\w.@-]+(?:\/[\w.@-]+)+\.[A-Za-z0-9]{1,10})(?![\w/:#-])/g
+const PLAIN_FILE = /(?<![\w/.:-])((?:\.{0,2}\/)?[\w.@-]+(?:\/[\w.@-]+)+\.[A-Za-z0-9]{1,10})(?=$|[\s)\]}`'",;!?]|\.(?:\s|$))/g
 const COMMIT = /\bcommit[:\s]+`?([0-9a-f]{7,40})\b/gi
 const SESSION = /\b(ses_[A-Za-z0-9]{8,}(?:\/msg_[A-Za-z0-9]+(?:\/prt_[A-Za-z0-9]+)?)?)/g
 
