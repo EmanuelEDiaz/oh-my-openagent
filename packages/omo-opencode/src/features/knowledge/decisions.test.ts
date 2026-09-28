@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { decisionStatus, recordDecision } from "./decisions"
+import { decisionStatus, recordDecision, slugify } from "./decisions"
 import type { DecisionInput } from "./decisions"
 
 const NOW = new Date("2026-09-28T10:00:00Z")
@@ -100,5 +100,13 @@ describe("recordDecision", () => {
     const hard = recordDecision(input({ reversibility: "hard" }), {}, context(), NOW)
     expect(hard.ok && hard.notes[0]).toContain("ADR candidate")
     expect(recordDecision(input({ planPath: "../outside.md" }), {}, context(), NOW)).toMatchObject({ ok: false })
+  })
+})
+
+describe("slugify", () => {
+  test("never leaves a trailing hyphen after truncating long titles", () => {
+    // then
+    expect(slugify("Keep one Markdown file per decision; plans link to decisions instead of copying them")).toBe("keep-one-markdown-file-per-decision-plans-link-to")
+    expect(slugify("¿Usar Valkey?")).toBe("usar-valkey")
   })
 })
