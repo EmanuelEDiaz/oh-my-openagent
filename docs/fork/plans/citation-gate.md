@@ -1,7 +1,7 @@
 # Paso 1.5 — Verificador activo de citas y "hecho exige evidencia"
 
 Parte del roadmap: `docs/fork/roadmap.md`. Detalla la Pieza 3 de `plans/knowledge-base-and-worktrees.md`.
-Estado: **hecho (28-09-2026)**; la revisión de citas de subagentes falta confirmarla en vivo (cupos gratuitos agotados). Rutas: `S/` = `packages/omo-opencode/src/`.
+Estado: **hecho (28-09-2026)**; revisión de citas de subagentes confirmada en vivo el 28-09-2026 (`[citation check] … src/cache.ts:120: line range out of bounds`). Rutas: `S/` = `packages/omo-opencode/src/`.
 
 ## Definiciones mecánicas (lo que el código comprueba)
 
