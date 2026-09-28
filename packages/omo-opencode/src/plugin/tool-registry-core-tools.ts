@@ -1,5 +1,6 @@
 import { getKnowledgeService } from "../features/knowledge/service"
 import { createKnowledgeOpenTool, createKnowledgeSearchTool } from "../tools/knowledge-search"
+import { formatHits } from "../features/knowledge/format"
 import type { ToolDefinition } from "@opencode-ai/plugin"
 import type { AvailableCategory } from "../agents/dynamic-agent-prompt-builder"
 import type { OhMyOpenCodeConfig } from "../config"
@@ -18,6 +19,19 @@ import { getSisyphusJuniorModelOverride } from "./tool-registry-team-tools"
 import { createNativeSkills, getPluginInputNativeSkills } from "./native-skills"
 import { createSkillContext } from "./skill-context"
 import { createRuntimeSkillsResolver, readRuntimeHostSkills } from "./runtime-skill-resolver"
+
+const SESSION_KINDS = ["user", "assistant", "summary", "subagent", "tool"] as const
+
+/** Lets session_search rank through the knowledge index when session indexing is on. */
+function knowledgeSessionSearch(directory: string, pluginConfig: OhMyOpenCodeConfig) {
+  if (pluginConfig.knowledge?.enabled === false || pluginConfig.knowledge?.index_sessions === false) return {}
+  return {
+    rankedSearch: async (query: string, limit: number): Promise<string | null> => {
+      const hits = await getKnowledgeService(directory, pluginConfig.knowledge).search(query, { kinds: SESSION_KINDS, limit, scope: "all" })
+      return hits === null || hits.length === 0 ? null : formatHits(query, hits)
+    },
+  }
+}
 
 export function createCoreTools(args: {
   readonly ctx: PluginContext
@@ -133,7 +147,7 @@ export function createCoreTools(args: {
   const tools: ToolsRecord = {
     ...factories.createGrepTools(ctx),
     ...factories.createGlobTools(ctx),
-    ...factories.createSessionManagerTools(ctx),
+    ...factories.createSessionManagerTools(ctx, knowledgeSessionSearch(ctx.directory, pluginConfig)),
     ...backgroundTools,
     call_omo_agent: callOmoAgent,
   }
