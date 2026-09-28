@@ -1,3 +1,4 @@
+import { GROUNDING_GUIDANCE } from "./features/knowledge/grounding"
 import type { PluginContext, PluginInterface, ToolsRecord } from "./plugin/types"
 import type { OhMyOpenCodeConfig } from "./config"
 
@@ -80,6 +81,7 @@ export function createPluginInterface(args: {
       pluginConfig.default_mode,
       getUltraworkMessage,
       hooks.keywordDetector,
+      pluginConfig.knowledge?.enabled === false ? undefined : GROUNDING_GUIDANCE,
     ),
 
     config: managers.configHandler,

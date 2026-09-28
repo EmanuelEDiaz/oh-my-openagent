@@ -84,7 +84,7 @@ ${includeCompletionGate ? `${buildCompletionGate(planName, sessionId)}
 
 ` : ""}${buildVerificationReminder(sessionId)}
 
-**STEP 5: READ SUBAGENT NOTEPAD (LEARNINGS, ISSUES, PROBLEMS)**
+**STEP 5: READ SUBAGENT NOTEPAD (LEARNINGS, DECISIONS, ISSUES, PROBLEMS)**
 
 The subagent was instructed to record findings in notepad files. Read them NOW:
 \`\`\`
@@ -92,6 +92,7 @@ Glob(".omo/notepads/${planName}/*.md")
 \`\`\`
 Then \`Read\` each file found - especially:
 - **learnings.md**: Patterns, conventions, successful approaches discovered
+- **decisions.md**: Choices the subagent made and why — record the non-trivial ones with \`decision_record\` (verified evidence, versioned in docs/decisions/) so they survive this plan
 - **issues.md**: Problems, blockers, gotchas encountered during work
 - **problems.md**: Unresolved issues, technical debt flagged
 
