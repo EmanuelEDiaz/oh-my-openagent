@@ -66,6 +66,8 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
   `~/.config/opencode` y lanzar con `timeout -s KILL`.
 - Nunca usar `pkill -f` con un patrón que aparezca en el propio comando.
 - Borrar el sandbox al terminar: contiene una copia de `auth.json`.
+- Muchas ejecuciones seguidas agotan los modelos gratuitos ("Insufficient account funds", "Rate limit exceeded"): activar
+  `runtime_fallback` con una cadena de varios modelos en el sandbox y espaciar las pruebas.
 
 ## Fase 0 — Seguridad
 | Paso | Qué | Estado | Plan |
@@ -83,7 +85,7 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
 | 1.4 | Decisiones citadas en tu formato (`docs/decisions/` + Decisions log del plan activo). | **hecho** (28-09-2026): `decision_record`/`decision_search`, verificador de citas, bloque `<grounding>` en los prompts, Atlas relee `decisions.md` |
 | 1.4b | **Decisiones que escalan:** el plan guarda enlaces (bloque generado entre marcadores) en vez de copias; vista `knowledge decisions`; campo `area`; validación del esquema; carpetas por año al superar ~200. Análisis y fuentes en `plans/decisions-scaling.md`. | **hecho** (28-09-2026) |
 | 1.4c | **Las decisiones encuentran al agente:** al leer/editar un archivo citado por una decisión activa, se inyecta una línea con esa decisión (una vez por sesión, con aviso si la evidencia cambió). | **hecho** (28-09-2026) |
-| 1.5 | Verificador de citas + "hecho exige evidencia" (modo `block`). El núcleo de verificación ya existe (1.4); falta: revisar citas en informes de subagentes, bloquear "hecho" sin evidencia, informe de deriva, y rechazar evidencia circular (en la QA de 1.4 el modelo citó la propia sección del Decisions log como evidencia). | pendiente, **siguiente** |
+| 1.5 | Verificador activo de citas y "hecho exige evidencia" (`block`): revisión de citas en informes de subagentes, puerta sobre casillas de planes, rechazo de evidencia circular, `knowledge check` de deriva. Detalle: `plans/citation-gate.md`. | **hecho** (28-09-2026); confirmar en vivo la revisión de citas de subagentes |
 | 1.6 | **Compactación sin pérdida.** (a) *Medir primero:* forzar compactaciones en sesiones de prueba y comprobar qué se pierde (peticiones literales, restricciones, decisiones, archivos:línea, errores vistos, preguntas abiertas). (b) *Instantánea antes de compactar:* extraer por código ese estado crítico y guardarlo en el índice con su puntero `ses_… → msg_… → prt_…` (las peticiones y restricciones del usuario, **siempre literales**). (c) *Resumen con anclas:* cada punto del resumen lleva el puntero a su origen. (d) *Verificación después:* comparar el resumen con la instantánea y reinyectar lo que falte, sin duplicar lo que ya está. (e) *Rehidratación mínima:* tras compactar, una tarjeta de estado corta + "busca en el índice para el detalle", en vez de reinyectar documentos enteros. | pendiente (depende de 1.2–1.3) |
 
 ## Fase 2 — Orquestador + especialistas con herramientas obligatorias
