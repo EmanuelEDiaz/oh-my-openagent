@@ -8,6 +8,7 @@ import { createMcpOAuthCommand } from "./mcp-oauth"
 import { configureRuntimeCommands } from "./runtime-commands"
 import { runConfigMigrate } from "./config-migrate"
 import { runConfigModels } from "./config-models"
+import { runKnowledgeReport } from "./knowledge-report"
 import {
   availableInstallPlatforms,
   isNativeDevPlatformEnabled,
@@ -336,6 +337,23 @@ Examples:
       ...(options.enableRuntimeFallback ? { enableRuntimeFallback: true } : {}),
       scope: options.project ? "project" : "user",
       json: options.json ?? false,
+    })
+    process.exit(exitCode)
+  })
+
+program
+  .command("knowledge")
+  .description("Project knowledge and session index")
+  .command("report")
+  .description("Show index sizes, pinned sessions and how much space the OpenCode database could reclaim")
+  .option("--vacuum", "Offer to VACUUM the OpenCode database (asks first; OpenCode must be closed; backup is written)")
+  .option("--yes", "Confirm the VACUUM without asking")
+  .option("--retention-days <n>", "Retention window used for the unreferenced-sessions count (default 180)")
+  .action(async (options: { vacuum?: boolean; yes?: boolean; retentionDays?: string }) => {
+    const exitCode = await runKnowledgeReport({
+      vacuum: options.vacuum ?? false,
+      yes: options.yes ?? false,
+      ...(options.retentionDays === undefined ? {} : { retentionDays: Number.parseInt(options.retentionDays, 10) || 180 }),
     })
     process.exit(exitCode)
   })
