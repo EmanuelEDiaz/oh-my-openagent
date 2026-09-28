@@ -3,6 +3,9 @@ import { join } from "node:path"
 
 import * as p from "@clack/prompts"
 
+import { loadDecisions } from "../features/knowledge/decision-files"
+import { filterDecisions, formatDecisionView } from "../features/knowledge/decision-view"
+import type { DecisionFilter } from "../features/knowledge/decision-view"
 import { formatReport, inspectOpencodeDb, pinnedIds, vacuumOpencodeDb } from "../features/knowledge/report"
 import type { KnowledgeReport } from "../features/knowledge/report"
 import { opencodeDbPath } from "../features/knowledge/service"
@@ -44,6 +47,11 @@ export async function runKnowledgeReport(options: KnowledgeReportOptions = {}): 
       opencodeDb: await inspectOpencodeDb(opencodeDbPath(), pinned, options.retentionDays ?? 180, Date.now()),
     }
     output(formatReport(report))
+    const { invalid } = loadDecisions(options.cwd ?? process.cwd())
+    if (invalid.length > 0) {
+      output(`\nMalformed decision records (${invalid.length}):`)
+      for (const record of invalid) output(`  ${record.path}: ${record.problems.join("; ")}`)
+    }
     if (!options.vacuum) return 0
     if (!report.opencodeDb) {
       output("\nNo OpenCode database found; nothing to vacuum.")
@@ -68,4 +76,19 @@ export async function runKnowledgeReport(options: KnowledgeReportOptions = {}): 
     project?.close()
     sessions?.close()
   }
+}
+
+export type KnowledgeDecisionsOptions = DecisionFilter & {
+  readonly cwd?: string
+  readonly json?: boolean
+  readonly output?: (line: string) => void
+}
+
+/** Generated view of docs/decisions — nothing is written. */
+export function runKnowledgeDecisions(options: KnowledgeDecisionsOptions = {}): number {
+  const output = options.output ?? console.log
+  const { valid, invalid } = loadDecisions(options.cwd ?? process.cwd())
+  const shown = filterDecisions(valid, options)
+  output(options.json ? JSON.stringify({ decisions: shown, invalid }, null, 2) : formatDecisionView(valid, shown, invalid))
+  return invalid.length > 0 ? 1 : 0
 }

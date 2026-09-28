@@ -1,9 +1,12 @@
-import { existsSync, mkdirSync, writeFileSync } from "node:fs"
+import { createHash } from "node:crypto"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 
 import type { KnowledgeConfig } from "../../config/schema/knowledge"
 import { getDataDir } from "../../shared/data-path"
 import { log } from "../../shared/logger"
+import { decisionPaths } from "./decision-files"
+import { refreshPlanLinks } from "./plan-links"
 import { openSessionLocator } from "./session-open"
 import { openSessionReader } from "./session-reader"
 import { pinSessions, syncSessions } from "./session-sync"
@@ -96,10 +99,24 @@ export function createKnowledgeService(projectDir: string, config: KnowledgeConf
         gitCommits: config?.git_commits ?? 500,
       })
       if (stats.filesIndexed > 0 || stats.commitsIndexed > 0) log("[knowledge] synced", stats)
+      refreshPlansIfDecisionsChanged(opened)
     } catch (error) {
       log("[knowledge] sync failed", { error: String(error) })
     }
     void syncSessionIndex(opened)
+  }
+
+  /** Decision files edited by hand (or by another branch) → regenerate the plans' link blocks. */
+  const refreshPlansIfDecisionsChanged = (projectStore: KnowledgeStore): void => {
+    const fingerprint = (): string => {
+      const hash = createHash("sha1")
+      for (const path of decisionPaths(projectDir)) hash.update(path).update(readFileSync(join(projectDir, path)))
+      return hash.digest("hex")
+    }
+    if (projectStore.getMeta("decisions_fingerprint") === fingerprint()) return
+    const rewritten = refreshPlanLinks(projectDir)
+    if (rewritten.length > 0) log("[knowledge] refreshed plan decision links", { rewritten })
+    projectStore.setMeta("decisions_fingerprint", fingerprint())
   }
 
   const syncSessionIndex = async (projectStore: KnowledgeStore): Promise<void> => {

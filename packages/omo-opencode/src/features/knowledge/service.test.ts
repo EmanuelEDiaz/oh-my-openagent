@@ -66,3 +66,29 @@ describe("knowledge service", () => {
     expect(existsSync(join(project, ".omo", "cache", "knowledge.db"))).toBe(false)
   })
 })
+
+describe("knowledge service plan links", () => {
+  test("a decision edited by hand refreshes the linking plan on the next sync", async () => {
+    // given
+    const project = mkdtempSync(join(tmpdir(), "omo-knowledge-links-"))
+    mkdirSync(join(project, "docs", "decisions"), { recursive: true })
+    mkdirSync(join(project, "plans"))
+    writeFileSync(join(project, "plans", "p.md"), "# P\n\n## Decisions log\n")
+    const record = (status: string) => `---\nid: D-20260928-1\ntitle: "Cache"\nstatus: ${status}\ndate: 2026-09-28\nreversibility: easy\nplans:\n  - "plans/p.md"\nevidence:\n  - type: url\n    ref: "https://example.com"\n---\n`
+    writeFileSync(join(project, "docs", "decisions", "D-20260928-1-cache.md"), record("active"))
+    const service = createKnowledgeService(project, undefined, { openSessionStore: async () => null })
+
+    // when
+    await service.syncNow()
+    const first = readFileSync(join(project, "plans", "p.md"), "utf-8")
+    writeFileSync(join(project, "docs", "decisions", "D-20260928-1-cache.md"), record("superseded"))
+    await service.syncNow()
+    const second = readFileSync(join(project, "plans", "p.md"), "utf-8")
+
+    // then
+    expect(first).toContain("- D-20260928-1 — Cache · active · easy")
+    expect(second).toContain("- ~~D-20260928-1 — Cache~~ · superseded")
+    service.close()
+    rmSync(project, { recursive: true, force: true })
+  })
+})

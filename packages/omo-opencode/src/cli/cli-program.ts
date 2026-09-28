@@ -8,7 +8,7 @@ import { createMcpOAuthCommand } from "./mcp-oauth"
 import { configureRuntimeCommands } from "./runtime-commands"
 import { runConfigMigrate } from "./config-migrate"
 import { runConfigModels } from "./config-models"
-import { runKnowledgeReport } from "./knowledge-report"
+import { runKnowledgeDecisions, runKnowledgeReport } from "./knowledge-report"
 import {
   availableInstallPlatforms,
   isNativeDevPlatformEnabled,
@@ -341,9 +341,27 @@ Examples:
     process.exit(exitCode)
   })
 
-program
+const knowledgeCommand = program
   .command("knowledge")
   .description("Project knowledge and session index")
+
+knowledgeCommand
+  .command("decisions")
+  .description("Generated view of docs/decisions: table, supersession chains and malformed records (writes nothing)")
+  .addOption(new Option("--status <status>", "Which decisions to show").choices(["active", "superseded", "all"]).default("active"))
+  .option("--area <area>", "Only decisions of this area")
+  .option("--file <path>", "Only decisions whose evidence cites this file or directory")
+  .option("--json", "Machine-readable output")
+  .action((options: { status?: "active" | "superseded" | "all"; area?: string; file?: string; json?: boolean }) => {
+    process.exit(runKnowledgeDecisions({
+      ...(options.status ? { status: options.status } : {}),
+      ...(options.area ? { area: options.area } : {}),
+      ...(options.file ? { file: options.file } : {}),
+      json: options.json ?? false,
+    }))
+  })
+
+knowledgeCommand
   .command("report")
   .description("Show index sizes, pinned sessions and how much space the OpenCode database could reclaim")
   .option("--vacuum", "Offer to VACUUM the OpenCode database (asks first; OpenCode must be closed; backup is written)")
