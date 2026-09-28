@@ -1,6 +1,6 @@
 # Paso 1.1 — Diseño del índice, citas de chat y ciclo de vida
 
-Parte del roadmap: `docs/fork/roadmap.md` (pasos 1.1 → 1.2 y 1.3). Estado: **plan aprobado 27-09-2026**; implementando 1.2. Rutas: `S/` = `packages/omo-opencode/src/`.
+Parte del roadmap: `docs/fork/roadmap.md` (pasos 1.1 → 1.2 y 1.3). Estado: **plan aprobado 27-09-2026**; 1.2 hecho (28-09-2026), siguiente 1.3. Rutas: `S/` = `packages/omo-opencode/src/`.
 
 ## 1. Mediciones reales (27-09-2026, tu máquina, solo lectura)
 
@@ -102,21 +102,21 @@ búsqueda p95 < 20 ms (hoy ≤ 12 ms) · nunca bloquea el arranque de OpenCode.
 ## 3. Subtareas
 
 ### Paso 1.2 — Índice del proyecto + `knowledge_search`
-- [ ] 1. `S/shared/bun-sqlite-shim.ts` (el repo exige pasar `bun:sqlite` por un shim aprobado) + test.
-- [ ] 2. Almacén `S/features/knowledge/store.ts`: esquema (tabla `documents` + FTS5 + triggers), migraciones versionadas, checkpoint, `optimize`/`VACUUM` programados.
-- [ ] 3. Saneado de consultas y ranking con pesos por tipo (`query.ts`).
-- [ ] 4. Indexador de archivos del proyecto: `AGENTS.md`, `/plans/**`, `.omo/plans|drafts|notepads/**`, `docs/adr`, `docs/decisions`, `CHANGELOG.md`; troceado por encabezados guardando línea; incremental por hash.
-- [ ] 5. Indexador de git: últimos 500 commits (sha, asunto, cuerpo, archivos).
-- [ ] 6. Herramienta `knowledge_search(query, kinds?, scope: project|all, limit)` registrada en `S/plugin/tool-registry-core-tools.ts`.
-- [ ] 7. Disparadores: arranque del plugin (en segundo plano), `session.idle`, tras `write`/`edit` de archivos indexados.
-- [ ] 8. Config `knowledge` (activada por defecto) + regenerar `assets/omo.schema.json`.
-- [ ] 9. QA real en sandbox: una pregunta que solo se responde con un plan o commit → el agente usa la herramienta y cita el locator.
+- [x] 1. `S/shared/bun-sqlite-shim.ts` (el repo exige pasar `bun:sqlite` por un shim aprobado) + test.
+- [x] 2. Almacén `S/features/knowledge/store.ts`: esquema (tabla `documents` + FTS5 + triggers), migraciones versionadas, checkpoint, `optimize`/`VACUUM` programados.
+- [x] 3. Saneado de consultas y ranking con pesos por tipo (`query.ts`).
+- [x] 4. Indexador de archivos del proyecto: `AGENTS.md`, `/plans/**`, `.omo/plans|drafts|notepads/**`, `docs/adr`, `docs/decisions`, `CHANGELOG.md`; troceado por encabezados guardando línea; incremental por hash.
+- [x] 5. Indexador de git: últimos 500 commits (sha, asunto, cuerpo, archivos).
+- [x] 6. Herramienta `knowledge_search(query, kinds?, limit)` (el parámetro `scope: project|all` llega en 1.3, junto con las sesiones) registrada en `S/plugin/tool-registry-core-tools.ts`.
+- [x] 7. Disparadores: arranque del plugin (en segundo plano), `session.idle`, tras `write`/`edit` de archivos indexados.
+- [x] 8. Config `knowledge` (activada por defecto) + regenerar `assets/omo.schema.json`.
+- [x] 9. QA real en sandbox: una pregunta que solo se responde con un plan o commit → el agente usa la herramienta y cita el locator.
 
 ### Paso 1.3 — Índice de sesiones y citas de chat
 - [ ] 1. Lector de solo lectura de `opencode.db` con marca de agua por sesión (D2), tolerante a cambios de esquema (si faltan columnas, desactiva el indexado de sesiones con un aviso, sin romper nada).
 - [ ] 2. Extracción según D3 + redacción de secretos (D7).
 - [ ] 3. Poda D6: sesiones borradas, retención de 180 días salvo referenciadas, presupuesto de tamaño.
-- [ ] 4. `knowledge_search` devuelve locators de chat con título, fecha y comando de re-auditoría.
+- [ ] 4. `knowledge_search` añade `scope: project|all` y devuelve locators de chat con título, fecha y comando de re-auditoría.
 - [ ] 5. `oh-my-opencode knowledge report`: tamaño del índice, sesiones podadas, espacio recuperable en `opencode.db`.
 - [ ] 6. QA real: buscar una frase dicha en una sesión antigua → locator correcto y re-auditoría que abre ese mensaje.
 - [ ] 7. `knowledge_open(locator, around=N)`: texto original exacto del mensaje citado (con su razonamiento si lo hay) y N mensajes vecinos, solo lectura.
