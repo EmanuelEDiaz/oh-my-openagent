@@ -22,6 +22,7 @@ Estados: `idea` → `investigando` → `en progreso` → `hecho` / `descartado`.
 ## Mejoras
 
 > Plan maestro paso a paso: [`docs/fork/roadmap.md`](docs/fork/roadmap.md). Planes detallados en `docs/fork/plans/`.
+> Decisiones del fork (con evidencia verificada): `docs/decisions/`.
 
 Rutas relativas a `packages/`; `S/` = `packages/omo-opencode/src/`.
 

@@ -26,8 +26,8 @@ export type DecisionResult =
   | { readonly ok: true; readonly id: string; readonly path: string; readonly planPath?: string; readonly notes: readonly string[] }
   | { readonly ok: false; readonly problems: readonly string[] }
 
-function slugify(title: string): string {
-  return title.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 50) || "decision"
+export function slugify(title: string): string {
+  return title.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 50).replace(/^-+|-+$/g, "") || "decision"
 }
 
 function quote(value: string): string {
