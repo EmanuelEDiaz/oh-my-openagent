@@ -63,7 +63,8 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
 ## Fase 0 — Seguridad
 | Paso | Qué | Estado | Plan |
 |---|---|---|---|
-| 0.1 | Worktrees seguros: no borrar nunca rutas que omo no creó; worktrees reales con git; no borrar trabajo sin guardar. | plan listo, **siguiente** | `plans/knowledge-base-and-worktrees.md` (Pieza 4) |
+| 0.1 | Worktrees seguros: no borrar nunca rutas que omo no creó; worktrees reales con git; no borrar trabajo sin guardar. | **hecho** (27-09-2026, rama `fix/team-worktree-safety`) | `plans/knowledge-base-and-worktrees.md` (Pieza 4) |
+| 0.2 | Borrar equipos desde otra ejecución: `team_delete` exige la sesión líder pero ese registro vive en memoria y se pierde entre procesos (`opencode run`), dejando equipos y worktrees huérfanos. Hallado en la QA de 0.1. | pendiente |
 
 ## Fase 1 — Fundamento: índice, citas de chat y decisiones
 | Paso | Qué | Estado |
