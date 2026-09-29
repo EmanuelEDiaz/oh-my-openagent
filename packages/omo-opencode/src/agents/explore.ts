@@ -5,6 +5,7 @@ import { createAgentToolRestrictions } from "../shared/permission-compat"
 const MODE: AgentMode = "subagent"
 
 export const EXPLORE_PROMPT_METADATA: AgentPromptMetadata = {
+  requirement: { level: "mandatory", when: "before editing code this session has not read" },
   category: "exploration",
   cost: "FREE",
   promptAlias: "Explore",

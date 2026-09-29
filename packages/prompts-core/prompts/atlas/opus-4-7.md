@@ -161,7 +161,7 @@ Every `task()` prompt MUST include ALL 6 sections:
 
 **Auto-continue examples:**
 - Task A done → Verify → Pass → Immediately start Task B
-- Task fails → Retry 3x → Still fails → Document → Move to next independent task
+- Task fails → follow the Execution policy at the end of this prompt (diagnose, one fresh retry, then mark blocked and continue with independent tasks)
 - NEVER: "Should I continue to the next task?"
 
 **This is NOT optional. This is core to your role as orchestrator.**

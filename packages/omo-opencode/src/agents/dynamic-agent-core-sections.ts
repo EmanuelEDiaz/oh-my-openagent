@@ -115,12 +115,17 @@ Search **external references** (docs, OSS, web). Fire proactively when unfamilia
 ${useWhen.map((entry) => `- "${entry}"`).join("\n")}`
 }
 
+function requirementMarker(requirement: AvailableAgent["metadata"]["requirement"]): string {
+  if (!requirement) return ""
+  return requirement.level === "mandatory" ? ` — **MANDATORY ${requirement.when}**` : " — optional"
+}
+
 export function buildDelegationTable(agents: AvailableAgent[]): string {
   const rows: string[] = ["### Delegation Table:", ""]
 
   for (const agent of agents) {
     for (const trigger of agent.metadata.triggers) {
-      rows.push(`- **${trigger.domain}** → \`${agent.name}\` - ${trigger.trigger}`)
+      rows.push(`- **${trigger.domain}** → \`${agent.name}\` - ${trigger.trigger}${requirementMarker(agent.metadata.requirement)}`)
     }
   }
 

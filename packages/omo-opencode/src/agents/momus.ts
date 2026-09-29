@@ -322,6 +322,7 @@ export function createMomusAgent(model: string): AgentConfig {
 createMomusAgent.mode = MODE;
 
 export const momusPromptMetadata: AgentPromptMetadata = {
+  requirement: { level: "mandatory", when: "before executing a plan" },
   category: "advisor",
   cost: "EXPENSIVE",
   promptAlias: "Momus",

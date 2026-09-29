@@ -1,5 +1,5 @@
 import type { AgentConfig } from "@opencode-ai/sdk"
-import type { BuiltinAgentName, AgentOverrides, AgentFactory, AgentPromptMetadata } from "./types"
+import type { BuiltinAgentName, AgentOverrides, AgentFactory, AgentPromptMetadata, SpecialistAgentName } from "./types"
 import type { CategoriesConfig, GitMasterConfig } from "../config/schema"
 import type { LoadedSkill } from "../features/opencode-skill-loader/types"
 import type { BrowserAutomationProvider } from "../config/schema"
@@ -13,6 +13,9 @@ import { createAtlasAgent, atlasPromptMetadata } from "./atlas"
 import { createMomusAgent, momusPromptMetadata } from "./momus"
 import { createHephaestusAgent } from "./hephaestus"
 import { createSisyphusJuniorAgentWithOverrides } from "./sisyphus-junior"
+import { SPECIALISTS } from "./specialists/catalog"
+import { createSpecialistAgent } from "./specialists/factory"
+import { customAgentsForDelegation } from "./custom-agent-visibility"
 import type { AvailableCategory } from "./dynamic-agent-prompt-builder"
 import {
   fetchAvailableModels,
@@ -42,6 +45,7 @@ const agentSources: Record<BuiltinAgentName, AgentSource> = {
   // because it needs OrchestratorContext, not just a model string
   atlas: createAtlasAgent as AgentFactory,
   "sisyphus-junior": createSisyphusJuniorAgentWithOverrides as AgentFactory,
+  ...(Object.fromEntries(SPECIALISTS.map((spec) => [spec.name, createSpecialistAgent(spec)])) as Record<SpecialistAgentName, AgentFactory>),
 }
 
 /**
@@ -56,6 +60,7 @@ const agentMetadata: Partial<Record<BuiltinAgentName, AgentPromptMetadata>> = {
   metis: metisPromptMetadata,
   momus: momusPromptMetadata,
   atlas: atlasPromptMetadata,
+  ...(Object.fromEntries(SPECIALISTS.map((spec) => [spec.name, spec.metadata])) as Record<SpecialistAgentName, AgentPromptMetadata>),
 }
 
 export async function createBuiltinAgents(
@@ -66,7 +71,7 @@ export async function createBuiltinAgents(
   categories?: CategoriesConfig,
   gitMasterConfig?: GitMasterConfig,
   discoveredSkills: LoadedSkill[] = [],
-  _customAgentSummaries?: unknown,
+  customAgentSummaries?: unknown,
   browserProvider?: BrowserAutomationProvider,
   uiSelectedModel?: string,
   disabledSkills?: Set<string>,
@@ -119,6 +124,12 @@ export async function createBuiltinAgents(
     disableOmoEnv,
   })
 
+  // The orchestrators also route to the user's own subagents (fork roadmap 2.2, D4).
+  const delegationAgents = [
+    ...availableAgents,
+    ...customAgentsForDelegation(customAgentSummaries, new Set([...Object.keys(agentSources), "prometheus"]), disabledAgents),
+  ]
+
   const sisyphusConfig = maybeCreateSisyphusConfig({
     disabledAgents,
     agentOverrides,
@@ -126,7 +137,7 @@ export async function createBuiltinAgents(
     availableModels,
     systemDefaultModel,
     isFirstRunNoCache,
-    availableAgents,
+    availableAgents: delegationAgents,
     availableSkills: buildAvailableSkills(discoveredSkills, browserProvider, disabledSkills, teamModeEnabled, "sisyphus"),
     availableCategories,
     mergedCategories,
@@ -145,7 +156,7 @@ export async function createBuiltinAgents(
     availableModels,
     systemDefaultModel,
     isFirstRunNoCache,
-    availableAgents,
+    availableAgents: delegationAgents,
     availableSkills: buildAvailableSkills(discoveredSkills, browserProvider, disabledSkills, teamModeEnabled, "hephaestus"),
     availableCategories,
     mergedCategories,
@@ -168,7 +179,7 @@ export async function createBuiltinAgents(
     uiSelectedModel,
     availableModels,
     systemDefaultModel,
-    availableAgents,
+    availableAgents: delegationAgents,
     availableSkills: buildAvailableSkills(discoveredSkills, browserProvider, disabledSkills, teamModeEnabled, "atlas"),
     mergedCategories,
     directory,

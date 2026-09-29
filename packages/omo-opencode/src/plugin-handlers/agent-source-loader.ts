@@ -30,7 +30,7 @@ function migratePluginAgents(rawPluginAgents: Record<string, unknown>): AgentSou
 
 function summarizeCustomAgents(
   sources: Omit<AgentSources, "customAgentSummaries">,
-): Array<{ name: string; description: string }> {
+): Array<{ name: string; description: string; mode?: unknown; hidden?: unknown; disable?: unknown }> {
   return [
     ...Object.entries(sources.configAgent ?? {}),
     ...Object.entries(sources.userAgents),
@@ -48,6 +48,9 @@ function summarizeCustomAgents(
         typeof (config as Record<string, unknown>).description === "string"
           ? ((config as Record<string, unknown>).description as string)
           : "",
+      mode: (config as Record<string, unknown>).mode,
+      hidden: (config as Record<string, unknown>).hidden,
+      disable: (config as Record<string, unknown>).disable,
     }));
 }
 

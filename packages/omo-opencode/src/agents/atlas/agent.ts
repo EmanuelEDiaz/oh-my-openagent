@@ -26,6 +26,7 @@ import type { AvailableAgent, AvailableSkill, AvailableCategory } from "../dynam
 import { buildAgentIdentitySection, buildCategorySkillsDelegationGuide } from "../dynamic-agent-prompt-builder"
 import type { CategoryConfig } from "../../config/schema"
 import { mergeCategories } from "../../shared/merge-categories"
+import { ATLAS_EXECUTION_POLICY } from "./execution-policy"
 
 import {
   getCategoryDescription,
@@ -105,7 +106,7 @@ function buildDynamicOrchestratorPrompt(ctx?: OrchestratorContext): string {
     inject: runtimeInjections,
   }).body
 
-  return agentIdentity + "\n" + basePrompt
+  return agentIdentity + "\n" + basePrompt + "\n\n" + ATLAS_EXECUTION_POLICY
 }
 
 export function createAtlasAgent(ctx: OrchestratorContext): AgentConfig {
