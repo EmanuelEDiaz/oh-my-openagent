@@ -17,7 +17,12 @@ existentes (`quick`, `deep-low`, `deep-high`, `visual-engineering`, `writing`). 
 | 29-09-2026 | Lectura de código: **mejorar `explore`** (no un agente aparte) con herramientas propias (`code_outline`, `read_symbol`, `repo_map`, `callers`) y **Graphify opcional** (se usa si está instalado; nunca dependencia) | un solo especialista de lectura; funciona sin nada externo → paso 2.8 |
 | 29-09-2026 | Añadir guardián de reglas y especialista `rules-checker` | las reglas se pierden en contextos largos → paso 2.7 |
 | 29-09-2026 | Aplicar la investigación por especialista (`plans/specialists-research.md`) a prompts y permisos | procedimientos y guardas con evidencia; solo herramientas gratuitas, sin instalar nada |
-| 29-09-2026 | **En análisis**: qué reglas de `@planning`/`@running`, del `AGENTS.md` global y de la biblioteca `ai-guidelines` van a Prometheus/Atlas, cuáles se quedan en el global, cuáles chocan y cuáles pasan a código | evitar instrucciones duplicadas o contradictorias (IFScale); subtarea 4 en espera de ese análisis |
+| 29-09-2026 | Análisis regla por regla hecho: **no** copiar `@planning`/`@running` en los prompts; la mayoría ya está en el plugin (skill `ulw-plan`, evidence-gate, especialistas) y otras chocan (`/plans`, `_index.md`, `maxSteps`, informes en `/plans/*-review`). Prometheus delega todo en la skill `ulw-plan` (`packages/prompts-core/prompts/prometheus/default.md:5`): las mejoras van a `ulw-plan`/`ulw-execute` y al código compartido de Atlas | menos instrucciones y sin contradicciones (IFScale) |
+| 29-09-2026 | **Alcance híbrido**: trabajo descubierto dentro del área del plan → casilla y se arregla; fuera → se anota y se presenta al usuario al final (cambia `ulw-execute/SKILL.md:55`) | combina "estado ideal" del plugin con "no ampliar el alcance" del usuario |
+| 29-09-2026 | Mejoras a Atlas/ulw: citar evidencia al marcar casillas (si no, el evidence-gate la rechaza); política de fallos acotada y sin la contradicción "Retry 3x → siguiente" vs "nunca pases a la siguiente" en sus 8 variantes; un REJECT que cambie alcance/arquitectura/contrato se pregunta al usuario; tarea de CHANGELOG/docs en la plantilla del plan; `security-reviewer` opcional en planes que toquen auth/secretos | huecos y contradicciones verificados en el análisis |
+| 29-09-2026 | Hook por código: los ejecutores no instalan dependencias ni ejecutan comandos destructivos sin aprobación registrada en el plan (→ 2.4) | "un plan no es consentimiento" (regla del usuario) hecha cumplir |
+| 29-09-2026 | **Archivar** `~/.config/opencode/agents/{planning,running,*-reviewer}.md` (no borrar) **cuando el plugin haya absorbido sus reglas** (cierre de 2.2) y actualizar el `AGENTS.md` global para que apunte a Prometheus, Atlas y los especialistas | los revisores ya no se cargan (nombre protegido); evitar perder @planning/@running antes de tiempo |
+| 29-09-2026 | La biblioteca `ai-guidelines`: la idea es **absorber en el plugin** lo valioso, no depender de que el usuario la cargue — pendiente de concretar cómo (ver 2.9) | decisión del usuario |
 
 ## Principios
 - **Un especialista = una tarea atómica.** Hace una sola cosa, con las herramientas mínimas para hacerla y una salida fija.
@@ -106,7 +111,8 @@ Hephaestus (orquestador pensado para modelos GPT) se mantiene oculto salvo que l
 - [ ] 2. Registro de especialistas: los nuevos como agentes builtin con su prompt, permisos y nivel de modelo; los
   existentes reutilizados sin romper sus ids internos (compatibilidad con upstream).
 - [ ] 3. Tabla de delegación con obligatorio/opcional y disparadores, generada desde el registro (una sola fuente).
-- [ ] 4. Reglas de planificación/ejecución: **según el análisis regla por regla** (ver registro de decisiones).
+- [ ] 4. Mejoras a `ulw-plan`/`ulw-execute`/Atlas del registro de decisiones (alcance híbrido, evidencia al marcar, fallos acotados, REJECT → usuario, CHANGELOG).
+- [ ] 4b. Archivar los agentes del usuario y actualizar su `AGENTS.md` global (al cerrar 2.2).
 - [ ] 5. Agentes personalizados visibles para el orquestador.
 - [ ] 6. QA real: en un OpenCode aislado, cada orquestador delega una tarea de cada tipo al especialista correcto.
 - [ ] 7. Docs, evidencia, merge y push.
