@@ -10,6 +10,15 @@ existentes (`quick`, `deep-low`, `deep-high`, `visual-engineering`, `writing`). 
 `dependency-check`, `test-writer`, `debugger`, `verifier`, `ui-tester`, `security-reviewer`, `test-reviewer`,
 `lang-reviewer`, `architect-reviewer`, `docs-writer`, `git-committer`.
 
+## Decisiones (registro)
+| Fecha | Decisión | Motivo |
+|---|---|---|
+| 29-09-2026 | Catálogo aprobado tal cual; nombres en inglés, ids existentes intactos | coherencia con el código del fork y compatibilidad con upstream |
+| 29-09-2026 | Lectura de código: **mejorar `explore`** (no un agente aparte) con herramientas propias (`code_outline`, `read_symbol`, `repo_map`, `callers`) y **Graphify opcional** (se usa si está instalado; nunca dependencia) | un solo especialista de lectura; funciona sin nada externo → paso 2.8 |
+| 29-09-2026 | Añadir guardián de reglas y especialista `rules-checker` | las reglas se pierden en contextos largos → paso 2.7 |
+| 29-09-2026 | Aplicar la investigación por especialista (`plans/specialists-research.md`) a prompts y permisos | procedimientos y guardas con evidencia; solo herramientas gratuitas, sin instalar nada |
+| 29-09-2026 | **En análisis**: qué reglas de `@planning`/`@running`, del `AGENTS.md` global y de la biblioteca `ai-guidelines` van a Prometheus/Atlas, cuáles se quedan en el global, cuáles chocan y cuáles pasan a código | evitar instrucciones duplicadas o contradictorias (IFScale); subtarea 4 en espera de ese análisis |
+
 ## Principios
 - **Un especialista = una tarea atómica.** Hace una sola cosa, con las herramientas mínimas para hacerla y una salida fija.
   Si una tarea necesita dos especialidades, el orquestador la parte en dos llamadas.
@@ -97,7 +106,7 @@ Hephaestus (orquestador pensado para modelos GPT) se mantiene oculto salvo que l
 - [ ] 2. Registro de especialistas: los nuevos como agentes builtin con su prompt, permisos y nivel de modelo; los
   existentes reutilizados sin romper sus ids internos (compatibilidad con upstream).
 - [ ] 3. Tabla de delegación con obligatorio/opcional y disparadores, generada desde el registro (una sola fuente).
-- [ ] 4. Reglas de @planning en Prometheus y de @running en Atlas.
+- [ ] 4. Reglas de planificación/ejecución: **según el análisis regla por regla** (ver registro de decisiones).
 - [ ] 5. Agentes personalizados visibles para el orquestador.
 - [ ] 6. QA real: en un OpenCode aislado, cada orquestador delega una tarea de cada tipo al especialista correcto.
 - [ ] 7. Docs, evidencia, merge y push.
