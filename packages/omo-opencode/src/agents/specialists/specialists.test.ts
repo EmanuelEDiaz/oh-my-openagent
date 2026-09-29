@@ -59,6 +59,37 @@ describe("specialists catalog", () => {
     expect(committer["git reset --hard*"]).toBe("deny")
     expect(verifier["git push*"]).toBe("deny")
     expect(permissionOf("api-lookup")["bash"]).toBe("deny")
+    for (const pattern of ["*--no-verify*", "*--force*", "git add -A*", "git add .", "git add --all*"]) {
+      expect(`${pattern}=${committer[pattern]}`).toBe(`${pattern}=deny`)
+    }
+  })
+
+  test("reviewers may run their free scanners when installed, never install them", () => {
+    // when
+    const security = permissionOf("security-reviewer")["bash"] as Record<string, string>
+    const tests = permissionOf("test-reviewer")["bash"] as Record<string, string>
+
+    // then
+    expect(security["gitleaks*"]).toBe("allow")
+    expect(security["osv-scanner*"]).toBe("allow")
+    expect(security["command -v*"]).toBe("allow")
+    expect(tests["mutmut*"]).toBe("allow")
+    for (const bash of [security, tests]) {
+      expect(bash["npm install*"]).toBe("deny")
+      expect(bash["pip install*"]).toBe("deny")
+    }
+  })
+
+  test("prompts carry the researched guards", () => {
+    const prompt = (name: string) => createSpecialistAgent(SPECIALISTS.find((spec) => spec.name === name)!)("m").prompt ?? ""
+    expect(prompt("verifier")).toContain("FLAKY")
+    expect(prompt("verifier")).toContain("baseline")
+    expect(prompt("test-writer")).toContain("from the specification")
+    expect(prompt("debugger")).toContain("git bisect run")
+    expect(prompt("ui-tester")).toContain("accessibility snapshot")
+    expect(prompt("security-reviewer")).toContain("source: tool | llm")
+    expect(prompt("dependency-check")).toContain("osv.dev")
+    expect(prompt("api-lookup")).toContain("degraded")
   })
 
   test("the orchestrator's delegation table advertises every specialist with its requirement", async () => {
