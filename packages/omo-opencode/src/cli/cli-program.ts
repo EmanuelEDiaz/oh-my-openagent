@@ -9,6 +9,7 @@ import { configureRuntimeCommands } from "./runtime-commands"
 import { runConfigMigrate } from "./config-migrate"
 import { runConfigModels } from "./config-models"
 import { runKnowledgeCheck, runKnowledgeDecisions, runKnowledgeReport } from "./knowledge-report"
+import { runTeamDelete, runTeamList } from "./team-admin"
 import {
   availableInstallPlatforms,
   isNativeDevPlatformEnabled,
@@ -339,6 +340,26 @@ Examples:
       json: options.json ?? false,
     })
     process.exit(exitCode)
+  })
+
+const teamCommand = program
+  .command("team")
+  .description("Inspect and clean up team runs, including ones left behind by another OpenCode process")
+
+teamCommand
+  .command("list")
+  .description("List team runs on disk with status, lead session (and whether it still exists), members and worktrees")
+  .action(async () => {
+    process.exit(await runTeamList())
+  })
+
+teamCommand
+  .command("delete <teamRunId>")
+  .description("Delete a team run; worktrees with uncommitted work are kept and listed")
+  .option("--force", "Tear it down even while members are still active")
+  .option("--dry-run", "Show what would be removed without changing anything")
+  .action(async (teamRunId: string, options: { force?: boolean; dryRun?: boolean }) => {
+    process.exit(await runTeamDelete(teamRunId, { force: options.force ?? false, dryRun: options.dryRun ?? false }))
   })
 
 const knowledgeCommand = program
