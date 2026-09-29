@@ -112,7 +112,7 @@ Hephaestus (orquestador pensado para modelos GPT) se mantiene oculto salvo que l
   existentes reutilizados sin romper sus ids internos (compatibilidad con upstream).
 - [ ] 3. Tabla de delegación con obligatorio/opcional y disparadores, generada desde el registro (una sola fuente).
 - [ ] 4. Mejoras a `ulw-plan`/`ulw-execute`/Atlas del registro de decisiones (alcance híbrido, evidencia al marcar, fallos acotados, REJECT → usuario, CHANGELOG).
-- [ ] 4b. Archivar los agentes del usuario y actualizar su `AGENTS.md` global.
+- [x] 4b. Archivar los agentes del usuario y actualizar su `AGENTS.md` global (hecho 29-09-2026: movidos a `~/.config/opencode/agents-archive/`).
 - [ ] 5. Agentes personalizados visibles para el orquestador.
 - [ ] 6. QA real: en un OpenCode aislado, cada orquestador delega una tarea de cada tipo al especialista correcto.
 - [ ] 7. Docs, evidencia, merge y push.
