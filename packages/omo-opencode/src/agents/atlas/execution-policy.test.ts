@@ -31,6 +31,8 @@ describe("Atlas execution policy (fork 2.2)", () => {
       expect(policy).toContain("blocked")
       expect(policy).toContain("ask the user")
       expect(policy).toContain("outside the plan's area")
+      expect(policy).toContain("`docs-writer` when the change")
+      expect(policy).toContain("`security-reviewer` when it touches auth")
     })
   }
 })

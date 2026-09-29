@@ -20,4 +20,9 @@ would change the plan's scope, the architecture or a public contract (API, data 
 
 **Work discovered on the way** (a pre-existing bug, failing test, stale doc):
 - inside the plan's area (files and modules the plan touches): add it to the plan as a checkbox and fix it;
-- outside the plan's area: do not fix it; list it for the user in the final report with its location.`
+- outside the plan's area: do not fix it; list it for the user in the final report with its location.
+
+**Closing a plan.** Before the final verification wave, run the specialists whose mandatory trigger applies to the whole
+diff: \`test-reviewer\` and \`lang-reviewer\` always; \`security-reviewer\` when it touches auth, secrets, external input
+or dependencies; \`architect-reviewer\` when the plan recorded a hard-to-reverse decision; \`docs-writer\` when the change
+is visible to users (README, CHANGELOG, docs); then \`git-committer\`. Critical or high findings block completion.`
