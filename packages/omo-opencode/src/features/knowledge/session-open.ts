@@ -1,3 +1,4 @@
+import { redactSecrets } from "./session-reader"
 import type { SessionPart, SessionReader } from "./session-reader"
 
 const MAX_PART_CHARS = 4000
@@ -24,7 +25,7 @@ function toolLine(part: SessionPart): string {
   } catch {
     detail = ""
   }
-  return `[tool ${part.tool ?? "?"}${detail ? ` ${detail.slice(0, 200)}` : ""}]`
+  return `[tool ${part.tool ?? "?"}${detail ? ` ${redactSecrets(detail).slice(0, 200)}` : ""}]`
 }
 
 function renderMessage(messageId: string, parts: readonly SessionPart[], cited: ParsedLocator): string {
@@ -34,8 +35,8 @@ function renderMessage(messageId: string, parts: readonly SessionPart[], cited: 
   const lines = [`${isCitedMessage ? "▶ " : ""}--- ${messageId} [${role}${parts[0]?.summary ? ", compaction summary" : ""}] ${when} ---`]
   for (const part of parts) {
     const mark = part.partId === cited.partId ? `   ◀ cited ${part.partId}` : ""
-    if (part.type === "text" && part.text) lines.push(`${part.synthetic ? "[injected] " : ""}${clip(part.text, MAX_PART_CHARS)}${mark}`)
-    else if (part.type === "reasoning" && part.text && isCitedMessage) lines.push(`[reasoning] ${clip(part.text, MAX_REASONING_CHARS)}${mark}`)
+    if (part.type === "text" && part.text) lines.push(`${part.synthetic ? "[injected] " : ""}${clip(redactSecrets(part.text), MAX_PART_CHARS)}${mark}`)
+    else if (part.type === "reasoning" && part.text && isCitedMessage) lines.push(`[reasoning] ${clip(redactSecrets(part.text), MAX_REASONING_CHARS)}${mark}`)
     else if (part.type === "tool") lines.push(`${toolLine(part)}${mark}`)
   }
   return lines.join("\n")
