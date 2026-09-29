@@ -30,8 +30,11 @@ describe("knowledge_open and combined search", () => {
         id: "ses_Main00001", projectId: "proj-a", directory: project, title: "Cache design", updated: NOW - 1000,
         messages: [
           message(1, "user", "¿Qué cache usamos?"),
-          message(2, "assistant", "Propongo Redis por la latencia.", [{ id: "prt_2r", type: "reasoning", text: "compare redis vs valkey licensing" }]),
-          message(3, "user", "Mejor Valkey, por la licencia."),
+          message(2, "assistant", "Propongo Redis por la latencia.", [
+            { id: "prt_2r", type: "reasoning", text: "compare redis vs valkey licensing" },
+            { id: "prt_2t", type: "tool", tool: "bash", input: { command: "mysql -u root --init password=SuperSecret123" } },
+          ]),
+          message(3, "user", "Mejor Valkey, por la licencia. password=SuperSecret123"),
           message(4, "assistant", "De acuerdo: Valkey."),
         ],
       },
@@ -83,6 +86,16 @@ describe("knowledge_open and combined search", () => {
     expect(output).not.toContain("De acuerdo: Valkey.")
     expect(output).toContain("[reasoning] compare redis vs valkey licensing")
     expect(output).toContain("Propongo Redis por la latencia.   ◀ cited prt_2")
+  })
+
+  test("never prints secrets from the original messages or tool inputs", async () => {
+    // when
+    const output = await service().open("ses_Main00001/msg_2/prt_2", 1)
+
+    // then
+    expect(output).toContain("Mejor Valkey, por la licencia.")
+    expect(output).toContain("[tool bash mysql -u root --init")
+    expect(output).not.toContain("SuperSecret123")
   })
 
   test("explains bad or stale locators instead of guessing", async () => {
