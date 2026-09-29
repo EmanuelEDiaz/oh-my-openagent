@@ -2,6 +2,12 @@
 
 Estado: **vivo**. Se actualiza al cerrar cada paso. Rutas: `S/` = `packages/omo-opencode/src/`.
 
+## Misión
+Un plugin que **cubra los huecos que OpenCode deja a los modelos de código abierto**: que un modelo gratuito o local
+trabaje con la fiabilidad de uno de pago porque el plugin le da contexto justo, especialistas, reglas en el momento
+adecuado y comprobaciones por código. Criterio para cada paso: **solo entra lo que es la mejor opción conocida**; si el
+plugin ya tiene algo mejor o la investigación encuentra algo mejor, lo otro se descarta y se anota por qué.
+
 ## Objetivo
 Una sola estructura que se quede con **lo mejor** de oh-my-openagent y de tu biblioteca/agentes, donde:
 1. Un orquestador descompone cada tarea en **tareas atómicas** y las envía al **especialista** adecuado.
@@ -106,6 +112,7 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
 | 2.5 | Skills obligatorias por categoría (`skills` en `CategoryConfigSchema`). | pendiente |
 | 2.6 | Contrato de salida verificado para todos los subagentes: resumen + fuentes; si falta, se devuelve al subagente. | pendiente |
 | 2.7 | **Guardián de reglas**: reglas de proyecto y de carpeta llevadas al momento de editar (bloqueo una vez + recordatorio), que vuelven tras compactar, comprobables por código (`forbid`), en el prompt de los subagentes, y especialista `rules-checker`. `plans/rules-guardian.md` | plan |
+| 2.9 | **Absorber la biblioteca de reglas en el plugin**: evaluar regla a regla de `ai-guidelines` y del `AGENTS.md` global; se aplica solo si es la mejor opción (si el plugin o la investigación tienen algo mejor, se descarta con motivo). Cada regla va donde se usa: comportamiento general compacto en los orquestadores, reglas de tarea en su especialista/skill, reglas de tema o lenguaje (REST, Go, PHP/Laravel, Next, Nuxt) solo si el proyecto usa ese stack y al tocar esos archivos (vía 2.7). Objetivo: dejar de cargar ~26k tokens de reglas en cada agente. | plan |
 | 2.8 | **Lectura de código eficiente**: `explore` mejorado + herramientas `code_outline`, `read_symbol`, `repo_map`, `callers`; Graphify opcional (se usa si está instalado). Investigación en `plans/specialists-research.md` | plan |
 
 ## Fase 3 — Medir que mejora
@@ -121,6 +128,7 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
   (`block`); indexar sesiones: sí; todo activado por defecto.
 - 27-09-2026 — No elegir entre tus agentes y los del plugin: quedarse con el mejor de cada papel (paso 2.1).
 - 27-09-2026 — Añadido 1.6: la compactación no debe perder peticiones, restricciones, decisiones ni pendientes.
+- 29-09-2026 — Misión del fork fijada; añadido 2.9 (absorber la biblioteca con criterio "solo lo mejor"); `@planning`/`@running` y los 4 revisores del usuario se archivan: sus reglas útiles ya están absorbidas o planificadas, el resto se descarta.
 - 29-09-2026 — Añadidos 2.7 (guardián de reglas) y 2.8 (lectura de código eficiente), con investigación por especialista.
 - 29-09-2026 — 2.1 hecho: matriz de enrutamiento y arquitectura objetivo (orquestadores + especialistas).
 - 29-09-2026 — 0.2 hecho: borrar equipos colgados desde otra ejecución (herramienta + CLI).

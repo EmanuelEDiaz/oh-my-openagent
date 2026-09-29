@@ -21,7 +21,7 @@ existentes (`quick`, `deep-low`, `deep-high`, `visual-engineering`, `writing`). 
 | 29-09-2026 | **Alcance híbrido**: trabajo descubierto dentro del área del plan → casilla y se arregla; fuera → se anota y se presenta al usuario al final (cambia `ulw-execute/SKILL.md:55`) | combina "estado ideal" del plugin con "no ampliar el alcance" del usuario |
 | 29-09-2026 | Mejoras a Atlas/ulw: citar evidencia al marcar casillas (si no, el evidence-gate la rechaza); política de fallos acotada y sin la contradicción "Retry 3x → siguiente" vs "nunca pases a la siguiente" en sus 8 variantes; un REJECT que cambie alcance/arquitectura/contrato se pregunta al usuario; tarea de CHANGELOG/docs en la plantilla del plan; `security-reviewer` opcional en planes que toquen auth/secretos | huecos y contradicciones verificados en el análisis |
 | 29-09-2026 | Hook por código: los ejecutores no instalan dependencias ni ejecutan comandos destructivos sin aprobación registrada en el plan (→ 2.4) | "un plan no es consentimiento" (regla del usuario) hecha cumplir |
-| 29-09-2026 | **Archivar** `~/.config/opencode/agents/{planning,running,*-reviewer}.md` (no borrar) **cuando el plugin haya absorbido sus reglas** (cierre de 2.2) y actualizar el `AGENTS.md` global para que apunte a Prometheus, Atlas y los especialistas | los revisores ya no se cargan (nombre protegido); evitar perder @planning/@running antes de tiempo |
+| 29-09-2026 | **Archivar ya** `~/.config/opencode/agents/{planning,running,*-reviewer}.md` (no borrar) y actualizar el `AGENTS.md` global para que apunte a Prometheus, Atlas y los especialistas | el usuario no quiere mantenerlos: lo útil ya está absorbido o planificado, el resto se descarta |
 | 29-09-2026 | La biblioteca `ai-guidelines`: la idea es **absorber en el plugin** lo valioso, no depender de que el usuario la cargue — pendiente de concretar cómo (ver 2.9) | decisión del usuario |
 
 ## Principios
@@ -112,7 +112,7 @@ Hephaestus (orquestador pensado para modelos GPT) se mantiene oculto salvo que l
   existentes reutilizados sin romper sus ids internos (compatibilidad con upstream).
 - [ ] 3. Tabla de delegación con obligatorio/opcional y disparadores, generada desde el registro (una sola fuente).
 - [ ] 4. Mejoras a `ulw-plan`/`ulw-execute`/Atlas del registro de decisiones (alcance híbrido, evidencia al marcar, fallos acotados, REJECT → usuario, CHANGELOG).
-- [ ] 4b. Archivar los agentes del usuario y actualizar su `AGENTS.md` global (al cerrar 2.2).
+- [ ] 4b. Archivar los agentes del usuario y actualizar su `AGENTS.md` global.
 - [ ] 5. Agentes personalizados visibles para el orquestador.
 - [ ] 6. QA real: en un OpenCode aislado, cada orquestador delega una tarea de cada tipo al especialista correcto.
 - [ ] 7. Docs, evidencia, merge y push.
