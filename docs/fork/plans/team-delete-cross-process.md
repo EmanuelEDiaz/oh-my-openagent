@@ -1,6 +1,6 @@
 # Paso 0.2 — Borrar equipos desde otra ejecución
 
-Parte del roadmap: `docs/fork/roadmap.md`. Estado: **plan (29-09-2026)**. Rutas: `S/` = `packages/omo-opencode/src/`.
+Parte del roadmap: `docs/fork/roadmap.md`. Estado: **hecho (29-09-2026)**. Rutas: `S/` = `packages/omo-opencode/src/`.
 
 ## Diagnóstico (verificado en el código)
 - `team_delete` (`S/features/team-mode/tools/lifecycle-shutdown-tools.ts:50`) autoriza por **participante**:
@@ -29,13 +29,21 @@ Parte del roadmap: `docs/fork/roadmap.md`. Estado: **plan (29-09-2026)**. Rutas:
    **solo** si el equipo está `orphaned` o atascado en `deleting`. Un equipo `active` sigue siendo solo del líder.
 
 ## Subtareas
-- [ ] 1. Tests RED: sesión ajena + `orphaned` + `force` (según decisión 3); mensaje de error; CLI list/delete/dry-run.
-- [ ] 2. Mensaje accionable en `team_delete`.
-- [ ] 3. `S/cli/team-admin.ts` + registro en `cli-program.ts`.
-- [ ] 4. (Si se aprueba) atajo para sesión ajena en equipos `orphaned`/`deleting`.
-- [ ] 5. QA real en sandbox: crear equipo en `opencode run` A; en B comprobar el mensaje; borrar con el CLI; confirmar que
+- [x] 1. Tests RED: sesión ajena + `orphaned` + `force` (según decisión 3); mensaje de error; CLI list/delete/dry-run.
+- [x] 2. Mensaje accionable en `team_delete`.
+- [x] 3. `S/cli/team-admin.ts` + registro en `cli-program.ts`.
+- [x] 4. (Si se aprueba) atajo para sesión ajena en equipos `orphaned`/`deleting`.
+- [x] 5. QA real en sandbox: crear equipo en `opencode run` A; en B comprobar el mensaje; borrar con el CLI; confirmar que
   los worktrees limpios se quitan y uno con cambios se conserva.
-- [ ] 6. Docs, evidencia, merge y push; limpiar sandbox.
+- [x] 6. Docs, evidencia, merge y push; limpiar sandbox.
+
+## Resultado (29-09-2026)
+- Decisión del usuario: punto 3 aprobado (sesión ajena + `force` en equipos `orphaned`/`deleting`).
+- Hallazgo en el código: el hook `team-tool-gating` rechazaba a cualquier no líder **antes** de la herramienta, así que el
+  atajo del upstream para miembros nunca se ejecutaba en producción. Ahora ambos aplican la misma regla y el mismo mensaje.
+- Hallazgo en la QA: al salir con normalidad, `opencode run` ya borra los equipos que creó (`cleanupSessionTeamRuns`). Los
+  equipos quedan colgados cuando el proceso muere de golpe; reproducido con `kill -9`.
+- QA real: los 4 escenarios pasan (evidencia en `.omo/evidence/20260929-team-delete-cross-process/`).
 
 ## Criterios de aceptación
 ```gherkin
