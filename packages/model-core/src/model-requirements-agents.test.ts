@@ -188,7 +188,7 @@ describe("AGENT_MODEL_REQUIREMENTS", () => {
     const [primary, secondary, solFallback, fourth, fifth, sixth] = atlas.fallbackChain
 
     // then
-    expect(atlas.fallbackChain).toHaveLength(6)
+    expect(atlas.fallbackChain).toHaveLength(7)
     expect(primary?.model).toBe("claude-sonnet-5")
     expect(primary?.providers[0]).toBe("anthropic")
     expect(secondary?.model).toBe("kimi-k3")
@@ -206,6 +206,8 @@ describe("AGENT_MODEL_REQUIREMENTS", () => {
         })
     expect(sixth?.model).toBe("minimax-m2.7")
     expect(sixth?.providers[0]).toBe("opencode-go")
+    // fork 0.3: a free last resort so Atlas never vanishes for opencode-only users
+    expect(atlas.fallbackChain[6]).toEqual({ providers: ["opencode"], model: "big-pickle" })
   })
 
   test("sisyphus-junior keeps sonnet, Kimi, minimax, and big-pickle fallbacks", () => {

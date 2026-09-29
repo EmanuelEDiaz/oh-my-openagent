@@ -8,7 +8,8 @@ import { buildAgent, isFactory } from "../agent-builder"
 import { resolveAgentSkills } from "../agent-skill-resolution"
 import { applyOverrides } from "./agent-overrides"
 import { applyEnvironmentContext } from "./environment-context"
-import { applyModelResolution, keepFallbackOverRetiredModel, userFallbackModelIds, getFirstFallbackModel } from "./model-resolution"
+import { applyModelResolution, getConnectedFallbackModel, keepFallbackOverRetiredModel, promptModelHint, userFallbackModelIds } from "./model-resolution"
+import { recordAgentRegistrationIssue } from "../../shared/agent-registration-report"
 import { log } from "../../shared/logger"
 
 export function collectPendingBuiltinAgents(input: {
@@ -28,6 +29,7 @@ export function collectPendingBuiltinAgents(input: {
   teamModeEnabled?: boolean
   useTaskSystem?: boolean
   disableOmoEnv?: boolean
+  connectedProviders?: readonly string[]
 }): { pendingAgentConfigs: Map<string, AgentConfig>; availableAgents: AvailableAgent[] } {
   const {
     agentSources,
@@ -94,19 +96,27 @@ export function collectPendingBuiltinAgents(input: {
         })
         resolution = { model: override.model, provenance: "override" as const }
       } else {
-        resolution = getFirstFallbackModel(requirement)
+        resolution = getConnectedFallbackModel(requirement, input.connectedProviders ?? [], availableModels)
       }
     }
     if (!resolution) {
-      log("[agent-registration] Agent skipped: model resolution returned no result", {
+      // Registered without a model: OpenCode runs it on the caller's/session model instead of a provider the user
+      // never connected (fork roadmap 0.3).
+      log("[agent-registration] Agent degraded: no model resolved, using the session model", { agent: agentName })
+      recordAgentRegistrationIssue({
         agent: agentName,
-        configuredModel: override?.model,
+        status: "degraded",
+        detail: `no configured or connected model; runs on the session model (set agents.${agentName}.model or use /omo-models)`,
       })
-      continue
     }
-    const { model, variant: resolvedVariant } = resolution
+    const model = resolution?.model ?? promptModelHint(requirement)
+    const resolvedVariant = resolution?.variant
 
     let config = buildAgent(source, model, mergedCategories)
+    if (!resolution) {
+      const { model: _promptOnlyModel, ...withoutModel } = config
+      config = withoutModel
+    }
 
     // Apply resolved variant from model fallback chain
     if (resolvedVariant) {
@@ -118,7 +128,7 @@ export function collectPendingBuiltinAgents(input: {
     }
 
     config = applyOverrides(config, override, mergedCategories, directory)
-    config = keepFallbackOverRetiredModel(config, resolution, override?.model)
+    if (resolution) config = keepFallbackOverRetiredModel(config, resolution, override?.model)
     config = resolveAgentSkills(config, { gitMasterConfig, browserProvider, disabledSkills, teamModeEnabled })
 
     // Store for later - will be added after sisyphus and hephaestus

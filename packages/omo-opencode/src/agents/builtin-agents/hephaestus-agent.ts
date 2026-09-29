@@ -7,7 +7,10 @@ import { log } from "../../shared/logger"
 import { createHephaestusAgent, isHephaestusSupportedModel } from "../hephaestus"
 import { applyEnvironmentContext } from "./environment-context"
 import { applyCategoryOverride, mergeAgentConfig } from "./agent-overrides"
-import { applyModelResolution, keepFallbackOverRetiredModel, userFallbackModelIds, getFirstFallbackModel } from "./model-resolution"
+import { applyModelResolution, getConnectedFallbackModel, getFirstFallbackModel, keepFallbackOverRetiredModel, userFallbackModelIds } from "./model-resolution"
+import { recordAgentRegistrationIssue } from "../../shared/agent-registration-report"
+
+const HEPHAESTUS_SKIP_HINT = "Hephaestus needs a GPT model: set agents.hephaestus.model (or connect an OpenAI-compatible provider)"
 import { applyFrontierToolSchemaPermission } from "../frontier-tool-schema-guard"
 
 export function maybeCreateHephaestusConfig(input: {
@@ -23,6 +26,7 @@ export function maybeCreateHephaestusConfig(input: {
   directory?: string
   useTaskSystem: boolean
   disableOmoEnv?: boolean
+  connectedProviders?: readonly string[]
 }): AgentConfig | undefined {
   const {
     disabledAgents,
@@ -56,6 +60,7 @@ export function maybeCreateHephaestusConfig(input: {
       agent: "hephaestus",
       requiredProvider: hephaestusRequirement?.requiresProvider,
     })
+    recordAgentRegistrationIssue({ agent: "hephaestus", status: "skipped", detail: HEPHAESTUS_SKIP_HINT })
     return undefined
   }
 
@@ -68,7 +73,19 @@ export function maybeCreateHephaestusConfig(input: {
   })
 
   if (isFirstRunNoCache && !hephaestusOverride?.model) {
+    // Hephaestus is GPT-only, so it cannot fall back to the session model. Before the provider cache exists nothing can
+    // be verified: keep the upstream GPT guess, but tell the user (fork roadmap 0.3).
     hephaestusResolution = getFirstFallbackModel(hephaestusRequirement)
+    if (hephaestusResolution) {
+      recordAgentRegistrationIssue({
+        agent: "hephaestus",
+        status: "degraded",
+        detail: `first run: ${hephaestusResolution.model} is assumed, not verified — set agents.hephaestus.model or use /omo-models`,
+      })
+    }
+  } else if (!hephaestusResolution) {
+    // With a provider cache, only a GPT model the user can actually reach; otherwise a visible skip.
+    hephaestusResolution = getConnectedFallbackModel(hephaestusRequirement, input.connectedProviders ?? [], availableModels)
   }
 
   if (!hephaestusResolution) {
@@ -76,6 +93,7 @@ export function maybeCreateHephaestusConfig(input: {
       agent: "hephaestus",
       configuredModel: hephaestusOverride?.model,
     })
+    recordAgentRegistrationIssue({ agent: "hephaestus", status: "skipped", detail: HEPHAESTUS_SKIP_HINT })
     return undefined
   }
   const { model: hephaestusModel, variant: hephaestusResolvedVariant } = hephaestusResolution
@@ -85,6 +103,7 @@ export function maybeCreateHephaestusConfig(input: {
       agent: "hephaestus",
       configuredModel: hephaestusModel,
     })
+    recordAgentRegistrationIssue({ agent: "hephaestus", status: "skipped", detail: `${HEPHAESTUS_SKIP_HINT} (resolved ${hephaestusModel})` })
     return undefined
   }
 
