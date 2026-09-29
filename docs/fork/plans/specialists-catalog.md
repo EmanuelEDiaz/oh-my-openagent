@@ -123,8 +123,12 @@ Hephaestus (orquestador pensado para modelos GPT) se mantiene oculto salvo que l
   agentes personalizados visibles (filtrando primarios, ocultos, desactivados, duplicados y nombres reservados).
 - Atlas: política de ejecución común a sus 8 variantes; `ulw-execute` con alcance híbrido.
 - QA real (`.omo/evidence/20260929-specialists-catalog/`): registro, permisos, tabla y política verificados en el servidor.
-  Hallazgos: (1) el `verifier` hace su tarea pero añade observaciones y ofrecimientos aunque el prompt lo prohíba → el
-  contrato de salida debe comprobarse por código (2.6); (2) Sisyphus respondió bien sin delegar en `explore` en un repo de
+  Hallazgos: (1) **corregido tras investigar**: la prueba del `verifier` con `opencode run --agent verifier` no era válida —
+  OpenCode no ejecuta subagentes como agente principal y cae al agente por defecto (Sisyphus;
+  `opencode/src/cli/cmd/run.ts:610-616` en v1.18.26), así que lo observado fue casi seguro Sisyphus. Los especialistas
+  se prueban vía delegación (`task(subagent_type=…)`). Aun así el riesgo de que no cumplan su formato es real: su contrato
+  queda al principio de un prompt de sistema de ~170 KB (biblioteca global + AGENTS.md del proyecto) → sobre `<report>` y
+  comprobación por código en 2.6; (2) Sisyphus respondió bien sin delegar en `explore` en un repo de
   3 archivos; el escenario "delega en explore" estaba mal planteado (su disparador obligatorio es editar código no leído).
   Queda como decisión de 2.4 si el orquestador puede hacer lecturas pequeñas por sí mismo.
 
