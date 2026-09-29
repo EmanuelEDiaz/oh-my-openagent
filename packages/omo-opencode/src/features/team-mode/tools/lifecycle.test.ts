@@ -242,7 +242,7 @@ describe("team lifecycle tools", () => {
     expect(hasRuntime(created.teamRunId)).toBe(false)
   })
 
-  test("team_delete still rejects non-participants even with force=true", async () => {
+  test("team_delete force=true lets a session from another run clean up an orphaned team", async () => {
     // given
     const createTool = createTeamCreateToolForTest()
     const deleteTool = createTeamDeleteTool(config, mockClient, backgroundManager, undefined, lifecycleDeps)
@@ -250,10 +250,42 @@ describe("team lifecycle tools", () => {
     requireRuntime(created.teamRunId).status = "orphaned"
 
     // when
+    const result = parseToolResult<{ deleted: boolean }>(await deleteTool.execute({ teamRunId: created.teamRunId, force: true }, createToolContext("outside-session")))
+
+    // then
+    expect(result.deleted).toBe(true)
+    expect(hasRuntime(created.teamRunId)).toBe(false)
+  })
+
+  test("team_delete force=true lets a session from another run recover a stuck deleting team", async () => {
+    // given
+    const createTool = createTeamCreateToolForTest()
+    const deleteTool = createTeamDeleteTool(config, mockClient, backgroundManager, undefined, lifecycleDeps)
+    const created = parseToolResult<{ teamRunId: string }>(await createTool.execute({ inline_spec: createSpec() }, createToolContext("lead-session")))
+    requireRuntime(created.teamRunId).status = "deleting"
+
+    // when
+    const result = parseToolResult<{ deleted: boolean }>(await deleteTool.execute({ teamRunId: created.teamRunId, force: true }, createToolContext("outside-session")))
+
+    // then
+    expect(result.deleted).toBe(true)
+  })
+
+  test("team_delete keeps active teams lead-only for other sessions and explains how to proceed", async () => {
+    // given
+    const createTool = createTeamCreateToolForTest()
+    const deleteTool = createTeamDeleteTool(config, mockClient, backgroundManager, undefined, lifecycleDeps)
+    const created = parseToolResult<{ teamRunId: string }>(await createTool.execute({ inline_spec: createSpec() }, createToolContext("lead-session")))
+
+    // when
     const result = deleteTool.execute({ teamRunId: created.teamRunId, force: true }, createToolContext("outside-session"))
 
     // then
-    expect(result).rejects.toThrow("team_delete is lead-only")
+    await expect(result).rejects.toThrow("team_delete is lead-only")
+    await expect(deleteTool.execute({ teamRunId: created.teamRunId, force: true }, createToolContext("outside-session"))).rejects.toThrow(
+      `led by session lead-session (status active). Continue it with \`opencode run --session lead-session\`, or delete it from a terminal with \`oh-my-openagent team delete ${created.teamRunId} --force\``,
+    )
+    expect(hasRuntime(created.teamRunId)).toBe(true)
   })
 
   test("team_delete force=true allows member participant to recover a stuck deleting team", async () => {
