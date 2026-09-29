@@ -427,7 +427,7 @@ describe("createBuiltinAgents with model overrides", () => {
     fetchSpy.mockRestore()
   })
 
-  test("does not advertise custom agents in orchestrator prompts when provided via config", async () => {
+  test("advertises custom subagents in orchestrator prompts when provided via config (fork 2.2)", async () => {
     // #given
     const fetchSpy = spyOn(shared, "fetchAvailableModels").mockResolvedValue(
       new Set([
@@ -462,9 +462,8 @@ describe("createBuiltinAgents with model overrides", () => {
       )
 
       // #then
-      expect(agents.sisyphus.prompt).not.toContain("researcher")
-      expect(agents.hephaestus.prompt).not.toContain("researcher")
-      expect(agents.atlas.prompt).not.toContain("researcher")
+      expect(agents.sisyphus.prompt).toContain("→ `researcher` - Research agent for deep analysis — optional")
+      expect(agents.atlas.prompt).toContain("researcher")
     } finally {
       fetchSpy.mockRestore()
     }

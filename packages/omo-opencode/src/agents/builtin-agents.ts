@@ -15,6 +15,7 @@ import { createHephaestusAgent } from "./hephaestus"
 import { createSisyphusJuniorAgentWithOverrides } from "./sisyphus-junior"
 import { SPECIALISTS } from "./specialists/catalog"
 import { createSpecialistAgent } from "./specialists/factory"
+import { customAgentsForDelegation } from "./custom-agent-visibility"
 import type { AvailableCategory } from "./dynamic-agent-prompt-builder"
 import {
   fetchAvailableModels,
@@ -70,7 +71,7 @@ export async function createBuiltinAgents(
   categories?: CategoriesConfig,
   gitMasterConfig?: GitMasterConfig,
   discoveredSkills: LoadedSkill[] = [],
-  _customAgentSummaries?: unknown,
+  customAgentSummaries?: unknown,
   browserProvider?: BrowserAutomationProvider,
   uiSelectedModel?: string,
   disabledSkills?: Set<string>,
@@ -123,6 +124,12 @@ export async function createBuiltinAgents(
     disableOmoEnv,
   })
 
+  // The orchestrators also route to the user's own subagents (fork roadmap 2.2, D4).
+  const delegationAgents = [
+    ...availableAgents,
+    ...customAgentsForDelegation(customAgentSummaries, new Set([...Object.keys(agentSources), "prometheus"]), disabledAgents),
+  ]
+
   const sisyphusConfig = maybeCreateSisyphusConfig({
     disabledAgents,
     agentOverrides,
@@ -130,7 +137,7 @@ export async function createBuiltinAgents(
     availableModels,
     systemDefaultModel,
     isFirstRunNoCache,
-    availableAgents,
+    availableAgents: delegationAgents,
     availableSkills: buildAvailableSkills(discoveredSkills, browserProvider, disabledSkills, teamModeEnabled, "sisyphus"),
     availableCategories,
     mergedCategories,
@@ -149,7 +156,7 @@ export async function createBuiltinAgents(
     availableModels,
     systemDefaultModel,
     isFirstRunNoCache,
-    availableAgents,
+    availableAgents: delegationAgents,
     availableSkills: buildAvailableSkills(discoveredSkills, browserProvider, disabledSkills, teamModeEnabled, "hephaestus"),
     availableCategories,
     mergedCategories,
@@ -172,7 +179,7 @@ export async function createBuiltinAgents(
     uiSelectedModel,
     availableModels,
     systemDefaultModel,
-    availableAgents,
+    availableAgents: delegationAgents,
     availableSkills: buildAvailableSkills(discoveredSkills, browserProvider, disabledSkills, teamModeEnabled, "atlas"),
     mergedCategories,
     directory,
