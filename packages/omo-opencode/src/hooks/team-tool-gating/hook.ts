@@ -1,6 +1,7 @@
 import type { Hooks, PluginInput } from "@opencode-ai/plugin"
 
 import type { TeamModeConfig } from "../../config/schema/team-mode"
+import { teamDeleteLeadOnlyMessage } from "../../features/team-mode/tools/lifecycle-shutdown-tools"
 import { lookupTeamSession } from "../../features/team-mode/team-session-registry"
 import type { RuntimeState } from "../../features/team-mode/types"
 import {
@@ -9,6 +10,8 @@ import {
 } from "../../features/team-mode/team-state-store"
 
 const ACTIVE_RUNTIME_STATUSES = new Set<RuntimeState["status"]>(["creating", "active", "shutdown_requested"])
+/** No live lead can be asked for these, so any session may force their deletion (team_delete re-checks it). */
+const FORCE_DELETABLE_BY_ANY_SESSION = new Set<RuntimeState["status"]>(["orphaned", "deleting"])
 const UNIVERSAL_TOOL_NAMES = new Set([
   "team_send_message",
   "team_task_create",
@@ -109,6 +112,12 @@ export function createTeamToolGating(_ctx: PluginInput, config: TeamModeConfig |
 
       const teamRunId = getStringArg(output.args, "teamRunId")
       const memberName = getStringArg(output.args, "memberName")
+
+      if (toolName === "team_delete" && !isLeadOfTargetTeam(participant, teamRunId) && teamRunId) {
+        const runtimeState = await loadRuntimeState(teamRunId, config).catch(() => undefined)
+        if (runtimeState && output.args["force"] === true && FORCE_DELETABLE_BY_ANY_SESSION.has(runtimeState.status)) return
+        if (runtimeState) throw new Error(teamDeleteLeadOnlyMessage(runtimeState))
+      }
 
       if (toolName === "team_delete" || toolName === "team_shutdown_request") {
         if (!isLeadOfTargetTeam(participant, teamRunId)) {

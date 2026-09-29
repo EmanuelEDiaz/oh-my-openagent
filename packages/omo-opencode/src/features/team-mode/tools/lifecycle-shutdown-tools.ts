@@ -34,6 +34,15 @@ const defaultTeamShutdownToolDeps: TeamShutdownToolDeps = {
   rejectShutdown,
 }
 
+/** Why team_delete was refused and the two ways forward (continue the lead session, or the CLI). */
+export function teamDeleteLeadOnlyMessage(runtimeState: { teamRunId: string; teamName: string; status: string; leadSessionId?: string }): string {
+  const lead = runtimeState.leadSessionId
+  const how = lead
+    ? `led by session ${lead} (status ${runtimeState.status}). Continue it with \`opencode run --session ${lead}\`, or delete it from a terminal with \`oh-my-openagent team delete ${runtimeState.teamRunId} --force\``
+    : `has no recorded lead session (status ${runtimeState.status}). Delete it from a terminal with \`oh-my-openagent team delete ${runtimeState.teamRunId} --force\``
+  return `team_delete is lead-only: team ${runtimeState.teamName} (${runtimeState.teamRunId}) is ${how}.`
+}
+
 export function createTeamDeleteTool(
   config: TeamModeConfig,
   client: OpencodeClient,
@@ -52,9 +61,11 @@ export function createTeamDeleteTool(
       const { runtimeState, participant } = await resolveParticipant(args.teamRunId, runtimeContext.sessionID, config, deps)
       const isOrphanedForceDelete = args.force === true && runtimeState.status === "orphaned"
       const isStuckDeletingForceDelete = args.force === true && runtimeState.status === "deleting"
-      const isForceBypass = (isStuckDeletingForceDelete || isOrphanedForceDelete) && participant !== undefined
+      // An orphaned or stuck-deleting team has no live lead to ask, so any session (including one from a later
+      // `opencode run`) may force its cleanup; active teams stay lead-only.
+      const isForceBypass = isStuckDeletingForceDelete || isOrphanedForceDelete
       if (!isForceBypass && participant?.role !== "lead") {
-        throw new Error("team_delete is lead-only")
+        throw new Error(teamDeleteLeadOnlyMessage(runtimeState))
       }
       return JSON.stringify({ teamRunId: args.teamRunId, teamName: runtimeState.teamName, deleted: true, ...(await deps.deleteTeam(args.teamRunId, config, tmuxMgr, backgroundManager, { force: args.force })) })
     },

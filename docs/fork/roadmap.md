@@ -71,6 +71,9 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
   que el ajuste se aplicó antes de fiarse de una medición.
 - El tier gratuito de OpenCode Zen rechaza (403) peticiones sin ninguna herramienta, y a veces un turno se queda colgado sin
   error: poner tiempo límite por turno y abortar la sesión.
+- Un `opencode run` que termina con normalidad borra los equipos que creó; para probar equipos colgados hay que matar el
+  proceso (`setsid` + `kill -9 -<pgid>` una vez escrito `state.json`).
+- A veces `opencode run` se queda parado al arrancar, antes de crear la sesión (sin log del plugin): reintentar una vez.
 - Muchas ejecuciones seguidas agotan los modelos gratuitos ("Insufficient account funds", "Rate limit exceeded"): activar
   `runtime_fallback` con una cadena de varios modelos en el sandbox y espaciar las pruebas.
 
@@ -78,7 +81,7 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
 | Paso | Qué | Estado | Plan |
 |---|---|---|---|
 | 0.1 | Worktrees seguros: no borrar nunca rutas que omo no creó; worktrees reales con git; no borrar trabajo sin guardar. | **hecho** (27-09-2026, rama `fix/team-worktree-safety`) | `plans/knowledge-base-and-worktrees.md` (Pieza 4) |
-| 0.2 | Borrar equipos desde otra ejecución: `team_delete` exige la sesión líder pero ese registro vive en memoria y se pierde entre procesos (`opencode run`), dejando equipos y worktrees huérfanos. Hallado en la QA de 0.1. | pendiente |
+| 0.2 | Borrar equipos desde otra ejecución: `team_delete` exige la sesión líder pero ese registro vive en memoria y se pierde entre procesos (`opencode run`), dejando equipos y worktrees huérfanos. Hallado en la QA de 0.1. | **hecho** (29-09-2026): mensaje con la sesión líder y cómo seguir; CLI `team list` / `team delete [--force] [--dry-run]`; cualquier sesión puede forzar el borrado de equipos huérfanos o atascados. `plans/team-delete-cross-process.md` |
 
 ## Fase 1 — Fundamento: índice, citas de chat y decisiones
 | Paso | Qué | Estado |
@@ -116,6 +119,7 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
   (`block`); indexar sesiones: sí; todo activado por defecto.
 - 27-09-2026 — No elegir entre tus agentes y los del plugin: quedarse con el mejor de cada papel (paso 2.1).
 - 27-09-2026 — Añadido 1.6: la compactación no debe perder peticiones, restricciones, decisiones ni pendientes.
+- 29-09-2026 — 0.2 hecho: borrar equipos colgados desde otra ejecución (herramienta + CLI).
 - 28-09-2026 — 1.6 hecho: sin mejora medible de recuerdo en el banco (ambos 10/10), pero con citas exactas de cada mensaje del
   usuario; el usuario eligió integrarlo activado.
 - 28-09-2026 — Decisiones: se mantiene un `.md` por decisión (estándar ADR); el plan pasa a enlaces generados; se añaden vistas,

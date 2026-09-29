@@ -179,6 +179,36 @@ describe("createTeamToolGating", () => {
     await expect(result).resolves.toBeUndefined()
   })
 
+  test("lets a session from another run force team_delete on an orphaned or stuck deleting team", async () => {
+    // given
+    const baseDir = await mkdtemp(path.join(tmpdir(), "team-tool-gating-"))
+    temporaryDirectories.push(baseDir)
+    await seedTeams(baseDir, { ...createRuntimeState(), status: "orphaned" })
+
+    // when
+    const result = runHook("team_delete", "outside-session", { teamRunId: "11111111-1111-4111-8111-111111111111", force: true }, undefined, baseDir)
+
+    // then
+    await expect(result).resolves.toBeUndefined()
+  })
+
+  test("keeps team_delete lead-only for other sessions on active teams or without force", async () => {
+    // given
+    const baseDir = await mkdtemp(path.join(tmpdir(), "team-tool-gating-"))
+    temporaryDirectories.push(baseDir)
+    await seedTeams(baseDir, createRuntimeState())
+    const teamRunId = "11111111-1111-4111-8111-111111111111"
+
+    // when
+    const activeForced = runHook("team_delete", "outside-session", { teamRunId, force: true }, undefined, baseDir)
+
+    // then
+    await expect(activeForced).rejects.toThrow("team_delete is lead-only")
+    await expect(runHook("team_delete", "outside-session", { teamRunId }, undefined, baseDir)).rejects.toThrow(
+      `led by session lead-session (status active). Continue it with \`opencode run --session lead-session\``,
+    )
+  })
+
   test("no-ops for unrelated tools without querying team state", async () => {
     // given
     const baseDir = await mkdtemp(path.join(tmpdir(), "team-tool-gating-"))
