@@ -5,6 +5,7 @@ import { createAgentToolAllowlist } from "../shared/permission-compat"
 const MODE: AgentMode = "subagent"
 
 export const MULTIMODAL_LOOKER_PROMPT_METADATA: AgentPromptMetadata = {
+  requirement: { level: "mandatory", when: "when the task includes images or PDFs" },
   category: "utility",
   cost: "CHEAP",
   promptAlias: "Multimodal Looker",

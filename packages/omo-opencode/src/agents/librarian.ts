@@ -5,6 +5,7 @@ import { createAgentToolRestrictions } from "../shared/permission-compat"
 const MODE: AgentMode = "subagent"
 
 export const LIBRARIAN_PROMPT_METADATA: AgentPromptMetadata = {
+  requirement: { level: "mandatory", when: "for broad external research in plans that depend on outside knowledge (best practices, comparing options)" },
   category: "exploration",
   cost: "CHEAP",
   promptAlias: "Librarian",

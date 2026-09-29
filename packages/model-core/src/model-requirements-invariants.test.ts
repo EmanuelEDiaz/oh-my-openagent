@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test"
+import { SPECIALIST_MODEL_TIERS } from "./agent-model-requirements"
 import { AGENT_MODEL_REQUIREMENTS, CATEGORY_MODEL_REQUIREMENTS } from "./model-requirements"
 
 const expectedAgents = [
@@ -13,6 +14,7 @@ const expectedAgents = [
   "momus",
   "atlas",
   "sisyphus-junior",
+  ...(Object.keys(SPECIALIST_MODEL_TIERS) as (keyof typeof SPECIALIST_MODEL_TIERS)[]),
 ] as const
 
 const expectedCategories = [

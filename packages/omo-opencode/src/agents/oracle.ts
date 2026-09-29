@@ -6,6 +6,7 @@ import { createAgentToolRestrictions } from "../shared/permission-compat";
 const MODE: AgentMode = "subagent";
 
 export const ORACLE_PROMPT_METADATA: AgentPromptMetadata = {
+  requirement: { level: "mandatory", when: "after two failed attempts at the same problem" },
   category: "advisor",
   cost: "EXPENSIVE",
   promptAlias: "Oracle",

@@ -411,6 +411,7 @@ export function createMetisAgent(model: string): AgentConfig {
 createMetisAgent.mode = MODE
 
 export const metisPromptMetadata: AgentPromptMetadata = {
+  requirement: { level: "mandatory", when: "before planning a large or ambiguous task" },
   category: "advisor",
   cost: "EXPENSIVE",
   triggers: [

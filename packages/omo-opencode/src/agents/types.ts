@@ -128,7 +128,17 @@ export interface AgentPromptMetadata {
 
   /** Key triggers that should appear in Phase 0 (e.g., "External library mentioned → fire librarian") */
   keyTrigger?: string;
+
+  /**
+   * Whether the orchestrator must use this specialist. "mandatory" names the situation that requires it (enforced by
+   * code in later steps); "optional" leaves the choice to the orchestrator.
+   */
+  requirement?: AgentRequirement;
 }
+
+export type AgentRequirement =
+  | { level: "mandatory"; when: string }
+  | { level: "optional" };
 
 function extractModelName(model: string): string {
   return model.includes("/") ? (model.split("/").pop() ?? model) : model;
@@ -168,7 +178,24 @@ export type BuiltinAgentName =
   | "metis"
   | "momus"
   | "atlas"
-  | "sisyphus-junior";
+  | "sisyphus-junior"
+  | SpecialistAgentName;
+
+/** Atomic specialists (fork roadmap 2.2); defined in agents/specialists/catalog.ts. */
+export type SpecialistAgentName =
+  | "api-lookup"
+  | "memory"
+  | "dependency-check"
+  | "test-writer"
+  | "debugger"
+  | "verifier"
+  | "ui-tester"
+  | "security-reviewer"
+  | "test-reviewer"
+  | "lang-reviewer"
+  | "architect-reviewer"
+  | "docs-writer"
+  | "git-committer";
 
 export type OverridableAgentName = "build" | BuiltinAgentName;
 

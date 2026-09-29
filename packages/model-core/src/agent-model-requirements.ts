@@ -169,3 +169,30 @@ export const AGENT_MODEL_REQUIREMENTS: Record<string, ModelRequirement> = {
     ],
   },
 }
+
+/**
+ * Atomic specialists (fork roadmap 2.2) reuse the chain of the builtin agent whose tier they share:
+ * fast = explore, medium = sisyphus-junior, strong = oracle. Override per specialist with `agents.<name>.model`.
+ */
+export const SPECIALIST_MODEL_TIERS = {
+  "api-lookup": "fast",
+  memory: "fast",
+  "dependency-check": "fast",
+  verifier: "fast",
+  "git-committer": "fast",
+  "test-writer": "medium",
+  "ui-tester": "medium",
+  "test-reviewer": "medium",
+  "lang-reviewer": "medium",
+  "docs-writer": "medium",
+  debugger: "strong",
+  "security-reviewer": "strong",
+  "architect-reviewer": "strong",
+} as const satisfies Record<string, "fast" | "medium" | "strong">
+
+const TIER_SOURCE_AGENT = { fast: "explore", medium: "sisyphus-junior", strong: "oracle" } as const
+
+for (const [name, tier] of Object.entries(SPECIALIST_MODEL_TIERS)) {
+  const source = AGENT_MODEL_REQUIREMENTS[TIER_SOURCE_AGENT[tier]]
+  if (source) AGENT_MODEL_REQUIREMENTS[name] = { ...source, fallbackChain: [...source.fallbackChain] }
+}
