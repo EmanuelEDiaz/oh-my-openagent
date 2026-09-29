@@ -105,6 +105,8 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
 | 2.4 | **Enrutamiento obligatorio por código:** reglas en `tool.execute.before` (p. ej. mencionar una librería externa ⇒ investigar antes de editar; el orquestador no busca en la web él mismo) que **bloquean** en vez de avisar. | pendiente |
 | 2.5 | Skills obligatorias por categoría (`skills` en `CategoryConfigSchema`). | pendiente |
 | 2.6 | Contrato de salida verificado para todos los subagentes: resumen + fuentes; si falta, se devuelve al subagente. | pendiente |
+| 2.7 | **Guardián de reglas**: reglas de proyecto y de carpeta llevadas al momento de editar (bloqueo una vez + recordatorio), que vuelven tras compactar, comprobables por código (`forbid`), en el prompt de los subagentes, y especialista `rules-checker`. `plans/rules-guardian.md` | plan |
+| 2.8 | **Lectura de código eficiente**: `explore` mejorado + herramientas `code_outline`, `read_symbol`, `repo_map`, `callers`; Graphify opcional (se usa si está instalado). Investigación en `plans/specialists-research.md` | plan |
 
 ## Fase 3 — Medir que mejora
 | Paso | Qué | Estado |
@@ -119,6 +121,7 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
   (`block`); indexar sesiones: sí; todo activado por defecto.
 - 27-09-2026 — No elegir entre tus agentes y los del plugin: quedarse con el mejor de cada papel (paso 2.1).
 - 27-09-2026 — Añadido 1.6: la compactación no debe perder peticiones, restricciones, decisiones ni pendientes.
+- 29-09-2026 — Añadidos 2.7 (guardián de reglas) y 2.8 (lectura de código eficiente), con investigación por especialista.
 - 29-09-2026 — 2.1 hecho: matriz de enrutamiento y arquitectura objetivo (orquestadores + especialistas).
 - 29-09-2026 — 0.2 hecho: borrar equipos colgados desde otra ejecución (herramienta + CLI).
 - 28-09-2026 — 1.6 hecho: sin mejora medible de recuerdo en el banco (ambos 10/10), pero con citas exactas de cada mensaje del
