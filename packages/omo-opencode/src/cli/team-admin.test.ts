@@ -81,11 +81,12 @@ describe("team admin CLI", () => {
     await seed(runtimeState())
 
     // when
-    const code = await runTeamDelete(TEAM_ID, { config, output, dryRun: true })
+    const code = await runTeamDelete(TEAM_ID, { config, output, dryRun: true, leadSessionExists: () => false })
 
     // then
     expect(code).toBe(0)
     expect(lines.join("\n")).toContain("Dry run: nothing was changed.")
+    expect(lines.join("\n")).toContain("lead ses_Lead0001 (session missing)")
     expect(lines.join("\n")).toContain("worktrees: /work/m1")
     expect(existsSync(join(baseDir, "runtime", TEAM_ID))).toBe(true)
   })
@@ -95,7 +96,7 @@ describe("team admin CLI", () => {
     await seed(runtimeState())
 
     // when
-    const code = await runTeamDelete(TEAM_ID, { config, output })
+    const code = await runTeamDelete(TEAM_ID, { config, output, leadSessionExists: () => undefined })
 
     // then
     expect(code).toBe(1)
@@ -108,7 +109,7 @@ describe("team admin CLI", () => {
     await seed(runtimeState())
 
     // when
-    const code = await runTeamDelete(TEAM_ID, { config, output, force: true })
+    const code = await runTeamDelete(TEAM_ID, { config, output, leadSessionExists: () => undefined, force: true })
 
     // then
     expect(code).toBe(0)
@@ -119,20 +120,20 @@ describe("team admin CLI", () => {
   test("team delete lists worktrees kept because they were not confirmed clean", async () => {
     // given
     await seed(runtimeState())
-    const deleteTeamStub = async () => ({ removedWorktrees: ["/work/m2"], preservedWorktrees: [{ path: "/work/m1", reason: "uncommitted changes" }], removedLayout: false })
+    const deleteTeamStub = async () => ({ removedWorktrees: ["/work/m2"], preservedWorktrees: [{ path: "/work/m1", reason: "preserving /work/m1: it has uncommitted changes" }], removedLayout: false })
 
     // when
-    const code = await runTeamDelete(TEAM_ID, { config, output, force: true, deleteTeam: deleteTeamStub })
+    const code = await runTeamDelete(TEAM_ID, { config, output, leadSessionExists: () => undefined, force: true, deleteTeam: deleteTeamStub })
 
     // then
     expect(code).toBe(0)
     expect(lines).toContain("Removed worktrees: /work/m2")
-    expect(lines).toContain("Kept worktree /work/m1: uncommitted changes")
+    expect(lines).toContain("Kept worktree /work/m1: it has uncommitted changes")
   })
 
   test("team delete reports an unknown team id", async () => {
     // when
-    const code = await runTeamDelete("22222222-2222-4222-8222-222222222222", { config, output })
+    const code = await runTeamDelete("22222222-2222-4222-8222-222222222222", { config, output, leadSessionExists: () => undefined })
 
     // then
     expect(code).toBe(1)

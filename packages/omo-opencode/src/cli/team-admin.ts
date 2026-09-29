@@ -17,7 +17,7 @@ export type TeamListOptions = TeamAdminBase & {
   readonly leadSessionExists?: (sessionId: string) => boolean | undefined
 }
 
-export type TeamDeleteOptions = TeamAdminBase & {
+export type TeamDeleteOptions = TeamListOptions & {
   readonly force?: boolean
   readonly dryRun?: boolean
   readonly deleteTeam?: typeof deleteTeam
@@ -45,11 +45,15 @@ function describeTeam(state: RuntimeState, leadExists: boolean | undefined): str
   ]
 }
 
+async function leadCheck(options: TeamListOptions): Promise<{ check: (sessionId: string) => boolean | undefined; close: () => void }> {
+  return options.leadSessionExists ? { check: options.leadSessionExists, close: () => {} } : openDbLeadCheck()
+}
+
 /** `team list`: every team run still on disk, so runs left behind by another process can be found. */
 export async function runTeamList(options: TeamListOptions = {}): Promise<number> {
   const output = options.output ?? console.log
   const config = teamModeConfig(options)
-  const db = options.leadSessionExists ? { check: options.leadSessionExists, close: () => {} } : await openDbLeadCheck()
+  const db = await leadCheck(options)
   try {
     const teams = await listActiveTeams(config)
     if (teams.length === 0) {
@@ -79,7 +83,12 @@ export async function runTeamDelete(teamRunId: string, options: TeamDeleteOption
     output(`No team run ${teamRunId}. Run \`oh-my-openagent team list\` to see the team runs on disk.`)
     return 1
   }
-  for (const line of describeTeam(state, undefined)) output(line)
+  const db = await leadCheck(options)
+  try {
+    for (const line of describeTeam(state, state.leadSessionId ? db.check(state.leadSessionId) : undefined)) output(line)
+  } finally {
+    db.close()
+  }
   if (options.dryRun) {
     output("Dry run: nothing was changed.")
     return 0
@@ -91,7 +100,9 @@ export async function runTeamDelete(teamRunId: string, options: TeamDeleteOption
     const result = await (options.deleteTeam ?? deleteTeam)(teamRunId, config, undefined, undefined, { force: options.force === true })
     output(`Deleted team ${state.teamName} (${teamRunId}).`)
     if (result.removedWorktrees.length > 0) output(`Removed worktrees: ${result.removedWorktrees.join(", ")}`)
-    for (const kept of result.preservedWorktrees ?? []) output(`Kept worktree ${kept.path}: ${kept.reason}`)
+    for (const kept of result.preservedWorktrees ?? []) {
+      output(`Kept worktree ${kept.path}: ${kept.reason.replace(`preserving ${kept.path}: `, "")}`)
+    }
     return 0
   } catch (error) {
     output(`Could not delete: ${error instanceof Error ? error.message : String(error)}`)
