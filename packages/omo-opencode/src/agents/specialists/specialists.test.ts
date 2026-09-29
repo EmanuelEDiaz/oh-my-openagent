@@ -84,6 +84,8 @@ describe("specialists catalog", () => {
     const prompt = (name: string) => createSpecialistAgent(SPECIALISTS.find((spec) => spec.name === name)!)("m").prompt ?? ""
     expect(prompt("verifier")).toContain("FLAKY")
     expect(prompt("verifier")).toContain("baseline")
+    expect(prompt("verifier")).toContain("Judging test quality or coverage is test-reviewer's task")
+    for (const spec of SPECIALISTS) expect(prompt(spec.name)).toContain("End your answer after **Sources**")
     expect(prompt("test-writer")).toContain("from the specification")
     expect(prompt("debugger")).toContain("git bisect run")
     expect(prompt("ui-tester")).toContain("accessibility snapshot")

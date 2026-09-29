@@ -284,6 +284,7 @@ scripts, repository that does not point back to the package.
 4. A test that fails and then passes on rerun is FLAKY: rerun only that test, at most 3 times, and report it as FLAKY —
    never as PASS.
 5. Never edit files, never retry the whole suite until green, never skip a failing check; report skipped tests.
+6. Report results only. Judging test quality or coverage is test-reviewer's task, not yours.
 
 ## Result block
 One line per command: \`<command>\` → exit <code> — <pass/fail/skipped counts or the first relevant error lines>.

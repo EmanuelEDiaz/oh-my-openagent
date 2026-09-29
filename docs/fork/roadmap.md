@@ -106,7 +106,7 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
 | Paso | Qué | Estado |
 |---|---|---|
 | 2.1 | **Taxonomía de tareas atómicas y matriz de enrutamiento** (solo análisis + plan): para cada tipo de tarea (buscar en código, investigar en la web/docs, planear, escribir código, escribir docs, revisar tests/seguridad/arquitectura, depurar, UI) → especialista → herramientas **obligatorias** → contrato de salida (resumen + fuentes) → cómo se verifica. Comparando uno a uno tus agentes con los del plugin para quedarnos con el mejor de cada papel. | **hecho** (29-09-2026): orquestadores con Tab + especialistas atómicos; planes en `.omo/plans/`; guardas que bloquean; el orquestador verá los agentes personalizados. `plans/task-routing.md` |
-| 2.2 | Unificar el plantel según 2.1: fusionar/reemplazar agentes, y que el orquestador **conozca** los especialistas personalizados (arreglar `_customAgentSummaries`). | pendiente |
+| 2.2 | Unificar el plantel según 2.1: fusionar/reemplazar agentes, y que el orquestador **conozca** los especialistas personalizados (arreglar `_customAgentSummaries`). | **hecho** (29-09-2026): 13 especialistas + marca obligatorio/opcional, agentes personalizados visibles, política de ejecución de Atlas, agentes del usuario archivados. `plans/specialists-catalog.md` |
 | 2.3 | `@investigador-web` optimizado: docs oficiales primero (context7, sitio oficial, versión), búsquedas amplias→estrechas, varias herramientas en paralelo, citas con URL obligatorias y **verificadas** al volver. | pendiente |
 | 2.4 | **Enrutamiento obligatorio por código:** reglas en `tool.execute.before` (p. ej. mencionar una librería externa ⇒ investigar antes de editar; el orquestador no busca en la web él mismo) que **bloquean** en vez de avisar. | pendiente |
 | 2.5 | Skills obligatorias por categoría (`skills` en `CategoryConfigSchema`). | pendiente |
@@ -128,6 +128,7 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
   (`block`); indexar sesiones: sí; todo activado por defecto.
 - 27-09-2026 — No elegir entre tus agentes y los del plugin: quedarse con el mejor de cada papel (paso 2.1).
 - 27-09-2026 — Añadido 1.6: la compactación no debe perder peticiones, restricciones, decisiones ni pendientes.
+- 29-09-2026 — 2.2 hecho; QA real: el formato de salida de los especialistas necesita comprobación por código (2.6) y queda para 2.4 decidir si el orquestador puede hacer lecturas pequeñas sin delegar.
 - 29-09-2026 — Misión del fork fijada; añadido 2.9 (absorber la biblioteca con criterio "solo lo mejor"); `@planning`/`@running` y los 4 revisores del usuario se archivan: sus reglas útiles ya están absorbidas o planificadas, el resto se descarta.
 - 29-09-2026 — Añadidos 2.7 (guardián de reglas) y 2.8 (lectura de código eficiente), con investigación por especialista.
 - 29-09-2026 — 2.1 hecho: matriz de enrutamiento y arquitectura objetivo (orquestadores + especialistas).

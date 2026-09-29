@@ -1,6 +1,6 @@
 # Paso 2.2 — Catálogo de especialistas atómicos
 
-Parte del roadmap: `docs/fork/roadmap.md`. Estado: **aprobado, en curso (29-09-2026)**. Parte de
+Parte del roadmap: `docs/fork/roadmap.md`. Estado: **hecho (29-09-2026)**. Parte de
 `plans/task-routing.md` (2.1). Rutas: `S/` = `packages/omo-opencode/src/`.
 
 ## Nombres (decisión del usuario, 29-09-2026)
@@ -107,16 +107,26 @@ Hephaestus (orquestador pensado para modelos GPT) se mantiene oculto salvo que l
 - **2.6** verifica cada contrato de salida y devuelve al especialista lo incompleto.
 
 ## Subtareas de 2.2
-- [ ] 1. Tests RED: el orquestador anuncia cada especialista con su marca y disparador; los agentes personalizados
+- [x] 1. Tests RED: el orquestador anuncia cada especialista con su marca y disparador; los agentes personalizados
   aparecen; permisos de cada especialista (p. ej. `verifier` no edita, `git-committer` no hace `push`).
-- [ ] 2. Registro de especialistas: los nuevos como agentes builtin con su prompt, permisos y nivel de modelo; los
+- [x] 2. Registro de especialistas: los nuevos como agentes builtin con su prompt, permisos y nivel de modelo; los
   existentes reutilizados sin romper sus ids internos (compatibilidad con upstream).
-- [ ] 3. Tabla de delegación con obligatorio/opcional y disparadores, generada desde el registro (una sola fuente).
+- [x] 3. Tabla de delegación con obligatorio/opcional y disparadores, generada desde el registro (una sola fuente).
 - [x] 4. Mejoras a `ulw-execute`/Atlas del registro de decisiones: alcance híbrido, evidencia al marcar, fallos acotados en las 8 variantes, REJECT → usuario, cierre con especialistas obligatorios (`S/agents/atlas/execution-policy.ts`).
 - [x] 4b. Archivar los agentes del usuario y actualizar su `AGENTS.md` global (hecho 29-09-2026: movidos a `~/.config/opencode/agents-archive/`).
-- [ ] 5. Agentes personalizados visibles para el orquestador.
-- [ ] 6. QA real: en un OpenCode aislado, cada orquestador delega una tarea de cada tipo al especialista correcto.
-- [ ] 7. Docs, evidencia, merge y push.
+- [x] 5. Agentes personalizados visibles para el orquestador.
+- [x] 6. QA real: en un OpenCode aislado, cada orquestador delega una tarea de cada tipo al especialista correcto.
+- [x] 7. Docs, evidencia, merge y push.
+
+## Resultado (29-09-2026)
+- 13 especialistas nuevos + marca obligatorio/opcional en los 6 reutilizados; tabla de delegación con disparadores;
+  agentes personalizados visibles (filtrando primarios, ocultos, desactivados, duplicados y nombres reservados).
+- Atlas: política de ejecución común a sus 8 variantes; `ulw-execute` con alcance híbrido.
+- QA real (`.omo/evidence/20260929-specialists-catalog/`): registro, permisos, tabla y política verificados en el servidor.
+  Hallazgos: (1) el `verifier` hace su tarea pero añade observaciones y ofrecimientos aunque el prompt lo prohíba → el
+  contrato de salida debe comprobarse por código (2.6); (2) Sisyphus respondió bien sin delegar en `explore` en un repo de
+  3 archivos; el escenario "delega en explore" estaba mal planteado (su disparador obligatorio es editar código no leído).
+  Queda como decisión de 2.4 si el orquestador puede hacer lecturas pequeñas por sí mismo.
 
 ## Criterios de aceptación
 ```gherkin
