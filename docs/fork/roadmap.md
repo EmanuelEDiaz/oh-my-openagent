@@ -99,7 +99,7 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
 ## Fase 2 — Orquestador + especialistas con herramientas obligatorias
 | Paso | Qué | Estado |
 |---|---|---|
-| 2.1 | **Taxonomía de tareas atómicas y matriz de enrutamiento** (solo análisis + plan): para cada tipo de tarea (buscar en código, investigar en la web/docs, planear, escribir código, escribir docs, revisar tests/seguridad/arquitectura, depurar, UI) → especialista → herramientas **obligatorias** → contrato de salida (resumen + fuentes) → cómo se verifica. Comparando uno a uno tus agentes con los del plugin para quedarnos con el mejor de cada papel. | pendiente |
+| 2.1 | **Taxonomía de tareas atómicas y matriz de enrutamiento** (solo análisis + plan): para cada tipo de tarea (buscar en código, investigar en la web/docs, planear, escribir código, escribir docs, revisar tests/seguridad/arquitectura, depurar, UI) → especialista → herramientas **obligatorias** → contrato de salida (resumen + fuentes) → cómo se verifica. Comparando uno a uno tus agentes con los del plugin para quedarnos con el mejor de cada papel. | **hecho** (29-09-2026): orquestadores con Tab + especialistas atómicos; planes en `.omo/plans/`; guardas que bloquean; el orquestador verá los agentes personalizados. `plans/task-routing.md` |
 | 2.2 | Unificar el plantel según 2.1: fusionar/reemplazar agentes, y que el orquestador **conozca** los especialistas personalizados (arreglar `_customAgentSummaries`). | pendiente |
 | 2.3 | `@investigador-web` optimizado: docs oficiales primero (context7, sitio oficial, versión), búsquedas amplias→estrechas, varias herramientas en paralelo, citas con URL obligatorias y **verificadas** al volver. | pendiente |
 | 2.4 | **Enrutamiento obligatorio por código:** reglas en `tool.execute.before` (p. ej. mencionar una librería externa ⇒ investigar antes de editar; el orquestador no busca en la web él mismo) que **bloquean** en vez de avisar. | pendiente |
@@ -119,6 +119,7 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
   (`block`); indexar sesiones: sí; todo activado por defecto.
 - 27-09-2026 — No elegir entre tus agentes y los del plugin: quedarse con el mejor de cada papel (paso 2.1).
 - 27-09-2026 — Añadido 1.6: la compactación no debe perder peticiones, restricciones, decisiones ni pendientes.
+- 29-09-2026 — 2.1 hecho: matriz de enrutamiento y arquitectura objetivo (orquestadores + especialistas).
 - 29-09-2026 — 0.2 hecho: borrar equipos colgados desde otra ejecución (herramienta + CLI).
 - 28-09-2026 — 1.6 hecho: sin mejora medible de recuerdo en el banco (ambos 10/10), pero con citas exactas de cada mensaje del
   usuario; el usuario eligió integrarlo activado.
