@@ -15,7 +15,7 @@ import { join } from "node:path"
 
 import { renderReport } from "./report"
 import { runTask } from "./runner"
-import { createSandbox, destroySandbox, startServer, type Sandbox, type Server } from "./sandbox"
+import { createSandbox, destroySandbox, startServer, warmUp, type Sandbox, type Server } from "./sandbox"
 import { isConfigError, summarize } from "./score"
 import { EXPLORE_TASKS } from "./tasks/explore"
 import type { RunResult, Task } from "./types"
@@ -95,6 +95,7 @@ async function main(): Promise<void> {
     sandbox = createSandbox(join(tmpdir(), `omo-bench-${process.pid}-${Date.now()}`), plugin)
     console.log(`sandbox ${sandbox.root}; starting OpenCode (the first start can take minutes)…`)
     server = await startServer(sandbox)
+    if (!(await warmUp(sandbox, server))) console.log("warning: the plugin's provider cache did not appear; tasks run as a first install")
     for (const task of tasks) {
       for (let repeat = 0; repeat < repeats; repeat++) {
         for (let attempt = 0; attempt <= INFRA_RETRIES; attempt++) {

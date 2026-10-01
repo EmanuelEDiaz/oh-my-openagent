@@ -9,6 +9,8 @@ import { createServer } from "node:net"
 import { homedir } from "node:os"
 import { join, resolve, sep } from "node:path"
 
+import { createOpencodeClient } from "@opencode-ai/sdk/v2"
+
 export type Sandbox = { readonly root: string; readonly env: Readonly<Record<string, string>> }
 
 const REAL_HOME = homedir()
@@ -124,6 +126,25 @@ export async function startServer(sandbox: Sandbox, startupTimeoutMs = 600_000):
   }
   stop()
   throw new Error(`server did not start within ${startupTimeoutMs / 1000}s`)
+}
+
+/**
+ * The plugin writes its provider cache only after the first root session, and registers agents from that cache when
+ * a directory is first opened. Without this warm-up every task would run as a first install, where configured models
+ * cannot be verified. Returns whether the cache appeared.
+ */
+export async function warmUp(sandbox: Sandbox, server: Server, timeoutMs = 120_000): Promise<boolean> {
+  const workdir = join(sandbox.root, "work", "warm-up")
+  mkdirSync(workdir, { recursive: true })
+  const client = createOpencodeClient({ baseUrl: server.baseUrl, directory: workdir })
+  await client.session.create({ title: "bench warm-up" })
+  const cacheFile = join(sandbox.env.XDG_CACHE_HOME ?? "", "oh-my-opencode/provider-models.json")
+  const deadline = Date.now() + timeoutMs
+  while (Date.now() < deadline) {
+    if (existsSync(cacheFile)) return true
+    await Bun.sleep(1000)
+  }
+  return false
 }
 
 export function destroySandbox(sandbox: Sandbox): void {
