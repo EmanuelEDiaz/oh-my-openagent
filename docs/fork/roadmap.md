@@ -125,7 +125,7 @@ Los antiguos pasos transversales 2.3–2.11 se reparten en la Fase 4, dentro del
 ## Fase 3 — Banco de pruebas (antes de mejorar ningún agente)
 | Paso | Qué | Estado |
 |---|---|---|
-| 3.0 | **Banco de pruebas** con promptfoo (MIT, TypeScript): proveedor que levanta un OpenCode aislado por ejecución y le habla por el SDK; correctores deterministas comunes (contrato `<report>` presente y completo, herramienta obligatoria usada / prohibida no usada, **citas que existen** —archivo:línea, URL, versión de paquete—, tokens, latencia, llamadas); repeticiones (`--repeat --no-cache`) con pass@1 y pass^3; registro de resultados en el repo; Ollama para iterar y el plan gratuito para las mediciones finales. Incluye la parte de 2.6 que verifica contratos. | pendiente — `plans/per-agent-program.md` |
+| 3.0 | **Banco de pruebas** propio en Bun (sin dependencias nuevas): OpenCode aislado y reutilizable, especialistas ejecutados como subagentes de verdad (parte `subtask` del SDK), correctores deterministas comunes (resultado en el repo, contrato `<report>`, herramienta obligatoria usada / prohibida no usada, **citas que existen** —archivo:línea, URL, versión de paquete—, tokens, coste, tiempo, turnos), pass@1 y pass^3, fallos de infraestructura (403, límites) separados de los del agente; modelos de `/omo-models`, agnóstico de proveedor. Incluye la parte de 2.6 que verifica contratos. | **hecho** (01-10-2026): banco en `script/fork/bench/` (44 tests), piloto `explore` 9/9 con `big-pickle`, informe en `docs/fork/evals/explore.md`; detecta cuelgues de modelos gratuitos y servidores que no responden; `regrade.ts` re-puntúa sin modelo. Evidencia en `.omo/evidence/3.0/` |
 
 ## Fase 4 — Especialistas uno a uno (plantilla común)
 Cada paso: investigar → contrato → 15–30 tareas (+30 % reservado) → medición base → análisis de fallos reales → 2–4
@@ -146,10 +146,10 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 | 4.10 | `dependency-check` | registro + OSV + deps.dev, señales de "slopsquatting" | pendiente |
 | 4.11 | `test-reviewer`, `lang-reviewer`, `architect-reviewer` | precisión/recall con diffs con fallos sembrados | pendiente |
 | 4.12 | `docs-writer` | afirmaciones que apuntan al código, Diátaxis, CHANGELOG | pendiente |
-| 4.13 | `ui-tester` | instantáneas de accesibilidad, consola, capturas solo si hacen falta | pendiente |
+| 4.13 | `ui-tester` | instantáneas de accesibilidad, consola, capturas solo si hacen falta; **UI fiel al código**: capturar la app real, mapa de ids ruta→componente→`archivo:línea`→nodo del diseño, comparación por código (sirve sin visión); skill "diseño desde la UI real" para Pencil, Figma o HTML | pendiente — `plans/ui-fidelity.md` |
 | 4.14 | Implementadores (categorías) | skills obligatorias por categoría (antes 2.5) y procesos gestionados (antes 2.10) | pendiente — `plans/process-lifecycle.md` |
 | 4.15 | `multimodal-looker`, `metis`, `momus`, `oracle` | — | pendiente |
-| 4.16 | Orquestadores: Prometheus, Atlas, Sisyphus | enrutamiento obligatorio por código y presupuesto de lectura (antes 2.4); calidad de plan, ejecución y delegación | pendiente |
+| 4.16 | Orquestadores: Prometheus, Atlas, Sisyphus | enrutamiento obligatorio por código y presupuesto de lectura (antes 2.4); calidad de plan, ejecución y delegación; **planes visuales**: Mermaid/SVG como código con `archivo:línea`, validados por código, skill `visual-plan` y herramienta `plan_render` (HTML) | pendiente — `plans/visual-plans.md` |
 
 **Equivalencias con la numeración anterior:** 2.3→4.2 · 2.4→4.16 · 2.5→4.14 · 2.6→3.0 + 4.4 · 2.7→4.5 · 2.8→4.1 ·
 2.9→4.5 · 2.10→4.14 · 2.11→4.6 · 3.1→5.1.
@@ -169,8 +169,11 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 - ~~Reglas de lenguaje/framework cargadas bajo demanda~~ — absorbido en 4.5 (antes 2.9), 29-09-2026.
 
 ## Registro de decisiones del roadmap
+- 01-10-2026 — 3.0 hecho. Siguiente: 4.1 `explore` (tareas 15–30 con conjunto reservado, lectura eficiente de código).
 - 01-10-2026 — 0.7 hecho. Descartado filtrar la cadena de reintentos de la delegación (rompía modelos con variante y no aporta con el modelo inicial ya válido). El banco (3.0) calienta la caché del plugin antes de las tareas.
 - 01-10-2026 — 0.7 añadido y priorizado antes del piloto de 3.0: el piloto mostró que 4 modelos gratuitos configurados (`deepseek-v4-flash-free`, `mimo-v2.5-free`, `north-mini-code-free`, `laguna-s-2.1-free`) están `deprecated` y OpenCode los borra; `explore` y `librarian` no pueden ejecutarse. El usuario cambia los modelos con `/omo-models`; el plugin se protege con 0.7.
+- 01-10-2026 — Planes visuales en 4.16: diagramas como código, porque los modelos sin visión leen y escriben su fuente; validados por código; skill `visual-plan` y HTML con `plan_render`. UI fiel al código en 4.13: diseño desde la app real con mapa de ids y comparación por código; skill común para cualquier herramienta de diseño, no un agente de Pencil.
+- 01-10-2026 — 3.0: motor **propio en Bun** en vez de promptfoo (el sandbox, la ejecución como subagente, los correctores y la clasificación de fallos se escriben igual; promptfoo solo aportaba un visor a cambio de 32 MB de dependencias y una caché que hay que desactivar). Inspect AI queda como opción para la Fase 5. Modelos: los configurados con `/omo-models`, cualquier proveedor.
 - 01-10-2026 — 0.6 hecho: `doctor` fiable para el fork. Hallazgos: los 5 fallos de comment-checker son contaminación entre archivos de test (pasan uno a uno), no un fallo del hook; la auditoría de `mock.module` puede agotar su tiempo bajo carga.
 - 01-10-2026 — 0.6 redefinido tras analizar `doctor`: su consejo de actualizar desde npm reemplazaría el fork.
 - 01-10-2026 — 0.5 hecho: las elecciones automáticas prefieren modelos gratuitos; lo elegido por el usuario manda.
