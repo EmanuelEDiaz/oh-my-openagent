@@ -1,6 +1,6 @@
-# Pasos 0.3 y 0.4 — Robustez: agentes que desaparecen y escritura de Prometheus
+# Pasos 0.3–0.5 y 0.7 — Robustez: agentes que desaparecen, escritura de Prometheus, modelos gratuitos y retirados
 
-Parte del roadmap: `docs/fork/roadmap.md`. Estado: **0.3, 0.4 y 0.5 hechos (01-10-2026)**, investigado en vivo y en el código.
+Parte del roadmap: `docs/fork/roadmap.md`. Estado: **0.3, 0.4, 0.5 y 0.7 hechos (01-10-2026)**, investigado en vivo y en el código.
 Rutas: `S/` = `packages/omo-opencode/src/`, `MC/` = `packages/model-core/src/`.
 
 ## 0.3 — Ningún agente desaparece por no resolver su modelo
@@ -98,6 +98,116 @@ cuenta gratuita fallan ("Insufficient account funds").
 - QA real: ningún agente recibe un modelo de pago automáticamente y la elección de pago del usuario se respeta.
 - Activado en `~/.omo/omo.jsonc` del usuario, con copia de seguridad.
 - Evidencia: `.omo/evidence/20261001-prefer-free-models/`.
+
+## 0.7 — Modelos retirados
+
+### Qué pasó (piloto de 3.0, 01-10-2026)
+- models.dev marcó como `deprecated` cuatro modelos gratuitos configurados (`deepseek-v4-flash-free`, `mimo-v2.5-free`,
+  `north-mini-code-free`, `laguna-s-2.1-free`), y OpenCode v1.18.26 los borra de su lista (`provider/provider.ts:1360`,
+  `:1690`).
+- El agente `explore`, con ese modelo y respaldos también retirados, falló con "Model not found".
+- Ni el plugin ni el aviso de 0.3 lo detectaron.
+
+### Causas (en el código, `S/` = `packages/omo-opencode/src/`, `DC/` = `packages/delegate-core/src/`)
+1. **Registro.**
+   - `MC/model-resolution-pipeline.ts:146-159`: el modelo del usuario solo se descarta si hay `fallback_models` y el
+     proveedor aparece en la lista; si no, se devuelve **sin comprobar**.
+   - `S/agents/builtin-agents/general-agents.ts:89-97`: si no se resuelve, se usa "tal cual", sin registrar ningún
+     aviso. Lo mismo en Sisyphus, Atlas y Hephaestus.
+2. **Lista de modelos.**
+   - `S/shared/model-availability.ts:215-251`: si falta la caché de OpenCode, se usa `models.json` **sin filtrar los
+     `deprecated`**.
+   - En el registro se lee la caché de la ejecución anterior (`connected-providers-status.ts` la refresca después).
+     Así, el primer arranque tras una retirada todavía cree el modelo disponible.
+3. **Delegación.**
+   - `DC/model-selection.ts:130` devuelve el modelo configurado aunque no exista.
+   - El reintento síncrono (`S/tools/delegate-task/sync-task-fallback.ts`, `hooks/model-fallback/next-fallback.ts`)
+     solo comprueba que el proveedor esté conectado, no que el modelo exista. Cuando se agotan los respaldos no cae
+     al modelo de la sesión.
+4. **Aviso.** El aviso de 0.3 (`agent-registration-warning.ts`) solo informa de agentes que se quedaron **sin**
+   modelo, nunca de un modelo configurado que no existe.
+5. **`/omo-models` ya cubre su parte.**
+   - Lista los modelos que OpenCode ofrece en vivo, y OpenCode ya quitó los retirados.
+   - Marca "model gone"/"broken" en la cadena de cada agente y avisa "Marked deprecated" en el detalle.
+   - El punto (c) del roadmap queda **sin código nuevo**: solo se verifica en la QA.
+
+### Decisión del usuario (01-10-2026)
+Aprobado tal cual. Lo que el usuario elige manda (0.5), salvo que OpenCode ya no ofrezca ese modelo. Entonces se sustituye
+por: respaldo → cadena gratuita → modelo de la sesión, siempre con aviso. Si no se conoce la lista, no se toca.
+
+### Diseño
+- **Una sola regla: "¿lo ofrece OpenCode?".**
+  - Se apoya en la lista de OpenCode, que ya excluye los retirados.
+  - Si solo hay `models.json`, se excluyen los `deprecated` (y los `alpha` sin el modo experimental), igual que
+    OpenCode.
+  - Si no se conoce ninguna lista, no se descarta nada (comportamiento actual).
+- **Registro.** Si el modelo configurado no se ofrece, se recorre esta cadena:
+  1. el primer `fallback_models` que sí se ofrezca;
+  2. la cadena automática (respetando `prefer_free_models` de 0.5);
+  3. el modelo de la sesión, como en 0.3.
+
+  Nunca "tal cual". Se registra el aviso con el agente, el modelo retirado y el que se usa en su lugar.
+- **Delegación.**
+  - Misma regla en `DC/model-selection.ts`: un modelo configurado que no se ofrece se salta aunque no haya
+    `fallback_models`.
+  - El reintento síncrono y el de segundo plano saltan los respaldos que no se ofrecen.
+  - Si no queda ninguno, se usa el modelo registrado o el de la sesión, en vez de fallar la tarea.
+- **Caché anticuada en el registro.** Tras refrescar la caché en la primera sesión, se vuelven a comprobar los modelos
+  configurados. Si alguno ya no se ofrece, avisa en ese momento. La delegación ya lo resuelve en ejecución.
+- **Aviso.** Ejemplo: "Modelos retirados por el proveedor: explore (deepseek-v4-flash-free → big-pickle), … —
+  cámbialos en /omo-models". Va junto al aviso de 0.3.
+- **Fuera de alcance.** `runtime_fallback` y `model_fallback` siguen desactivados por defecto, porque son opciones del
+  usuario.
+
+### Resultado (01-10-2026)
+- **Hecho:**
+  - `isKnownMissingModel` en model-core, usado por el registro, la cadena automática y `delegate-core`;
+  - `models.json` sin `deprecated` (ni `alpha` sin `OPENCODE_ENABLE_EXPERIMENTAL_MODELS`);
+  - aviso "Retired by their provider: agente (retirado → nuevo)" y nueva comprobación cuando se refresca la caché.
+- **Descartado:** filtrar los retirados también de la cadena de reintentos de la delegación.
+  - Rompía dos tests del upstream con razón: no entiende sufijos de variante (`openai/gpt-5.4 high`) y descartaría
+    modelos válidos.
+  - Esa cadena solo actúa si el modelo inicial falla por otra causa, y el modelo inicial ya es válido con 0.7.
+- **Límite conocido:** en el **primer arranque**, sin caché de proveedores del plugin, el registro no puede verificar
+  nada y deja el modelo configurado, como antes.
+  - Lo cubren la delegación del plugin (consulta la lista en vivo), la segunda comprobación del aviso y el
+    siguiente directorio que se abra.
+  - El usuario no abre OpenCode desde el 29-09, así que su caché aún no existe.
+- **El aviso sale una vez por directorio abierto** (cada instancia registra sus agentes).
+- **QA real** (sandbox con el `omo.jsonc` real; evidencia en `.omo/evidence/0.7/`):
+  - 7 agentes con modelo retirado pasan a `big-pickle`; `explore` y `librarian` (sin respaldo válido) usan el modelo
+    de la sesión;
+  - el piloto de 3.0 ejecuta `explore` con `big-pickle` y pasa todos los correctores;
+  - `opencode.db` y `auth.json` reales sin cambios.
+- **Tests:**
+  - model-core 433/433, delegate-core 17/17;
+  - omo-opencode 8788 en verde; 108 fallan solo en la ejecución conjunta (contaminación de mocks entre archivos, ya
+    vista en 0.6) y los 14 archivos afectados pasan uno a uno;
+  - tipado limpio.
+
+### Nota para 3.0
+La parte `subtask` del banco usa el `task` **nativo** de OpenCode (`handleSubtask`), no el `task` del plugin. Ese
+`task` usa el modelo con el que se **registró** el agente. Con 0.7, ese modelo ya será uno que exista.
+
+### Criterios de aceptación
+```gherkin
+Feature: modelos retirados
+  Scenario: registro con un modelo retirado y respaldo válido
+    Given explore configurado con un modelo que OpenCode ya no ofrece y big-pickle como respaldo
+    Then explore se registra con big-pickle y el aviso nombra explore, el modelo retirado y /omo-models
+  Scenario: sin respaldos válidos
+    Given todos los modelos configurados de explore están retirados
+    Then explore usa la cadena automática o el modelo de la sesión, nunca el retirado
+  Scenario: delegación
+    When un orquestador delega en un agente cuyo modelo configurado no existe
+    Then la tarea se ejecuta con el siguiente modelo que sí existe en vez de fallar con "Model not found"
+  Scenario: lista desconocida
+    Given no hay ninguna lista de modelos disponible
+    Then el modelo configurado se usa como hasta ahora
+  Scenario: QA real
+    Given el omo.jsonc real del usuario con los modelos retirados, en un sandbox
+    Then el piloto de 3.0 ejecuta explore sin "Model not found"
+```
 
 ## Otros hallazgos (sin paso propio)
 - Tests del upstream no aislados de la máquina (`codex-components.test.ts` asume que `sg` no está instalado;

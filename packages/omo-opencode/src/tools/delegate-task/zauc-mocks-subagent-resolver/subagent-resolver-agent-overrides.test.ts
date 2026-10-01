@@ -107,4 +107,33 @@ describe("resolveSubagentExecution agent overrides", () => {
     })
     expect(result.fallbackChain).toBeUndefined()
   })
+
+  test("when the configured model and every fallback were retired, the subagent starts on its registered model (fork 0.7)", async () => {
+    // given
+    readProviderModelsCacheMock.mockReturnValue({
+      models: { opencode: ["big-pickle"] },
+      connected: ["opencode"],
+      updatedAt: "2026-10-01T00:00:00.000Z",
+    })
+    readConnectedProvidersCacheMock.mockReturnValue(["opencode"])
+    const args = createBaseArgs({ subagent_type: "explore" })
+    const executorCtx = createExecutorContext(
+      async () => ([{ name: "explore", mode: "subagent", model: "opencode/big-pickle" }]),
+      {
+        agentOverrides: {
+          explore: {
+            model: "opencode/deepseek-v4-flash-free",
+            fallback_models: ["opencode/north-mini-code-free"],
+          },
+        } as ExecutorContext["agentOverrides"],
+      },
+    )
+
+    // when
+    const result = await resolveSubagentExecution(args, executorCtx, "sisyphus", "deep")
+
+    // then
+    expect(result.error).toBeUndefined()
+    expect(result.categoryModel).toMatchObject({ providerID: "opencode", modelID: "big-pickle" })
+  })
 })

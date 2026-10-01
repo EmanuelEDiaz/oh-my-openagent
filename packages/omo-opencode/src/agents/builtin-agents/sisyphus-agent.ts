@@ -6,7 +6,7 @@ import { AGENT_MODEL_REQUIREMENTS, isAnyFallbackModelAvailable } from "../../sha
 import { log } from "../../shared/logger"
 import { applyEnvironmentContext } from "./environment-context"
 import { applyOverrides } from "./agent-overrides"
-import { applyModelResolution, getConnectedFallbackModel, keepFallbackOverRetiredModel, promptModelHint, userFallbackModelIds } from "./model-resolution"
+import { applyModelResolution, getConnectedFallbackModel, promptModelHint, settleConfiguredModel, userFallbackModelIds } from "./model-resolution"
 import { recordAgentRegistrationIssue } from "../../shared/agent-registration-report"
 import { createSisyphusAgent } from "../sisyphus"
 import { applyFrontierToolSchemaPermission } from "../frontier-tool-schema-guard"
@@ -96,9 +96,14 @@ export function maybeCreateSisyphusConfig(input: {
   }
 
   sisyphusConfig = applyOverrides(sisyphusConfig, sisyphusOverride, mergedCategories, directory)
-  if (sisyphusResolution) {
-    sisyphusConfig = keepFallbackOverRetiredModel(sisyphusConfig, sisyphusResolution, sisyphusOverride?.model)
-  } else if (sisyphusOverride?.model === undefined) {
+  sisyphusConfig = settleConfiguredModel({
+    agent: "sisyphus",
+    config: sisyphusConfig,
+    resolution: sisyphusResolution,
+    overrideModel: sisyphusOverride?.model,
+    availableModels,
+  })
+  if (!sisyphusResolution && sisyphusOverride?.model === undefined) {
     const { model: _promptOnlyModel, ...withoutModel } = sisyphusConfig
     sisyphusConfig = withoutModel
   }
