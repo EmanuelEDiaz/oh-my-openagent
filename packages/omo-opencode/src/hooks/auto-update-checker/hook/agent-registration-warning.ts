@@ -5,6 +5,13 @@ import { log } from "../../../shared/logger"
 import { ignoreToastError } from "./ignore-toast-error"
 
 const MAX_LISTED = 6
+/** Orchestrators the user switches between with Tab come first, so they are never hidden behind "+N". */
+const PRIORITY = ["sisyphus", "atlas", "prometheus", "hephaestus"]
+
+function byPriority(left: string, right: string): number {
+  const rank = (agent: string) => (PRIORITY.includes(agent) ? PRIORITY.indexOf(agent) : PRIORITY.length)
+  return rank(left) - rank(right)
+}
 
 function list(agents: readonly string[]): string {
   return agents.length <= MAX_LISTED ? agents.join(", ") : `${agents.slice(0, MAX_LISTED).join(", ")} +${agents.length - MAX_LISTED}`
@@ -12,7 +19,7 @@ function list(agents: readonly string[]): string {
 
 /** Startup message for agents registered without a usable model (fork roadmap 0.3); undefined when all is well. */
 export function formatAgentRegistrationWarning(issues: readonly AgentRegistrationIssue[]): string | undefined {
-  const degraded = issues.filter((issue) => issue.status === "degraded").map((issue) => issue.agent)
+  const degraded = issues.filter((issue) => issue.status === "degraded").map((issue) => issue.agent).sort(byPriority)
   const skipped = issues.filter((issue) => issue.status === "skipped")
   if (degraded.length === 0 && skipped.length === 0) return undefined
   const lines: string[] = []
