@@ -11,6 +11,7 @@ const CATALOG = parseModelCatalog(JSON.stringify({
     "big-pickle": { cost: { input: 0, output: 0 } },
     "mystery": {},
   } },
+  openai: { models: { "gpt-5.5": { cost: { input: 1, output: 4 } } } },
 }))
 
 describe("free model preference (fork 0.5)", () => {
@@ -32,5 +33,15 @@ describe("free model preference (fork 0.5)", () => {
     expect(isPaidModel("ollama/qwen3:8b")).toBe(false)
     expect(isPaidModel("opencode/anything-free")).toBe(false)
     expect(paidModelCheck()).toBe(isPaidModel)
+  })
+
+  test("a model missing from the cache is paid only if its provider offers no free model", () => {
+    // given
+    setPreferFreeModels(true, () => CATALOG)
+
+    // then
+    expect(isPaidModel("openai/gpt-6-luna-fast")).toBe(true)
+    expect(isPaidModel("opencode/brand-new-model")).toBe(false)
+    expect(isPaidModel("ollama/llama3.3")).toBe(false)
   })
 })
