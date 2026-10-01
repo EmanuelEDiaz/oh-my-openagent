@@ -136,7 +136,7 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 | 4.6 | `security-reviewer` | credenciales y guarda de destrucción (antes 2.11), escáneres gratuitos | pendiente — `plans/credentials.md` |
 | 4.7 | `test-writer` | test en rojo por la razón correcta, valores esperados desde la especificación | pendiente |
 | 4.8 | `debugger` | reproducción, `git bisect run`, bucle hipótesis/experimento | pendiente |
-| 4.9 | `git-committer` | permisos destructivos probados, commits atómicos, escaneo de secretos | pendiente |
+| 4.9 | `git-committer` → **especialista de control de versiones** | commits + ramas + merge, push/rebase solo con aprobación; reglas generales + política por proyecto; **identidad del proyecto preguntada y confirmada en cada sesión, nunca la global** (ordenador compartido); comprobado por código | pendiente — `plans/version-control.md` |
 | 4.10 | `dependency-check` | registro + OSV + deps.dev, señales de "slopsquatting" | pendiente |
 | 4.11 | `test-reviewer`, `lang-reviewer`, `architect-reviewer` | precisión/recall con diffs con fallos sembrados | pendiente |
 | 4.12 | `docs-writer` | afirmaciones que apuntan al código, Diátaxis, CHANGELOG | pendiente |
@@ -163,6 +163,9 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 - ~~Reglas de lenguaje/framework cargadas bajo demanda~~ — absorbido en 4.5 (antes 2.9), 29-09-2026.
 
 ## Registro de decisiones del roadmap
+- 01-10-2026 — Control de versiones: `git-committer` se amplía a especialista de commits, ramas y merge (push/rebase solo
+  con aprobación), con reglas generales + política por proyecto; la identidad nunca es la global: se pregunta por
+  proyecto y se confirma en cada sesión antes del primer commit.
 - 01-10-2026 — Reestructurado: banco de pruebas (Fase 3) antes de tocar agentes; un paso por especialista con plantilla
   común y orden por impacto (Fase 4), con los pasos transversales 2.3–2.11 dentro del agente al que pertenecen;
   evaluación conjunta (Fase 5); documentación y skill del plugin con `skill-creator` al final (Fase 6).
