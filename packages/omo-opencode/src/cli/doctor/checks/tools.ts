@@ -1,5 +1,6 @@
 import { checkAstGrepCli, checkCommentChecker } from "./dependencies"
 import { getGhCliInfo } from "./tools-gh"
+import { getLastDownloadFailure } from "../../../hooks/comment-checker/downloader"
 import { getInstalledLspServers } from "./tools-lsp"
 import { getBuiltinMcpInfo, getUserMcpInfo } from "./tools-mcp"
 import { CHECK_IDS, CHECK_NAMES } from "../framework/constants"
@@ -20,6 +21,7 @@ export async function gatherToolsSummary(): Promise<ToolsSummary> {
     lspServers,
     astGrepCli: astGrepCliInfo.installed,
     commentChecker: commentCheckerInfo.installed,
+    ...(commentCheckerInfo.installed ? {} : commentCheckerFailure()),
     ghCli: {
       installed: ghInfo.installed,
       authenticated: ghInfo.authenticated,
@@ -28,6 +30,11 @@ export async function gatherToolsSummary(): Promise<ToolsSummary> {
     mcpBuiltin: builtinMcp.map((server) => server.id),
     mcpUser: userMcp.map((server) => server.id),
   }
+}
+
+function commentCheckerFailure(): { commentCheckerDownloadFailure?: string } {
+  const failure = getLastDownloadFailure()
+  return failure ? { commentCheckerDownloadFailure: `${failure.error} (${failure.at})` } : {}
 }
 
 export function buildToolIssues(summary: ToolsSummary): DoctorIssue[] {
@@ -43,10 +50,11 @@ export function buildToolIssues(summary: ToolsSummary): DoctorIssue[] {
     })
   }
 
-  if (!summary.commentChecker) {
+  // Missing before first use is normal (the hook downloads it lazily); only a recorded failed download is a problem.
+  if (!summary.commentChecker && summary.commentCheckerDownloadFailure) {
     issues.push({
       title: "Comment checker unavailable",
-      description: "Comment checker binary is not installed.",
+      description: `The last download of the comment-checker binary failed: ${summary.commentCheckerDownloadFailure}.`,
       fix: "The hook downloads its pinned GitHub release automatically on first use. Allow access to github.com and restart OpenCode to retry.",
       severity: "warning",
       affects: ["comment-checker hook"],
@@ -104,7 +112,7 @@ export async function checkTools(): Promise<CheckResult> {
     message: issues.length === 0 ? "All tools checks passed" : `${issues.length} tools issue(s) detected`,
     details: [
       `AST-Grep CLI: ${summary.astGrepCli ? "yes" : "no"}`,
-      `Comment checker: ${summary.commentChecker ? "yes" : "no"}`,
+      `Comment checker: ${summary.commentChecker ? "yes" : summary.commentCheckerDownloadFailure ? "no (last download failed)" : "not downloaded yet (fetched from GitHub on first use)"}`,
       `LSP: ${summary.lspServers.length > 0 ? `${summary.lspServers.length} server(s)` : "none"}`,
       `GH CLI: ${summary.ghCli.installed ? "installed" : "missing"}${summary.ghCli.authenticated ? " (authenticated)" : ""}`,
       `MCP: builtin=${summary.mcpBuiltin.length}, user=${summary.mcpUser.length}`,
