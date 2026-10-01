@@ -1,6 +1,6 @@
-# Paso 2.7 — Guardián de reglas (que las reglas no se pierdan)
+# Paso 4.5 (antes 2.7 y 2.9) — Guardián de reglas (que las reglas no se pierdan)
 
-Parte del roadmap: `docs/fork/roadmap.md`. Estado: **plan, pendiente de aprobación (29-09-2026)**. Rutas: `S/` =
+Parte del roadmap: `docs/fork/roadmap.md`. Estado: **plan aprobado; ampliado el 01-10-2026** (creación interactiva, obligatoriedad por código, preguntar antes de actuar). Rutas: `S/` =
 `packages/omo-opencode/src/`, `RE/` = `packages/rules-engine/src/`.
 
 ## El problema
@@ -104,6 +104,81 @@ momento justo, comprobaciones que no dependen del modelo, y un especialista que 
   (> 40 líneas por regla, > 200 líneas siempre activas en total), sin frontmatter fuera de `.omo/rules`, o duplicadas.
 - CLI `oh-my-openagent rules for <ruta>`: qué reglas verá el agente al tocar esa ruta (para depurar).
 
+## Ampliación (01-10-2026, decisiones del usuario)
+
+### Crear reglas cuando el proyecto no tiene (`rules init`), interactivo con respaldo
+Cómo lo hacen otros:
+- Claude Code `/init` lee el repo y propone, y su modo nuevo pregunta antes de escribir
+  (https://code.claude.com/docs/en/memory).
+- Cursor tiene `/create-rule` (https://cursor.com/docs/context/rules).
+- VS Code analiza el repo y genera instrucciones para revisar
+  (https://code.visualstudio.com/docs/agent-customization/custom-instructions).
+
+Evidencia: los archivos de contexto largos o genéricos **no mejoran** las tareas y encarecen un 20 %; solo ayudan con
+prácticas no estándar (https://arxiv.org/abs/2602.11988). Por eso, pocas reglas y con evidencia.
+
+Flujo:
+1. Leer fuentes deterministas: configuraciones de linter y formateador, `tsconfig` (flags estrictos), CI, scripts del
+   manifiesto, `CONTRIBUTING`, decisiones/ADR, reglas de otras herramientas (`.cursor/rules`, `AGENTS.md`,
+   `copilot-instructions`), convención de commits.
+2. Muestrear el código buscando invariantes con evidencia ("0 SQL directo fuera de `repo/` en 48 archivos").
+3. Descartar lo que ya hace un linter; si tiene forma de regla de linter, proponer cambiar el linter.
+4. Ordenar por impacto × confianza y quedarse con **≤ 7**.
+5. **Una sola pregunta** agrupada (herramienta `question`): aceptar las obligatorias, elegir una a una, dejarlas todas
+   como recomendables u omitir.
+6. Escribir el archivo y recordar que se pueden añadir más (`rules add`).
+
+Sin interfaz (ejecución automática), las reglas quedan como `status: proposed` hasta confirmarlas. Una regla rechazada
+no se vuelve a proponer salvo que su evidencia cambie.
+
+**Cuándo una regla puede ser obligatoria** (pauta para el agente). Solo si se cumplen las cuatro condiciones:
+1. incumplirla rompe la corrección, la seguridad, los datos o una frontera de arquitectura;
+2. es comprobable, con `forbid` o con un revisor capaz de señalar la línea;
+3. tiene evidencia fuerte (documento, ADR o CI explícito, o ~100 % de coherencia en el código);
+4. ningún linter la cubre.
+
+Si no, es `should` o no es una regla. Nunca son reglas obligatorias las preferencias de estilo, lo que el modelo ya
+hace por defecto ni los datos puntuales.
+
+### Formato ampliado
+```yaml
+id: api-no-raw-sql
+severity: must | should | info
+paths: ["src/api/**"]
+rule: "Never build SQL strings in handlers; use repo/* query builders."
+why: "SQL injection; ADR-004"
+source: { kind: adr | lint-config | ci | code-pattern | user, ref: "docs/adr/004.md" }
+evidence: "0 violations / 48 files"
+confidence: high | med | low
+forbid: { pattern: "\\b(SELECT|INSERT)\\b.*\\+", glob: "src/api/**" }   # opcional
+status: active | proposed | rejected
+exceptions: [{ date, reason, scope: once }]
+```
+
+### Obligatoriedad por código (no por llamadas extra a un agente)
+| Agente | Recibe reglas | Cómo |
+|---|---|---|
+| Implementadores, `test-writer`, `docs-writer` (todo el que edita) | sí, obligatorio | inyección por ruta al editar; `forbid` bloquea |
+| Prometheus | sí | ids de las reglas de las rutas del plan; los conflictos se plantean en el plan |
+| `rules-checker` | sí, completas | revisa el diff **antes del `verifier` y antes de cada commit** |
+| Revisores de seguridad/tests/lenguaje/arquitectura | solo las de su categoría | en su contexto |
+| `verifier` | ligero | confirma que pasan los `forbid` |
+| `git-committer` | sí | barrido de `forbid` + convención de commits |
+| Solo lectura (`explore`, `librarian`, `oracle`…) | no | gastaría tokens; como mucho un puntero |
+
+Todo informe de quien escribe o revisa lista los ids de las reglas aplicadas.
+
+### Si una regla impide algo pedido o viable: preguntar antes de actuar
+Los agentes preguntan muy poco: Claude Code pide aclaración solo en el 1–3 % de los casos
+(https://arxiv.org/html/2604.20779v1). Pero interrumpir también cuesta, así que solo se pregunta ante **conflictos
+reales**. Nunca se salta en silencio lo pedido ni se incumple la regla en silencio. Formato:
+
+> "La regla `api-no-raw-sql` (obligatoria, `src/api/**`, de ADR-004) prohíbe X. Lo que pides necesita X porque Y.
+> Opciones: (1) seguir la regla con la alternativa Z [por defecto], (2) excepción solo esta vez (queda anotada),
+> (3) cambiar o relajar la regla, (4) cancelar."
+
+Los conflictos detectados al **planear** se agrupan en la aprobación del plan para no interrumpir a mitad de trabajo.
+
 ## Subtareas
 - [ ] 1. Tests RED de cada comportamiento (antes de editar, tras compactar, `forbid`, subagentes, reglas sin frontmatter).
 - [ ] 2. Formato: `id`, `severity`, `exclude`, `forbid`; reglas de carpeta sin frontmatter en `.omo/rules`.
@@ -114,7 +189,9 @@ momento justo, comprobaciones que no dependen del modelo, y un especialista que 
 - [ ] 7. Especialista `rules-checker`.
 - [ ] 8. CLI `rules check` / `rules for`.
 - [ ] 9. Medición: escenario en el banco de compactación (sesión larga con una regla de carpeta) — antes/después.
-- [ ] 10. Docs, evidencia, merge y push.
+- [ ] 10. `rules init` interactivo (con respaldo sin interfaz), formato ampliado, matriz de obligatoriedad y pregunta ante conflicto.
+- [ ] 11. Absorción de la biblioteca `ai-guidelines` (antes 2.9) con criterio "solo lo mejor" y reglas por stack.
+- [ ] 12. Docs, evidencia, merge y push.
 
 ## Criterios de aceptación
 ```gherkin

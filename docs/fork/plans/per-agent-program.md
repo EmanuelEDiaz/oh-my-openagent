@@ -1,0 +1,85 @@
+# Fases 3–5 — Banco de pruebas, especialistas uno a uno y evaluación conjunta
+
+Parte del roadmap: `docs/fork/roadmap.md`. Estado: **plan aprobado (01-10-2026)**. Rutas: `S/` = `packages/omo-opencode/src/`.
+
+## Por qué así
+- Mejorar un agente sin medirlo es adivinar. Anthropic recomienda empezar con 20–50 tareas sacadas de fallos reales,
+  corregir primero con comprobaciones por código y mirar el **resultado en el entorno**, no lo que el agente dice que hizo
+  (https://www.anthropic.com/engineering/demystifying-evals-for-ai-agents).
+- Herramientas y prompts se mejoran iterando con evaluaciones y un conjunto **reservado** para no sobreajustar
+  (https://www.anthropic.com/engineering/writing-tools-for-agents).
+- Primero el análisis de errores: leer trazas, anotar fallos y agruparlos en categorías; evaluaciones binarias
+  (pasa/no pasa); validar los jueces LLM contra etiquetas humanas (https://hamelhusain.substack.com/p/evals-faq).
+- En sistemas con varios agentes hay que medir si se delega en el agente correcto
+  (https://developers.openai.com/api/docs/guides/evaluation-best-practices).
+- Los subagentes se usan dentro de flujos largos: importa la fiabilidad (`pass^k`: todas las repeticiones bien), no solo
+  `pass@k`.
+
+## Fase 3 — Banco de pruebas (3.0)
+- **promptfoo** (MIT, TypeScript; https://www.promptfoo.dev/docs/providers/custom-api/) con un proveedor propio que:
+  - levanta un OpenCode aislado por ejecución (XDG propio, como en las QA de este fork);
+  - prepara un repo de prueba;
+  - envía la tarea por el SDK y devuelve salida, tokens y la transcripción.
+
+  No se usa `opencode run`: no ejecuta subagentes como agente principal y tiene fallos en modo sin interfaz.
+- **Correctores deterministas comunes:**
+  - contrato de salida (`<report>` con Resumen/Resultado/Fuentes);
+  - herramienta obligatoria usada y herramienta prohibida no usada (desde los mensajes de la sesión);
+  - **citas que existen**: `archivo:línea` contra el disco, URL contra la red y versión contra el registro;
+  - tokens, latencia, llamadas y turnos.
+
+  Juez LLM binario solo para lo que el código no puede comprobar, validado con 30–50 casos etiquetados a mano.
+- Repeticiones: 3–5 por tarea (`--repeat --no-cache`), informando `pass@1` y `pass^3`.
+- Registro de resultados en `docs/fork/evals/<agente>.md` (resumen) + datos locales en `.omo/evals/`.
+- Modelos: Ollama para iterar; el plan gratuito de OpenCode para las mediciones finales; límites de tokens y turnos por
+  tarea. Coste: 0 €; el límite real es el tiempo y los límites de uso de los modelos gratuitos.
+- Inspect AI (con su agente `opencode()` en Docker) queda como opción para la Fase 5 si promptfoo se queda corto.
+
+## Fase 4 — Plantilla para cada especialista
+1. **Investigar:** prompt y herramientas actuales, cómo lo hacen agentes comparables. Ya hay base en
+   `plans/specialists-research.md`.
+2. **Contrato:** qué hace, entradas, salida, herramientas obligatorias y prohibidas, cuándo para.
+3. **Tareas:** 15–30, variando el tipo de tarea, el tamaño del repo y el lenguaje; 30 % reservado que nunca se mira
+   al ajustar.
+4. **Medición base:** 3–5 repeticiones en el modelo gratuito objetivo.
+5. **Análisis de fallos:** leer las transcripciones, anotar y agrupar, y localizar dónde se tuerce cada una.
+6. **Mejoras:** una por iteración (prompt, descripción de herramientas, permisos, contexto que recibe), de 2 a 4.
+7. **Nueva medición** en el conjunto de trabajo y en el reservado.
+8. **Evidencia** antes/después en el plan del paso; los casos que pasan entran en la suite de regresión.
+
+Orden (impacto × riesgo): 4.1 `explore` → 4.2 `librarian` + `api-lookup` → 4.3 `memory` → 4.4 `verifier` →
+4.5 `rules-checker` (+ guardián de reglas) → 4.6 `security-reviewer` (+ credenciales) → 4.7 `test-writer` →
+4.8 `debugger` → 4.9 `git-committer` → 4.10 `dependency-check` → 4.11 revisores de tests/lenguaje/arquitectura →
+4.12 `docs-writer` → 4.13 `ui-tester` → 4.14 implementadores (+ skills por categoría, procesos gestionados) →
+4.15 `multimodal-looker`, `metis`, `momus`, `oracle` → 4.16 orquestadores (+ enrutamiento obligatorio por código).
+
+Estimación: 1,5–3 días por paso; 7–10 semanas a tiempo parcial en total.
+
+## Fase 5 — Evaluación conjunta (5.1)
+- 15–30 tareas completas, en tres tipos:
+  - repos pequeños con tests que fallan (estilo SWE-bench, o 10–20 de SWE-bench Verified-mini);
+  - investigación;
+  - documentación y commits.
+- Métricas:
+  - éxito por tests ocultos;
+  - `pass^3`;
+  - enrutamiento correcto: precisión y cobertura de "delegó en el especialista esperado";
+  - tokens totales;
+  - datos perdidos tras compactar;
+  - dónde falla cada tarea.
+- **Ablación**: cambiar cada especialista mejorado por su versión base para ver qué aportó cada cambio.
+
+## Criterios de aceptación
+```gherkin
+Feature: programa por agente
+  Scenario: banco de pruebas reproducible
+    Given el proveedor de promptfoo y un repo de prueba
+    When se ejecuta la suite de un especialista con --repeat 3
+    Then se obtienen pass@1, pass^3, tokens y citas verificadas por código, sin tocar la configuración real del usuario
+  Scenario: mejora demostrada
+    Given un especialista estudiado
+    Then su plan registra la medición base y la final en el conjunto reservado
+  Scenario: enrutamiento medido
+    When se ejecuta la evaluación conjunta
+    Then se informa la precisión y cobertura de delegación por especialista
+```

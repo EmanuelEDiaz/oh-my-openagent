@@ -83,18 +83,20 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
 - Muchas ejecuciones seguidas agotan los modelos gratuitos ("Insufficient account funds", "Rate limit exceeded"): activar
   `runtime_fallback` con una cadena de varios modelos en el sandbox y espaciar las pruebas.
 
-## Fase 0 — Seguridad
+## Fase 0 — Seguridad y robustez
 | Paso | Qué | Estado | Plan |
 |---|---|---|---|
 | 0.1 | Worktrees seguros: no borrar nunca rutas que omo no creó; worktrees reales con git; no borrar trabajo sin guardar. | **hecho** (27-09-2026, rama `fix/team-worktree-safety`) | `plans/knowledge-base-and-worktrees.md` (Pieza 4) |
 | 0.2 | Borrar equipos desde otra ejecución: `team_delete` exige la sesión líder pero ese registro vive en memoria y se pierde entre procesos (`opencode run`), dejando equipos y worktrees huérfanos. Hallado en la QA de 0.1. | **hecho** (29-09-2026): mensaje con la sesión líder y cómo seguir; CLI `team list` / `team delete [--force] [--dry-run]`; cualquier sesión puede forzar el borrado de equipos huérfanos o atascados. `plans/team-delete-cross-process.md` |
 | 0.3 | **Ningún agente desaparece por su modelo**: Atlas se descarta sin aviso en el primer arranque o sin modelos de su cadena, y otros arrancan con modelos de pago sin credencial. Degradar (registrar sin modelo → usa el de la sesión) + aviso visible + big-pickle en la cadena de Atlas. `plans/robustness-fixes.md` | **hecho** (01-10-2026); hallazgo: con caché se eligen modelos de pago que fallan en cuentas gratuitas → propuesta "solo modelos gratuitos" |
 | 0.4 | **Prometheus solo escribe `.omo/*.md`**: hoy `apply_patch`, `hashline_edit rename` y `lsp_rename` lo esquivan y sin ruta deja pasar. Bloquear todas las vías y fallar cerrado. `plans/robustness-fixes.md` | plan |
+| 0.5 | **¿Solo modelos gratuitos?** Con la caché de proveedores, la resolución elige modelos de pago que el proveedor lista (Zen: `opencode/claude-opus-5-5`…), que fallan en cuentas gratuitas. Propuesta: opción que salte los modelos con coste (precio de la caché de OpenCode). | **pendiente de decisión del usuario** |
+| 0.6 | Restos de 0.3: `sisyphus-junior` hereda `anthropic/…` sin Atlas; el aviso no sale en `doctor`; tests del upstream que dependen de lo instalado en la máquina. | pendiente (baja prioridad) |
 
 ## Fase 1 — Fundamento: índice, citas de chat y decisiones
 | Paso | Qué | Estado |
 |---|---|---|
-| 1.1 | **Diseño del índice y su ciclo de vida** (solo análisis + plan): qué se indexa, formato de locator, presupuesto de tamaño, poda (capas resume/cold/orphan de tu biblioteca), `optimize`/`VACUUM`, qué pasa al borrar sesiones, rendimiento medido. | **análisis hecho**, plan en revisión: `plans/knowledge-index.md` |
+| 1.1 | **Diseño del índice y su ciclo de vida** (solo análisis + plan): qué se indexa, formato de locator, presupuesto de tamaño, poda (capas resume/cold/orphan de tu biblioteca), `optimize`/`VACUUM`, qué pasa al borrar sesiones, rendimiento medido. | **hecho** (28-09-2026; implementado en 1.2–1.3): `plans/knowledge-index.md` |
 | 1.2 | Índice del proyecto (`.omo/cache/knowledge.db`, FTS5 + BM25) + herramienta `knowledge_search` con locators citables. | **hecho** (28-09-2026) |
 | 1.3 | **Citas de chat:** indexado de sesiones leyendo `opencode.db` en solo lectura (tu método validado), puntero `ses_… → msg_… → prt_…`, comando de re-auditoría, poda de sesiones borradas y "una sesión vive si algo la referencia". + `knowledge_open` y `knowledge report [--vacuum]`. | **hecho** (28-09-2026) |
 | 1.3b | Que el `session_search` antiguo (subcadena, sin ranking) use el índice o remita a `knowledge_search`: en la QA el agente lo probó primero y no encontró nada. | **hecho** (28-09-2026) |
@@ -104,30 +106,70 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
 | 1.5 | Verificador activo de citas y "hecho exige evidencia" (`block`): revisión de citas en informes de subagentes, puerta sobre casillas de planes, rechazo de evidencia circular, `knowledge check` de deriva. Detalle: `plans/citation-gate.md`. | **hecho** (28-09-2026); revisión de citas de subagentes confirmada en vivo |
 | 1.6 | **Compactación sin pérdida.** (a) *Medir primero:* forzar compactaciones en sesiones de prueba y comprobar qué se pierde (peticiones literales, restricciones, decisiones, archivos:línea, errores vistos, preguntas abiertas). (b) *Instantánea antes de compactar:* extraer por código ese estado crítico y guardarlo en el índice con su puntero `ses_… → msg_… → prt_…` (las peticiones y restricciones del usuario, **siempre literales**). (c) *Resumen con anclas:* cada punto del resumen lleva el puntero a su origen. (d) *Verificación después:* comparar el resumen con la instantánea y reinyectar lo que falte, sin duplicar lo que ya está. (e) *Rehidratación mínima:* tras compactar, una tarjeta de estado corta + "busca en el índice para el detalle", en vez de reinyectar documentos enteros. | **hecho** (28-09-2026): recuerdo 10/10 con y sin el modo (empate en el techo con big-pickle); con el modo, 12 locators literales en el resumen frente a 0, resumen ~2× más largo; tarjeta inyectada en vivo. Se integra activado por decisión del usuario. `plans/lossless-compaction.md` |
 
-## Fase 2 — Orquestador + especialistas con herramientas obligatorias
+
+## Fase 2 — Orquestador + especialistas: diseño y plantel
 | Paso | Qué | Estado |
 |---|---|---|
 | 2.1 | **Taxonomía de tareas atómicas y matriz de enrutamiento** (solo análisis + plan): para cada tipo de tarea (buscar en código, investigar en la web/docs, planear, escribir código, escribir docs, revisar tests/seguridad/arquitectura, depurar, UI) → especialista → herramientas **obligatorias** → contrato de salida (resumen + fuentes) → cómo se verifica. Comparando uno a uno tus agentes con los del plugin para quedarnos con el mejor de cada papel. | **hecho** (29-09-2026): orquestadores con Tab + especialistas atómicos; planes en `.omo/plans/`; guardas que bloquean; el orquestador verá los agentes personalizados. `plans/task-routing.md` |
 | 2.2 | Unificar el plantel según 2.1: fusionar/reemplazar agentes, y que el orquestador **conozca** los especialistas personalizados (arreglar `_customAgentSummaries`). | **hecho** (29-09-2026): 13 especialistas + marca obligatorio/opcional, agentes personalizados visibles, política de ejecución de Atlas, agentes del usuario archivados. `plans/specialists-catalog.md` |
-| 2.3 | `@investigador-web` optimizado: docs oficiales primero (context7, sitio oficial, versión), búsquedas amplias→estrechas, varias herramientas en paralelo, citas con URL obligatorias y **verificadas** al volver. | pendiente |
-| 2.4 | **Enrutamiento obligatorio por código:** reglas en `tool.execute.before` (p. ej. mencionar una librería externa ⇒ investigar antes de editar; el orquestador no busca en la web él mismo) que **bloquean** en vez de avisar. Incluye el **presupuesto de lectura del orquestador** (29-09-2026): puede leer/buscar hasta `min(12k tokens, 10 % del contexto del modelo)` u 8 llamadas por turno; aviso al 60 %, bloqueo al 100 % con "delega en explore"; Atlas puede leer lo que verifica; y unificar las frases contradictorias de los prompts sobre cuándo usar explore. | pendiente |
-| 2.5 | Skills obligatorias por categoría (`skills` en `CategoryConfigSchema`). | pendiente |
-| 2.6 | Contrato de salida verificado para todos los subagentes: resumen + fuentes; si falta, se devuelve al subagente. Plan (29-09-2026): sobre `<report>` que el plugin ya sabe recortar (`deliverableTag`), hook que anota secciones que faltan, contrato repetido al final del prompt de sistema de los especialistas, sin inyectar grounding/ultrawork en ellos; más adelante `format: json_schema` opcional. | pendiente |
-| 2.7 | **Guardián de reglas**: reglas de proyecto y de carpeta llevadas al momento de editar (bloqueo una vez + recordatorio), que vuelven tras compactar, comprobables por código (`forbid`), en el prompt de los subagentes, y especialista `rules-checker`. `plans/rules-guardian.md` | plan |
-| 2.10 | **Procesos gestionados**: `process_start/stop/list/logs` (ampliando `monitor`), parar por grupo y avisar con el comando exacto si no se puede, aviso de procesos que siguen corriendo al quedar inactiva la sesión, y guarda que impide `pkill`/`killall`/`kill` autodestructivos. `plans/process-lifecycle.md` | plan |
-| 2.11 | **Credenciales**: almacén local (`.omo/secrets`, 0600, llavero opcional) con `secret_save/list/get`, política "guárdala al crearla, nunca destruyas para recuperarla: pregunta", ocultación ampliada (valores conocidos + patrones) en índice/log/salidas, y guarda que pide confirmación antes de borrar datos o desinstalar. `plans/credentials.md` | plan |
-| 2.9 | **Absorber la biblioteca de reglas en el plugin**: evaluar regla a regla de `ai-guidelines` y del `AGENTS.md` global; se aplica solo si es la mejor opción (si el plugin o la investigación tienen algo mejor, se descarta con motivo). Cada regla va donde se usa: comportamiento general compacto en los orquestadores, reglas de tarea en su especialista/skill, reglas de tema o lenguaje (REST, Go, PHP/Laravel, Next, Nuxt) solo si el proyecto usa ese stack y al tocar esos archivos (vía 2.7). Objetivo: dejar de cargar ~26k tokens de reglas en cada agente. | plan |
-| 2.8 | **Lectura de código eficiente**: `explore` mejorado + herramientas `code_outline`, `read_symbol`, `repo_map`, `callers`; Graphify opcional (se usa si está instalado). Investigación en `plans/specialists-research.md` | plan |
 
-## Fase 3 — Medir que mejora
+Los antiguos pasos transversales 2.3–2.11 se reparten en la Fase 4, dentro del especialista al que pertenecen
+(decisión del 01-10-2026; tabla de equivalencias abajo). Su contenido y sus planes no cambian.
+
+## Fase 3 — Banco de pruebas (antes de mejorar ningún agente)
 | Paso | Qué | Estado |
 |---|---|---|
-| 3.1 | Banco de pruebas pequeño con tareas reales: mide citas inventadas, uso de herramientas obligatorias, **datos perdidos tras compactar**, costo y tiempo, antes/después de cada fase. | pendiente |
+| 3.0 | **Banco de pruebas** con promptfoo (MIT, TypeScript): proveedor que levanta un OpenCode aislado por ejecución y le habla por el SDK; correctores deterministas comunes (contrato `<report>` presente y completo, herramienta obligatoria usada / prohibida no usada, **citas que existen** —archivo:línea, URL, versión de paquete—, tokens, latencia, llamadas); repeticiones (`--repeat --no-cache`) con pass@1 y pass^3; registro de resultados en el repo; Ollama para iterar y el plan gratuito para las mediciones finales. Incluye la parte de 2.6 que verifica contratos. | pendiente — `plans/per-agent-program.md` |
+
+## Fase 4 — Especialistas uno a uno (plantilla común)
+Cada paso: investigar → contrato → 15–30 tareas (+30 % reservado) → medición base → análisis de fallos reales → 2–4
+mejoras de una en una → nueva medición → evidencia antes/después → casos aprobados pasan a la suite de regresión.
+Orden por impacto (los que alimentan a todos, luego los "porteros", luego los que escriben, los orquestadores al final).
+
+| Paso | Agente(s) | Incluye | Estado |
+|---|---|---|---|
+| 4.1 | `explore` | lectura de código eficiente (antes 2.8): `repo_map`, `code_outline`, `read_symbol`, `callers`, Graphify opcional | pendiente |
+| 4.2 | `librarian` + `api-lookup` | investigación web (antes 2.3): búsqueda gratuita, docs oficiales primero, citas literales verificadas, versión instalada | pendiente |
+| 4.3 | `memory` | calidad del recuerdo de decisiones y chats; ocultación de secretos en el índice | pendiente |
+| 4.4 | `verifier` | contrato `<report>` comprobado en ejecución (resto de 2.6), estado `FLAKY`, comparación con la base | pendiente |
+| 4.5 | `rules-checker` + guardián de reglas | antes 2.7 + **creación interactiva de reglas** + absorción de la biblioteca (antes 2.9) y reglas por stack | pendiente — `plans/rules-guardian.md` |
+| 4.6 | `security-reviewer` | credenciales y guarda de destrucción (antes 2.11), escáneres gratuitos | pendiente — `plans/credentials.md` |
+| 4.7 | `test-writer` | test en rojo por la razón correcta, valores esperados desde la especificación | pendiente |
+| 4.8 | `debugger` | reproducción, `git bisect run`, bucle hipótesis/experimento | pendiente |
+| 4.9 | `git-committer` | permisos destructivos probados, commits atómicos, escaneo de secretos | pendiente |
+| 4.10 | `dependency-check` | registro + OSV + deps.dev, señales de "slopsquatting" | pendiente |
+| 4.11 | `test-reviewer`, `lang-reviewer`, `architect-reviewer` | precisión/recall con diffs con fallos sembrados | pendiente |
+| 4.12 | `docs-writer` | afirmaciones que apuntan al código, Diátaxis, CHANGELOG | pendiente |
+| 4.13 | `ui-tester` | instantáneas de accesibilidad, consola, capturas solo si hacen falta | pendiente |
+| 4.14 | Implementadores (categorías) | skills obligatorias por categoría (antes 2.5) y procesos gestionados (antes 2.10) | pendiente — `plans/process-lifecycle.md` |
+| 4.15 | `multimodal-looker`, `metis`, `momus`, `oracle` | — | pendiente |
+| 4.16 | Orquestadores: Prometheus, Atlas, Sisyphus | enrutamiento obligatorio por código y presupuesto de lectura (antes 2.4); calidad de plan, ejecución y delegación | pendiente |
+
+**Equivalencias con la numeración anterior:** 2.3→4.2 · 2.4→4.16 · 2.5→4.14 · 2.6→3.0 + 4.4 · 2.7→4.5 · 2.8→4.1 ·
+2.9→4.5 · 2.10→4.14 · 2.11→4.6 · 3.1→5.1.
+
+## Fase 5 — Todos juntos
+| Paso | Qué | Estado |
+|---|---|---|
+| 5.1 | **Evaluación conjunta**: 15–30 tareas completas (repos pequeños con tests que fallan, investigación, docs, commits): éxito comprobado por tests ocultos, pass^3, **enrutamiento correcto** (¿delegó en el especialista esperado?), tokens totales, datos perdidos tras compactar; ablación que cambia cada especialista mejorado por su versión base para ver qué aportó cada cambio. | pendiente |
+
+## Fase 6 — Documentación y skill del plugin
+| Paso | Qué | Estado |
+|---|---|---|
+| 6.1 | **Documentación completa** del fork: arquitectura, agentes, herramientas, hooks, configuración, guía de usuario y de contribución, coherente con el código final. | pendiente |
+| 6.2 | **Skill del plugin** creada con `skill-creator` (instalado en `~/.agents/skills/` y `~/.claude/skills/`): estructura del proyecto, cada parte modular, cómo modificar o añadir agentes, hooks, herramientas y reglas; probada con las evaluaciones de `skill-creator`. | pendiente |
 
 ## Aparcado (decidido no hacer por ahora)
-- Reglas de lenguaje/framework cargadas bajo demanda (ahorraría gran parte de ~24.5k tokens por sesión). — 27-09-2026
+- ~~Reglas de lenguaje/framework cargadas bajo demanda~~ — absorbido en 4.5 (antes 2.9), 29-09-2026.
 
 ## Registro de decisiones del roadmap
+- 01-10-2026 — Reestructurado: banco de pruebas (Fase 3) antes de tocar agentes; un paso por especialista con plantilla
+  común y orden por impacto (Fase 4), con los pasos transversales 2.3–2.11 dentro del agente al que pertenecen;
+  evaluación conjunta (Fase 5); documentación y skill del plugin con `skill-creator` al final (Fase 6).
+- 01-10-2026 — Reglas: creación **interactiva** cuando el proyecto no tiene (≤7 propuestas con evidencia, una sola
+  pregunta; sin interfaz quedan como propuestas); "obligatorio" **por código** (inyección por ruta a quien edita,
+  planea o commitea) + `rules-checker` antes del verifier y de cada commit; si una regla impide algo pedido o viable,
+  se pregunta antes con 4 opciones.
 - 27-09-2026 — Código dentro del plugin; decisiones versionadas en `docs/decisions/`; "hecho" exige evidencia
   (`block`); indexar sesiones: sí; todo activado por defecto.
 - 27-09-2026 — No elegir entre tus agentes y los del plugin: quedarse con el mejor de cada papel (paso 2.1).
