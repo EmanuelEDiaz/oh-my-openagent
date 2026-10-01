@@ -1,5 +1,6 @@
 import type { PluginInput } from "@opencode-ai/plugin"
-import { HOOK_NAME, BLOCKED_TOOLS, PLANNING_CONSULT_WARNING, PLANNING_CONTEXT_OPEN, PROMETHEUS_WORKFLOW_REMINDER } from "./constants"
+import { HOOK_NAME, BLOCKED_TOOLS, PLANNING_CONSULT_WARNING, PLANNING_CONTEXT_OPEN, PROMETHEUS_WORKFLOW_REMINDER, WORKSPACE_REWRITE_TOOLS } from "./constants"
+import { extractTargetPaths } from "./target-paths"
 import { log } from "../../shared/logger"
 import { replaceToolArgs } from "../../shared/replace-tool-args"
 import { getAgentDisplayName } from "../../shared/agent-display-names"
@@ -37,16 +38,19 @@ export function createPrometheusMdOnlyHook(ctx: PluginInput) {
         return
       }
 
-      if (!BLOCKED_TOOLS.includes(toolName)) {
+      const normalizedTool = toolName.toLowerCase()
+      const rewritesWorkspace = WORKSPACE_REWRITE_TOOLS.includes(normalizedTool)
+      if (!rewritesWorkspace && !BLOCKED_TOOLS.includes(normalizedTool)) {
         return
       }
 
-      const filePath = (output.args.filePath ?? output.args.path ?? output.args.file) as string | undefined
-      if (!filePath) {
-        return
-      }
+      // Fail closed: a write whose targets cannot all be identified, or a workspace-wide rewrite, is blocked.
+      const targets = rewritesWorkspace ? [] : extractTargetPaths(output.args)
+      const filePath = rewritesWorkspace
+        ? `(workspace-wide ${toolName})`
+        : targets.find((target) => !isAllowedFile(target, ctx.directory)) ?? (targets.length === 0 ? "(no target path given)" : undefined)
 
-       if (!isAllowedFile(filePath, ctx.directory)) {
+       if (filePath !== undefined) {
          log(`[${HOOK_NAME}] Blocked: Prometheus can only write to .omo/*.md`, {
            sessionID: input.sessionID,
            tool: toolName,
@@ -61,12 +65,12 @@ export function createPrometheusMdOnlyHook(ctx: PluginInput) {
          )
        }
 
-      const normalizedPath = filePath.toLowerCase().replace(/\\/g, "/")
-      if (normalizedPath.includes(".omo/plans/") || normalizedPath.includes(".omo\\plans\\")) {
+      const writesPlan = targets.some((target) => target.toLowerCase().replace(/\\/g, "/").includes(".omo/plans/"))
+      if (writesPlan) {
         log(`[${HOOK_NAME}] Injecting workflow reminder for plan write`, {
           sessionID: input.sessionID,
           tool: toolName,
-          filePath,
+          targets,
           agent: agentName,
         })
         output.message = (output.message || "") + PROMETHEUS_WORKFLOW_REMINDER
@@ -75,7 +79,7 @@ export function createPrometheusMdOnlyHook(ctx: PluginInput) {
       log(`[${HOOK_NAME}] Allowed: .omo/*.md write permitted`, {
         sessionID: input.sessionID,
         tool: toolName,
-        filePath,
+        targets,
         agent: agentName,
       })
     },

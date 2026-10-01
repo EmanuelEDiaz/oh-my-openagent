@@ -427,3 +427,25 @@ describe("applyToolConfig", () => {
     })
   })
 })
+
+describe("Prometheus write permissions (fork 0.4)", () => {
+  it("#then denies shell and workspace-wide rewrite tools even when the agent config allowed them", () => {
+    // given
+    const params = createParams({ agents: ["prometheus"] })
+    ;(params.agentResult["prometheus"] as { permission: Record<string, unknown> }).permission = {
+      bash: "allow",
+      lsp_rename: "allow",
+      ast_grep_rewrite: "allow",
+    }
+
+    // when
+    applyToolConfig(params)
+
+    // then
+    const permission = (params.agentResult["prometheus"] as { permission: Record<string, unknown> }).permission
+    expect(permission.bash).toBe("deny")
+    expect(permission.interactive_bash).toBe("deny")
+    expect(permission.lsp_rename).toBe("deny")
+    expect(permission.ast_grep_rewrite).toBe("deny")
+  })
+})
