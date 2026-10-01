@@ -1,6 +1,6 @@
 # Pasos 0.3 y 0.4 — Robustez: agentes que desaparecen y escritura de Prometheus
 
-Parte del roadmap: `docs/fork/roadmap.md`. Estado: **0.3 hecho (01-10-2026); 0.4 en curso; 0.5 decidido**, investigado en vivo y en el código.
+Parte del roadmap: `docs/fork/roadmap.md`. Estado: **0.3 y 0.4 hechos (01-10-2026); 0.5 decidido**, investigado en vivo y en el código.
 Rutas: `S/` = `packages/omo-opencode/src/`, `MC/` = `packages/model-core/src/`.
 
 ## 0.3 — Ningún agente desaparece por no resolver su modelo
@@ -52,6 +52,20 @@ y, si no encuentra ruta, **deja pasar** (`hook.ts:44-47`).
 distinguir mayúsculas); extraer **todas** las rutas (incluidas las cabeceras `*** Add/Update/Delete File:` / `*** Move to:`
 de `apply_patch` y `rename`); **fallar cerrado** si no hay ruta; `lsp_rename: deny` en los permisos de Prometheus. Tests
 de cada vía y del permiso.
+
+**Resultado 0.4 (01-10-2026): hecho.**
+- Nombres de herramienta sin distinguir mayúsculas.
+- Se extraen **todas** las rutas destino (cabeceras de `apply_patch` add/update/delete/move, `rename`, entradas de
+  `multiedit`).
+- `lsp_rename` y `ast_grep_rewrite/replace` siempre bloqueados.
+- **Falla cerrado** sin ruta.
+- Permisos de Prometheus deniegan además `lsp_rename` y `ast_grep_rewrite`.
+- Un test del upstream que comprobaba "sin ruta → permitir" se invirtió a propósito.
+- QA en vivo no concluyente por el proveedor gratuito (403 intermitente "free tier can only be used from within
+  OpenCode"; ver evidencia en `.omo/evidence/20261001-prometheus-write-guard/`); la guarda queda demostrada por tests
+  deterministas con las formas reales de las llamadas.
+- **Hallazgo abierto**: el 403 del plan gratuito de Zen es intermitente y afectó a varios agentes; a vigilar en el banco
+  de pruebas (Fase 3) y en 0.5.
 
 ## 0.5 — Preferir modelos gratuitos sin imponerlos
 **Problema (QA de 0.3).** Con la caché de proveedores, la resolución automática asigna modelos de pago que el proveedor
