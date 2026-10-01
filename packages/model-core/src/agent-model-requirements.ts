@@ -150,7 +150,8 @@ export const AGENT_MODEL_REQUIREMENTS: Record<string, ModelRequirement> = {
       },
       { providers: ["opencode-go"], model: "minimax-m3" },
       { providers: ["minimax-coding-plan", "minimax-cn-coding-plan"], model: "MiniMax-M3" },
-      { providers: ["opencode-go"], model: "minimax-m2.7" }
+      { providers: ["opencode-go"], model: "minimax-m2.7" },
+      { providers: ["opencode"], model: "big-pickle" }
     ],
   },
   "sisyphus-junior": {

@@ -10,6 +10,7 @@ import { showConfigErrorsIfAny } from "./hook/config-errors-toast"
 import { updateAndShowConnectedProvidersCacheStatus } from "./hook/connected-providers-status"
 import { refreshModelCapabilitiesOnStartup } from "./hook/model-capabilities-status"
 import { showModelCacheWarningIfNeeded } from "./hook/model-cache-warning"
+import { showAgentRegistrationWarningIfNeeded } from "./hook/agent-registration-warning"
 import { showLocalDevToast, showVersionToast } from "./hook/startup-toasts"
 import { ignoreToastError } from "./hook/ignore-toast-error"
 
@@ -21,6 +22,7 @@ interface AutoUpdateCheckerDeps {
   updateAndShowConnectedProvidersCacheStatus: typeof updateAndShowConnectedProvidersCacheStatus
   refreshModelCapabilitiesOnStartup: typeof refreshModelCapabilitiesOnStartup
   showModelCacheWarningIfNeeded: typeof showModelCacheWarningIfNeeded
+  showAgentRegistrationWarningIfNeeded?: typeof showAgentRegistrationWarningIfNeeded
   showLocalDevToast: typeof showLocalDevToast
   showVersionToast: typeof showVersionToast
   runBackgroundUpdateCheck: typeof runBackgroundUpdateCheck
@@ -37,6 +39,7 @@ const defaultDeps: AutoUpdateCheckerDeps = {
   updateAndShowConnectedProvidersCacheStatus,
   refreshModelCapabilitiesOnStartup,
   showModelCacheWarningIfNeeded,
+  showAgentRegistrationWarningIfNeeded,
   showLocalDevToast,
   showVersionToast,
   runBackgroundUpdateCheck,
@@ -108,6 +111,7 @@ export function createAutoUpdateCheckerHook(
           await deps.updateAndShowConnectedProvidersCacheStatus(ctx)
           await deps.refreshModelCapabilitiesOnStartup(modelCapabilities)
           await deps.showModelCacheWarningIfNeeded(ctx)
+          await deps.showAgentRegistrationWarningIfNeeded?.(ctx)
 
           if (localDevVersion) {
             if (showStartupToast) {

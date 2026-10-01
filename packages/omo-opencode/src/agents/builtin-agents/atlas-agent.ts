@@ -5,7 +5,8 @@ import type { AvailableAgent, AvailableSkill } from "../dynamic-agent-prompt-bui
 import { AGENT_MODEL_REQUIREMENTS } from "../../shared"
 import { log } from "../../shared/logger"
 import { applyOverrides } from "./agent-overrides"
-import { applyModelResolution, keepFallbackOverRetiredModel, userFallbackModelIds } from "./model-resolution"
+import { applyModelResolution, getConnectedFallbackModel, keepFallbackOverRetiredModel, userFallbackModelIds } from "./model-resolution"
+import { recordAgentRegistrationIssue } from "../../shared/agent-registration-report"
 import { createAtlasAgent } from "../atlas"
 
 export function maybeCreateAtlasConfig(input: {
@@ -20,6 +21,7 @@ export function maybeCreateAtlasConfig(input: {
   directory?: string
   userCategories?: CategoriesConfig
   useTaskSystem?: boolean
+  connectedProviders?: readonly string[]
 }): AgentConfig | undefined {
   const {
     disabledAgents,
@@ -55,13 +57,20 @@ export function maybeCreateAtlasConfig(input: {
   }
 
   if (!atlasResolution) {
-    log("[agent-registration] Agent skipped: model resolution returned no result", {
-      agent: "atlas",
-      configuredModel: orchestratorOverride?.model,
-    })
-    return undefined
+    atlasResolution = getConnectedFallbackModel(atlasRequirement, input.connectedProviders ?? [], availableModels)
   }
-  const { model: atlasModel, variant: atlasResolvedVariant } = atlasResolution
+
+  if (!atlasResolution) {
+    // Never drop the orchestrator: register it without a model so OpenCode runs it on the session model.
+    log("[agent-registration] Agent degraded: no model resolved, using the session model", { agent: "atlas" })
+    recordAgentRegistrationIssue({
+      agent: "atlas",
+      status: "degraded",
+      detail: "no configured or connected model; runs on the session model (set agents.atlas.model or use /omo-models)",
+    })
+  }
+  const atlasModel = atlasResolution?.model
+  const atlasResolvedVariant = atlasResolution?.variant
 
   let orchestratorConfig = createAtlasAgent({
     model: atlasModel,
@@ -75,7 +84,9 @@ export function maybeCreateAtlasConfig(input: {
   }
 
   orchestratorConfig = applyOverrides(orchestratorConfig, orchestratorOverride, mergedCategories, directory)
-  orchestratorConfig = keepFallbackOverRetiredModel(orchestratorConfig, atlasResolution, orchestratorOverride?.model)
+  if (atlasResolution) {
+    orchestratorConfig = keepFallbackOverRetiredModel(orchestratorConfig, atlasResolution, orchestratorOverride?.model)
+  }
 
   return orchestratorConfig
 }

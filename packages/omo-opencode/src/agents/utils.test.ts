@@ -661,7 +661,7 @@ describe("createBuiltinAgents without systemDefaultModel", () => {
      fetchSpy.mockRestore()
    })
 
-  test("oracle is created on first run when no cache and no systemDefaultModel", async () => {
+  test("oracle is created on first run when no cache and no systemDefaultModel, on the session model (fork 0.3)", async () => {
     // #given
     const cacheSpy = spyOn(connectedProvidersCache, "readConnectedProvidersCache").mockReturnValue(null)
     const fetchSpy = spyOn(shared, "fetchAvailableModels").mockResolvedValue(new Set())
@@ -672,7 +672,7 @@ describe("createBuiltinAgents without systemDefaultModel", () => {
 
       // #then
       expect(agents.oracle).toBeDefined()
-      expect(agents.oracle.model).toBe("openai/gpt-5.6-sol")
+      expect(agents.oracle.model).toBeUndefined()
     } finally {
       fetchSpy.mockRestore()
       cacheSpy.mockRestore()
@@ -1046,7 +1046,7 @@ describe("createBuiltinAgents with requiresAnyModel gating (sisyphus)", () => {
     }
   })
 
-  test("sisyphus is not created when no fallback model is available and provider not connected", async () => {
+  test("sisyphus is degraded to the session model (not dropped) when no fallback model is available (fork 0.3)", async () => {
     // #given - only venice/deepseek-v3.2 available, not in sisyphus fallback chain
     const fetchSpy = spyOn(shared, "fetchAvailableModels").mockResolvedValue(
       new Set(["venice/deepseek-v3.2"])
@@ -1058,7 +1058,8 @@ describe("createBuiltinAgents with requiresAnyModel gating (sisyphus)", () => {
       const agents = await createBuiltinAgents([], {}, undefined, TEST_DEFAULT_MODEL, undefined, undefined, [], {})
 
       // #then
-      expect(agents.sisyphus).toBeUndefined()
+      expect(agents.sisyphus).toBeDefined()
+      expect(agents.sisyphus.model).toBeUndefined()
     } finally {
       fetchSpy.mockRestore()
       cacheSpy.mockRestore()
@@ -1129,8 +1130,8 @@ describe("createBuiltinAgents with requiresAnyModel gating (sisyphus)", () => {
       // #then
       expect(agents.atlas).toMatchObject({ model: "openai/gpt-5.6-sol", variant: "medium" })
       expect(agents.metis).toBeDefined()
-      expect(agents.metis.model).toBe("anthropic/claude-fable-5-1")
-      expect(agents.metis.variant).toBe("max")
+      // fork 0.3: an unconnected chain head (anthropic) is no longer assigned; metis runs on the session model
+      expect(agents.metis.model).toBeUndefined()
     } finally {
       fetchSpy.mockRestore()
       cacheSpy.mockRestore()

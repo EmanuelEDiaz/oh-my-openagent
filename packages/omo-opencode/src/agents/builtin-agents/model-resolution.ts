@@ -37,6 +37,38 @@ export function getFirstFallbackModel(requirement?: {
 }
 
 /**
+ * Last resort after the pipeline: the first chain entry served by a provider the user actually connected. Unlike
+ * getFirstFallbackModel it never picks a provider the user has no credentials for; with no provider cache yet it
+ * returns nothing, and the caller registers the agent without a model instead (fork roadmap 0.3).
+ */
+export function getConnectedFallbackModel(
+  requirement: { fallbackChain?: { providers: string[]; model: string; variant?: string }[] } | undefined,
+  connectedProviders: readonly string[],
+  availableModels: ReadonlySet<string> = new Set(),
+) {
+  if (connectedProviders.length === 0) return undefined
+  for (const entry of requirement?.fallbackChain ?? []) {
+    for (const provider of entry.providers.filter((candidate) => connectedProviders.includes(candidate))) {
+      const model = `${provider}/${transformModelForProvider(provider, entry.model)}`
+      // When the model list is known, a connected provider is not enough: the model must be listed (a free-tier
+      // account lists no paid models). With no list yet, trust the connected provider.
+      if (availableModels.size > 0 && !availableModels.has(model)) continue
+      return {
+        model,
+        provenance: "provider-fallback" as const,
+        variant: entry.variant,
+      }
+    }
+  }
+  return undefined
+}
+
+/** Model id used only to pick a prompt variant for an agent registered without a model. */
+export function promptModelHint(requirement?: { fallbackChain?: { providers: string[]; model: string }[] }): string {
+  return getFirstFallbackModel(requirement)?.model ?? ""
+}
+
+/**
  * Agent overrides are merged after resolution and would copy the configured `model` back on top.
  * When resolution skipped that model because its provider no longer lists it, keep the fallback.
  */

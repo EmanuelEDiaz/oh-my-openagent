@@ -6,7 +6,8 @@ import { AGENT_MODEL_REQUIREMENTS, isAnyFallbackModelAvailable } from "../../sha
 import { log } from "../../shared/logger"
 import { applyEnvironmentContext } from "./environment-context"
 import { applyOverrides } from "./agent-overrides"
-import { applyModelResolution, keepFallbackOverRetiredModel, userFallbackModelIds, getFirstFallbackModel } from "./model-resolution"
+import { applyModelResolution, getConnectedFallbackModel, keepFallbackOverRetiredModel, promptModelHint, userFallbackModelIds } from "./model-resolution"
+import { recordAgentRegistrationIssue } from "../../shared/agent-registration-report"
 import { createSisyphusAgent } from "../sisyphus"
 import { applyFrontierToolSchemaPermission } from "../frontier-tool-schema-guard"
 import { setSisyphusRuntimePromptContext } from "../sisyphus-runtime-prompt-reconciler"
@@ -26,6 +27,7 @@ export function maybeCreateSisyphusConfig(input: {
   userCategories?: CategoriesConfig
   useTaskSystem: boolean
   disableOmoEnv?: boolean
+  connectedProviders?: readonly string[]
 }): AgentConfig | undefined {
   const {
     disabledAgents,
@@ -52,14 +54,9 @@ export function maybeCreateSisyphusConfig(input: {
     isFirstRunNoCache ||
     isAnyFallbackModelAvailable(sisyphusRequirement.fallbackChain, availableModels)
 
-  if (!disabledAgents.includes("sisyphus") && !meetsSisyphusAnyModelRequirement) {
-    log("[agent-registration] Agent skipped: no model in fallback chain is available", {
-      agent: "sisyphus",
-    })
-  }
-  if (disabledAgents.includes("sisyphus") || !meetsSisyphusAnyModelRequirement) return undefined
+  if (disabledAgents.includes("sisyphus")) return undefined
 
-  let sisyphusResolution = applyModelResolution({
+  let sisyphusResolution = !meetsSisyphusAnyModelRequirement ? undefined : applyModelResolution({
     uiSelectedModel: sisyphusOverride?.model !== undefined ? undefined : uiSelectedModel,
     userModel: sisyphusOverride?.model,
     userFallbackModels: userFallbackModelIds(sisyphusOverride?.fallback_models),
@@ -68,18 +65,22 @@ export function maybeCreateSisyphusConfig(input: {
     systemDefaultModel,
   })
 
-  if (isFirstRunNoCache && !sisyphusOverride?.model && !uiSelectedModel) {
-    sisyphusResolution = getFirstFallbackModel(sisyphusRequirement)
+  if (!sisyphusResolution) {
+    sisyphusResolution = getConnectedFallbackModel(sisyphusRequirement, input.connectedProviders ?? [], availableModels)
   }
 
   if (!sisyphusResolution) {
-    log("[agent-registration] Agent skipped: model resolution returned no result", {
+    // The main orchestrator is never dropped: it runs on the session model and the user is told why.
+    log("[agent-registration] Agent degraded: no model resolved, using the session model", { agent: "sisyphus" })
+    recordAgentRegistrationIssue({
       agent: "sisyphus",
-      configuredModel: sisyphusOverride?.model,
+      status: "degraded",
+      detail: "no configured or connected model; runs on the session model (set agents.sisyphus.model or use /omo-models)",
     })
-    return undefined
   }
-  const { model: sisyphusModel, variant: sisyphusResolvedVariant } = sisyphusResolution
+  // A degraded Sisyphus still needs a model id to pick its prompt; the runtime reconciler rebuilds it for the real one.
+  const sisyphusModel = sisyphusResolution?.model ?? promptModelHint(sisyphusRequirement)
+  const sisyphusResolvedVariant = sisyphusResolution?.variant
 
   let sisyphusConfig = createSisyphusAgent(
     sisyphusModel,
@@ -95,7 +96,12 @@ export function maybeCreateSisyphusConfig(input: {
   }
 
   sisyphusConfig = applyOverrides(sisyphusConfig, sisyphusOverride, mergedCategories, directory)
-  sisyphusConfig = keepFallbackOverRetiredModel(sisyphusConfig, sisyphusResolution, sisyphusOverride?.model)
+  if (sisyphusResolution) {
+    sisyphusConfig = keepFallbackOverRetiredModel(sisyphusConfig, sisyphusResolution, sisyphusOverride?.model)
+  } else if (sisyphusOverride?.model === undefined) {
+    const { model: _promptOnlyModel, ...withoutModel } = sisyphusConfig
+    sisyphusConfig = withoutModel
+  }
 
   const resolvedModel = sisyphusConfig.model ?? ""
   sisyphusConfig.permission = applyFrontierToolSchemaPermission(

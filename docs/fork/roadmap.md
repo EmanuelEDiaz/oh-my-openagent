@@ -88,7 +88,7 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
 |---|---|---|---|
 | 0.1 | Worktrees seguros: no borrar nunca rutas que omo no creó; worktrees reales con git; no borrar trabajo sin guardar. | **hecho** (27-09-2026, rama `fix/team-worktree-safety`) | `plans/knowledge-base-and-worktrees.md` (Pieza 4) |
 | 0.2 | Borrar equipos desde otra ejecución: `team_delete` exige la sesión líder pero ese registro vive en memoria y se pierde entre procesos (`opencode run`), dejando equipos y worktrees huérfanos. Hallado en la QA de 0.1. | **hecho** (29-09-2026): mensaje con la sesión líder y cómo seguir; CLI `team list` / `team delete [--force] [--dry-run]`; cualquier sesión puede forzar el borrado de equipos huérfanos o atascados. `plans/team-delete-cross-process.md` |
-| 0.3 | **Ningún agente desaparece por su modelo**: Atlas se descarta sin aviso en el primer arranque o sin modelos de su cadena, y otros arrancan con modelos de pago sin credencial. Degradar (registrar sin modelo → usa el de la sesión) + aviso visible + big-pickle en la cadena de Atlas. `plans/robustness-fixes.md` | plan (afecta a la instalación real) |
+| 0.3 | **Ningún agente desaparece por su modelo**: Atlas se descarta sin aviso en el primer arranque o sin modelos de su cadena, y otros arrancan con modelos de pago sin credencial. Degradar (registrar sin modelo → usa el de la sesión) + aviso visible + big-pickle en la cadena de Atlas. `plans/robustness-fixes.md` | **hecho** (01-10-2026); hallazgo: con caché se eligen modelos de pago que fallan en cuentas gratuitas → propuesta "solo modelos gratuitos" |
 | 0.4 | **Prometheus solo escribe `.omo/*.md`**: hoy `apply_patch`, `hashline_edit rename` y `lsp_rename` lo esquivan y sin ruta deja pasar. Bloquear todas las vías y fallar cerrado. `plans/robustness-fixes.md` | plan |
 
 ## Fase 1 — Fundamento: índice, citas de chat y decisiones
@@ -132,6 +132,7 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
   (`block`); indexar sesiones: sí; todo activado por defecto.
 - 27-09-2026 — No elegir entre tus agentes y los del plugin: quedarse con el mejor de cada papel (paso 2.1).
 - 27-09-2026 — Añadido 1.6: la compactación no debe perder peticiones, restricciones, decisiones ni pendientes.
+- 01-10-2026 — 0.3 hecho: ningún agente desaparece por su modelo; aviso al arrancar.
 - 29-09-2026 — Investigados los hallazgos de la QA de 2.2 y dos problemas nuevos del usuario: añadidos 0.3, 0.4, 2.10 y 2.11; ampliados 2.4 y 2.6; corregido que `knowledge_open` mostraba secretos.
 - 29-09-2026 — 2.2 hecho; QA real (corregida: la prueba del `verifier` con `opencode run --agent` caía a Sisyphus; los especialistas se prueban por delegación): el formato de salida de los especialistas necesita comprobación por código (2.6) y queda para 2.4 decidir si el orquestador puede hacer lecturas pequeñas sin delegar.
 - 29-09-2026 — Misión del fork fijada; añadido 2.9 (absorber la biblioteca con criterio "solo lo mejor"); `@planning`/`@running` y los 4 revisores del usuario se archivan: sus reglas útiles ya están absorbidas o planificadas, el resto se descarta.

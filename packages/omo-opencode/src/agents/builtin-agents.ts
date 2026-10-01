@@ -29,6 +29,7 @@ import { collectPendingBuiltinAgents } from "./builtin-agents/general-agents"
 import { maybeCreateSisyphusConfig } from "./builtin-agents/sisyphus-agent"
 import { maybeCreateHephaestusConfig } from "./builtin-agents/hephaestus-agent"
 import { maybeCreateAtlasConfig } from "./builtin-agents/atlas-agent"
+import { resetAgentRegistrationReport } from "../shared/agent-registration-report"
 
 type AgentSource = AgentFactory | AgentConfig
 
@@ -80,6 +81,7 @@ export async function createBuiltinAgents(
   teamModeEnabled = false,
 ): Promise<Record<string, AgentConfig>> {
 
+  resetAgentRegistrationReport()
   const connectedProviders = readConnectedProvidersCache()
   const providerModelsConnected = connectedProviders
     ? (readProviderModelsCache()?.connected ?? [])
@@ -131,6 +133,7 @@ export async function createBuiltinAgents(
   ]
 
   const sisyphusConfig = maybeCreateSisyphusConfig({
+    connectedProviders: mergedConnectedProviders,
     disabledAgents,
     agentOverrides,
     uiSelectedModel,
@@ -151,6 +154,7 @@ export async function createBuiltinAgents(
   }
 
   const hephaestusConfig = maybeCreateHephaestusConfig({
+    connectedProviders: mergedConnectedProviders,
     disabledAgents,
     agentOverrides,
     availableModels,
@@ -174,6 +178,7 @@ export async function createBuiltinAgents(
   }
 
   const atlasConfig = maybeCreateAtlasConfig({
+    connectedProviders: mergedConnectedProviders,
     disabledAgents,
     agentOverrides,
     uiSelectedModel,
