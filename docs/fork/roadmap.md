@@ -134,7 +134,7 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 
 | Paso | Agente(s) | Incluye | Estado |
 |---|---|---|---|
-| 4.1 | `explore` | lectura de código eficiente (antes 2.8): `repo_map`, `code_outline`, `read_symbol`, `callers`, Graphify opcional | pendiente |
+| 4.1 | `explore` | lectura de código eficiente (antes 2.8): 3 herramientas `code_map`, `code_symbols` (esquema + lectura de un símbolo), `code_callers`; motor ast-grep ya descargado + LSP (decidido 01-10-2026); Graphify opcional como pistas; procedimiento fijo en el prompt; `bash` de solo lectura; banco de 24 tareas (7 reservadas) en el fork, `ts-service` y 2 repos públicos | en curso — `plans/explore.md` |
 | 4.2 | `librarian` + `api-lookup` | investigación web (antes 2.3): búsqueda gratuita, docs oficiales primero, citas literales verificadas, versión instalada | pendiente |
 | 4.3 | `memory` | calidad del recuerdo de decisiones y chats; ocultación de secretos en el índice | pendiente |
 | 4.4 | `verifier` | contrato `<report>` comprobado en ejecución (resto de 2.6), estado `FLAKY`, comparación con la base | pendiente |
@@ -169,6 +169,7 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 - ~~Reglas de lenguaje/framework cargadas bajo demanda~~ — absorbido en 4.5 (antes 2.9), 29-09-2026.
 
 ## Registro de decisiones del roadmap
+- 01-10-2026 — 4.1: motor de símbolos ast-grep (ya descargado por el plugin) + LSP, sin dependencias nuevas, detrás de una interfaz para poder cambiarlo; 3 herramientas en vez de 4–6 (menos herramientas = menos errores en modelos pequeños); repos de prueba: fork + ts-service + 2 públicos (Python, Go).
 - 01-10-2026 — 3.0 hecho. Siguiente: 4.1 `explore` (tareas 15–30 con conjunto reservado, lectura eficiente de código).
 - 01-10-2026 — 0.7 hecho. Descartado filtrar la cadena de reintentos de la delegación (rompía modelos con variante y no aporta con el modelo inicial ya válido). El banco (3.0) calienta la caché del plugin antes de las tareas.
 - 01-10-2026 — 0.7 añadido y priorizado antes del piloto de 3.0: el piloto mostró que 4 modelos gratuitos configurados (`deepseek-v4-flash-free`, `mimo-v2.5-free`, `north-mini-code-free`, `laguna-s-2.1-free`) están `deprecated` y OpenCode los borra; `explore` y `librarian` no pueden ejecutarse. El usuario cambia los modelos con `/omo-models`; el plugin se protege con 0.7.
