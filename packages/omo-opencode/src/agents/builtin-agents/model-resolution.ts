@@ -1,5 +1,6 @@
 import { normalizeFallbackModels, resolveModelPipeline } from "../../shared"
 import { transformModelForProvider } from "../../shared/provider-model-id-transform"
+import { isPaidModel } from "../../shared/free-model-preference"
 
 /** Plain `provider/model` ids of the user's configured fallbacks (per-entry settings are applied later). */
 export function userFallbackModelIds(fallbackModels: Parameters<typeof normalizeFallbackModels>[0]): string[] | undefined {
@@ -53,6 +54,7 @@ export function getConnectedFallbackModel(
       // When the model list is known, a connected provider is not enough: the model must be listed (a free-tier
       // account lists no paid models). With no list yet, trust the connected provider.
       if (availableModels.size > 0 && !availableModels.has(model)) continue
+      if (isPaidModel(model)) continue
       return {
         model,
         provenance: "provider-fallback" as const,

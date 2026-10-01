@@ -1,6 +1,6 @@
 # Pasos 0.3 y 0.4 — Robustez: agentes que desaparecen y escritura de Prometheus
 
-Parte del roadmap: `docs/fork/roadmap.md`. Estado: **0.3 y 0.4 hechos (01-10-2026); 0.5 decidido**, investigado en vivo y en el código.
+Parte del roadmap: `docs/fork/roadmap.md`. Estado: **0.3, 0.4 y 0.5 hechos (01-10-2026)**, investigado en vivo y en el código.
 Rutas: `S/` = `packages/omo-opencode/src/`, `MC/` = `packages/model-core/src/`.
 
 ## 0.3 — Ningún agente desaparece por no resolver su modelo
@@ -86,6 +86,18 @@ cuenta gratuita fallan ("Insufficient account funds").
   - con la preferencia activa, Sisyphus/Atlas no reciben `opencode/claude-*` de la cadena;
   - un modelo de pago elegido en `/omo-models` se respeta;
   - sin datos de coste no se descarta nada.
+
+**Resultado 0.5 (01-10-2026): hecho.**
+- Opción `prefer_free_models`, que filtra solo las elecciones automáticas:
+  - la cadena de `model-core`;
+  - los modelos por defecto de categorías integradas y su cadena en `delegate-core`;
+  - el respaldo por proveedor conectado.
+- Lo elegido por el usuario nunca se filtra.
+- "De pago" = precio distinto de 0 en la caché de OpenCode, o sin precio pero de un proveedor sin ningún modelo gratuito
+  (p. ej. openai). Locales (ollama) y `*-free` nunca.
+- QA real: ningún agente recibe un modelo de pago automáticamente y la elección de pago del usuario se respeta.
+- Activado en `~/.omo/omo.jsonc` del usuario, con copia de seguridad.
+- Evidencia: `.omo/evidence/20261001-prefer-free-models/`.
 
 ## Otros hallazgos (sin paso propio)
 - Tests del upstream no aislados de la máquina (`codex-components.test.ts` asume que `sg` no está instalado;

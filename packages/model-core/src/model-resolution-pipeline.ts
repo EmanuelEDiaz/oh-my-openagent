@@ -40,6 +40,11 @@ export type ModelResolutionRequest = {
   policy?: {
     fallbackChain?: FallbackEntry[]
     systemDefaultModel?: string
+    /**
+     * When set, the automatic fallback chain skips models this returns true for (fork: "prefer free models").
+     * Explicit user choices (intent) and the system default are never filtered.
+     */
+    isPaidModel?: (model: string) => boolean
   }
 }
 
@@ -129,6 +134,7 @@ export function resolveModelPipeline(
   const availableModels = constraints.availableModels
   const fallbackChain = policy?.fallbackChain
   const systemDefaultModel = policy?.systemDefaultModel
+  const isPaidModel = policy?.isPaidModel ?? (() => false)
 
   const normalizedUiModel = normalizeModel(intent?.uiSelectedModel)
   if (normalizedUiModel) {
@@ -245,6 +251,7 @@ export function resolveModelPipeline(
               const entryModelID = modelIDForProvider(provider, entry.model)
               const transformedModelId = deps.transformModelForProvider(provider, entryModelID)
               const model = `${provider}/${transformedModelId}`
+              if (isPaidModel(model)) continue
               log("Model resolved via fallback chain (connected provider)", {
                 provider,
                 model: transformedModelId,
@@ -272,7 +279,7 @@ export function resolveModelPipeline(
           for (const modelID of candidateModelIds) {
             const fullModel = `${provider}/${modelID}`
             const match = deps.fuzzyMatchModel(fullModel, availableModels, [provider])
-            if (match) {
+            if (match && !isPaidModel(match)) {
               log("Model resolved via fallback chain (availability confirmed)", {
                 provider,
                 model: entry.model,

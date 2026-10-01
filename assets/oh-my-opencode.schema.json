@@ -9222,6 +9222,9 @@
       ],
       "additionalProperties": false
     },
+    "prefer_free_models": {
+      "type": "boolean"
+    },
     "ralph_loop": {
       "type": "object",
       "propertyNames": {
