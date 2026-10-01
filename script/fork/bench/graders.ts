@@ -5,7 +5,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs"
 import { isAbsolute, relative, resolve } from "node:path"
 
-import type { Budget, GradeContext, Grader, GradeResult } from "./types"
+import type { Budget, GradeContext, Grader, GradeResult, Task } from "./types"
 
 /** Ordered section markers of an answer format. */
 export type ContractFormat = { readonly name: string; readonly sections: readonly RegExp[] }
@@ -101,17 +101,34 @@ function lineCount(file: string): number {
   return content.endsWith("\n") ? content.split("\n").length - 1 : content.split("\n").length
 }
 
-function citationProblem(citation: Citation, workdir: string): string | undefined {
-  const file = isAbsolute(citation.path) ? citation.path : resolve(workdir, citation.path)
-  const inside = relative(workdir, file)
-  if (inside.startsWith("..") || isAbsolute(inside)) return "outside the repo"
-  if (!existsSync(file)) return "no such file"
+function lineProblem(citation: Citation, file: string): string | undefined {
   if (citation.line === undefined) return undefined
   if (!statSync(file).isFile()) return "not a file"
   const lines = lineCount(file)
   const last = citation.endLine ?? citation.line
   if (citation.line < 1 || last > lines || last < citation.line) return `file has ${lines} lines`
   return undefined
+}
+
+/** Repo files with this exact name: agents often cite `retry.ts:4` without the directory. */
+function filesNamed(name: string, workdir: string): string[] {
+  return [...new Bun.Glob(`**/${name}`).scanSync({ cwd: workdir, onlyFiles: true })]
+    .filter((path) => !path.startsWith(".git/") && !path.includes("node_modules/"))
+    .map((path) => resolve(workdir, path))
+}
+
+function citationProblem(citation: Citation, workdir: string): string | undefined {
+  if (!citation.path.includes("/")) {
+    const candidates = filesNamed(citation.path, workdir)
+    if (candidates.length === 0) return "no such file"
+    const problems = candidates.map((file) => lineProblem(citation, file))
+    return problems.includes(undefined) ? undefined : problems[0]
+  }
+  const file = isAbsolute(citation.path) ? citation.path : resolve(workdir, citation.path)
+  const inside = relative(workdir, file)
+  if (inside.startsWith("..") || isAbsolute(inside)) return "outside the repo"
+  if (!existsSync(file)) return "no such file"
+  return lineProblem(citation, file)
 }
 
 /** Every `path` or `path:line[-line]` the answer cites exists in the workdir. */
@@ -211,4 +228,9 @@ export function withinBudget(budget: Budget): Grader {
       return result(name, over.length === 0, over.length === 0 ? `${tokens} tokens, ${transcript.turns} turns` : over.join("; "))
     },
   }
+}
+
+/** Every grader a task is scored with: the automatic ones plus its own. */
+export function gradersFor(task: Task): Grader[] {
+  return [...(task.mode === "subtask" ? [ranAs(task.agent)] : []), withinBudget(task.budget), ...task.expect]
 }

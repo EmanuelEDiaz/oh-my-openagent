@@ -1,7 +1,7 @@
 /** Runs one bench task against the sandboxed OpenCode and grades what really happened in the session. */
 import { createOpencodeClient } from "@opencode-ai/sdk/v2"
 
-import { ranAs, withinBudget } from "./graders"
+import { gradersFor } from "./graders"
 import { createStallDetector, progressSignature } from "./progress"
 import { prepareWorkdir, type Sandbox } from "./sandbox"
 import { classifyFailure } from "./score"
@@ -120,7 +120,7 @@ export type RunOptions = {
 export async function runTask(task: Task, options: RunOptions): Promise<RunResult> {
   const name = `${task.id.replaceAll("/", "_")}-r${options.repeat}-a${options.attempt}`
   const workdir = prepareWorkdir(options.sandbox, options.fixtureDir, name)
-  const base = { taskId: task.id, repeat: options.repeat, attempt: options.attempt }
+  const base = { taskId: task.id, repeat: options.repeat, attempt: options.attempt, workdir }
   let transcript: Transcript
   try {
     const client = createOpencodeClient({ baseUrl: options.baseUrl, directory: workdir })
@@ -134,8 +134,7 @@ export async function runTask(task: Task, options: RunOptions): Promise<RunResul
     return { ...base, failure: "infra", grades: [], transcript, error: transcript.error }
   }
   const context: GradeContext = { transcript, workdir, ...(options.fetchStatus ? { fetchStatus: options.fetchStatus } : {}) }
-  const graders = [...(task.mode === "subtask" ? [ranAs(task.agent)] : []), withinBudget(task.budget), ...task.expect]
-  const grades = await Promise.all(graders.map((grader) => grader.grade(context)))
+  const grades = await Promise.all(gradersFor(task).map((grader) => grader.grade(context)))
   const pass = transcript.error === undefined && grades.every((grade) => grade.pass)
   return { ...base, pass, ...(pass ? {} : { failure: "task" as const }), grades, transcript, ...(transcript.error === undefined ? {} : { error: transcript.error }) }
 }

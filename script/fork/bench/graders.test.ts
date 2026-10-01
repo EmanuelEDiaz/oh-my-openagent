@@ -101,6 +101,12 @@ describe("citationsExist", () => {
     expect((await citationsExist().grade(context({ answer }))).pass).toBe(true)
   })
 
+  test("a bare file name with a line is checked against the repo file with that name", async () => {
+    expect((await citationsExist().grade(context({ answer: "see a.ts:3 and `a.ts:1`" }))).pass).toBe(true)
+    expect((await citationsExist().grade(context({ answer: "see a.ts:9" }))).pass).toBe(false)
+    expect((await citationsExist().grade(context({ answer: "see nope.ts:1" }))).pass).toBe(false)
+  })
+
   test("requiring at least one citation fails an answer that cites nothing", async () => {
     expect((await citationsExist({ min: 1 }).grade(context({ answer: "no sources" }))).pass).toBe(false)
   })

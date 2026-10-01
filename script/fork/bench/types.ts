@@ -75,4 +75,6 @@ export type RunResult = {
   readonly grades: readonly GradeResult[]
   readonly transcript?: Transcript
   readonly error?: string
+  /** Where the agent worked: lets `regrade.ts` map its absolute paths onto a fresh copy of the fixture. */
+  readonly workdir?: string
 }
