@@ -1,3 +1,4 @@
+import { setPreferFreeModels } from "../shared/free-model-preference";
 import { createBuiltinAgents } from "../agents";
 import { collectDisabledSkillAliases } from "../plugin/skill-context";
 import { isTaskSystemEnabled } from "../shared";
@@ -22,6 +23,7 @@ export async function applyAgentConfig(
   const disabledSkills = collectDisabledSkillAliases(params.pluginConfig);
   const useTaskSystem = isTaskSystemEnabled(params.pluginConfig);
   const disableOmoEnv = params.pluginConfig.experimental?.disable_omo_env ?? false;
+  setPreferFreeModels(params.pluginConfig.prefer_free_models === true);
   const builtinAgents = await createBuiltinAgents(
     migratedDisabledAgents,
     params.pluginConfig.agents,

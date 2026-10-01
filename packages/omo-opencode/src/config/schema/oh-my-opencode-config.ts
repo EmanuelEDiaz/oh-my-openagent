@@ -72,6 +72,11 @@ export const OhMyOpenCodeConfigSchema = z.object({
   skills: SkillsConfigSchema.optional(),
   goal: GoalConfigSchema.optional(),
   knowledge: KnowledgeConfigSchema.optional(),
+  /**
+   * Prefer free models for automatic picks (fallback chains, builtin category defaults). Models chosen in /omo-models
+   * or in agents/categories config always win, even when paid.
+   */
+  prefer_free_models: z.boolean().optional(),
   /** Deprecated compatibility shim. Old \`ralph_loop\` key is parsed and migrated to \`goal\` in validate.ts. */
   ralph_loop: z.record(z.string(), z.unknown()).optional(),
   /**

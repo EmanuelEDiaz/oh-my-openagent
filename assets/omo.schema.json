@@ -11538,6 +11538,9 @@
           ],
           "additionalProperties": false
         },
+        "prefer_free_models": {
+          "type": "boolean"
+        },
         "ralph_loop": {
           "type": "object",
           "propertyNames": {
@@ -29549,6 +29552,9 @@
                   "max_index_mb"
                 ],
                 "additionalProperties": false
+              },
+              "prefer_free_models": {
+                "type": "boolean"
               },
               "ralph_loop": {
                 "type": "object",

@@ -5,6 +5,7 @@ import {
 } from "@oh-my-opencode/delegate-core"
 import * as connectedProvidersCache from "../../shared/connected-providers-cache"
 import { log } from "../../shared/logger"
+import { paidModelCheck } from "../../shared/free-model-preference"
 
 export type { DelegateModelResolutionInput, DelegateModelResolutionResult }
 
@@ -18,5 +19,6 @@ export function resolveModelForDelegateTask(input: DelegateModelResolutionInput)
     hasProviderModelsCache: connectedProvidersCache.hasProviderModelsCache(),
     hasConnectedProvidersCache: connectedProvidersCache.hasConnectedProvidersCache(),
     log,
+    isPaidModel: paidModelCheck(),
   })
 }

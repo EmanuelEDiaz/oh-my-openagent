@@ -34,6 +34,11 @@ export type DelegateModelResolutionDeps = {
   readonly hasProviderModelsCache: boolean
   readonly hasConnectedProvidersCache: boolean
   readonly log?: (message: string, metadata?: Record<string, unknown>) => void
+  /**
+   * Fork "prefer free models": automatic picks (builtin category defaults and the fallback chain) skip models this
+   * returns true for. Models the user chose (user model, user category model, user fallback_models) are never filtered.
+   */
+  readonly isPaidModel?: (model: string) => boolean
 }
 
 function modelIDForProvider(provider: string, model: string): string {
@@ -136,7 +141,11 @@ export function resolveModelForDelegateTask(
     return { skipped: true }
   }
 
-  const categoryDefault = normalizeModel(input.categoryDefaultModel)
+  const isPaidModel = deps.isPaidModel ?? (() => false)
+  const rawCategoryDefault = normalizeModel(input.categoryDefaultModel)
+  const categoryDefault = rawCategoryDefault && !input.isUserConfiguredCategoryModel && isPaidModel(rawCategoryDefault)
+    ? undefined
+    : rawCategoryDefault
   const explicitHighBaseModel = categoryDefault ? getExplicitHighBaseModel(categoryDefault) : null
   const explicitHighModel = explicitHighBaseModel ? categoryDefault : undefined
   if (categoryDefault) {
@@ -212,7 +221,7 @@ export function resolveModelForDelegateTask(
         const connectedSet = new Set(connectedProviders)
         for (const entry of fallbackChain) {
           for (const provider of entry.providers) {
-            if (connectedSet.has(provider)) {
+            if (connectedSet.has(provider) && !isPaidModel(`${provider}/${transformModelForProvider(provider, modelIDForProvider(provider, entry.model))}`)) {
               const transformedModelId = transformModelForProvider(provider, modelIDForProvider(provider, entry.model))
               deps.log?.("[resolveModelForDelegateTask] fallback chain resolved via connected provider", {
                 provider,
@@ -237,7 +246,7 @@ export function resolveModelForDelegateTask(
           const transformedModelId = transformModelForProvider(provider, modelIDForProvider(provider, entry.model))
           const fullModel = `${provider}/${transformedModelId}`
           const match = fuzzyMatchModel(fullModel, new Set(input.availableModels), [provider])
-          if (match) {
+          if (match && !isPaidModel(match)) {
             if (explicitHighModel && entry.variant === "high" && match === explicitHighBaseModel) {
               return { model: explicitHighModel, fallbackEntry: entry, matchedFallback: true }
             }
@@ -255,7 +264,7 @@ export function resolveModelForDelegateTask(
         const crossProviderCandidates = new Set(
           [...input.availableModels].filter((model) => {
             const [provider] = model.split("/")
-            return provider !== undefined && !laterRungProviders.has(provider)
+            return provider !== undefined && !laterRungProviders.has(provider) && !isPaidModel(model)
           }),
         )
         const crossProviderMatch = fuzzyMatchModel(entry.model, crossProviderCandidates)
