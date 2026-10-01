@@ -9,7 +9,11 @@ export const ALLOWED_EXTENSIONS = [".md"]
 
 export const ALLOWED_PATH_PREFIX = ".omo"
 
-export const BLOCKED_TOOLS = ["Write", "Edit", "write", "edit"]
+/** Tools that write files (matched case-insensitively); each target path must be an .omo/*.md file. */
+export const BLOCKED_TOOLS = ["write", "edit", "multiedit", "apply_patch", "patch", "hashline_edit"]
+
+/** Tools that rewrite code across the workspace; never allowed for Prometheus, whatever the arguments. */
+export const WORKSPACE_REWRITE_TOOLS = ["lsp_rename", "ast_grep_rewrite", "ast_grep_replace"]
 
 /**
  * XML-tag wrapper used to mark the planning-context boundary in prompts

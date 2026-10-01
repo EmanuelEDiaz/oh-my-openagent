@@ -376,7 +376,7 @@ describe("prometheus-md-only", () => {
       ).resolves.toBeUndefined()
     })
 
-    test("should handle missing filePath gracefully", async () => {
+    test("should fail closed when a write has no target path (fork 0.4)", async () => {
       // given
       const hook = createPrometheusMdOnlyHook(createMockPluginInput())
       const input = {
@@ -391,7 +391,7 @@ describe("prometheus-md-only", () => {
       // when / #then
       await expect(
         hook["tool.execute.before"](input, output)
-      ).resolves.toBeUndefined()
+      ).rejects.toThrow("File operations restricted to .omo/*.md plan files only")
     })
 
     test("should inject planning warning when Prometheus calls task", async () => {

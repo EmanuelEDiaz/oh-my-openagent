@@ -141,6 +141,9 @@ export function applyToolConfig(params: {
       ...denyTodoTools,
       bash: "deny",
       interactive_bash: "deny",
+      // Workspace-wide rewrites cannot be confined to .omo/*.md (fork roadmap 0.4); the hook blocks them too.
+      lsp_rename: "deny",
+      ast_grep_rewrite: "deny",
     };
   }
   const junior = agentByKey(params.agentResult, "sisyphus-junior", params.pluginConfig);
