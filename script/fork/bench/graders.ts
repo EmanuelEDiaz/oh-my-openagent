@@ -110,19 +110,24 @@ function lineProblem(citation: Citation, file: string): string | undefined {
   return undefined
 }
 
-/** Repo files with this exact name: agents often cite `retry.ts:4` without the directory. */
-function filesNamed(name: string, workdir: string): string[] {
-  return [...new Bun.Glob(`**/${name}`).scanSync({ cwd: workdir, onlyFiles: true })]
-    .filter((path) => !path.startsWith(".git/") && !path.includes("node_modules/"))
-    .map((path) => resolve(workdir, path))
+/** Repo files whose path ends in this one: agents cite `retry.ts:4` or `http/client.ts` without the leading dirs. */
+function filesEndingIn(path: string, workdir: string): string[] {
+  return [...new Bun.Glob(`**/${path}`).scanSync({ cwd: workdir, onlyFiles: true })]
+    .filter((found) => !found.startsWith(".git/") && !found.includes("node_modules/"))
+    .map((found) => resolve(workdir, found))
+}
+
+function bestProblem(citation: Citation, candidates: readonly string[]): string | undefined {
+  if (candidates.length === 0) return "no such file"
+  const problems = candidates.map((file) => lineProblem(citation, file))
+  return problems.includes(undefined) ? undefined : problems[0]
 }
 
 function citationProblem(citation: Citation, workdir: string): string | undefined {
-  if (!citation.path.includes("/")) {
-    const candidates = filesNamed(citation.path, workdir)
-    if (candidates.length === 0) return "no such file"
-    const problems = candidates.map((file) => lineProblem(citation, file))
-    return problems.includes(undefined) ? undefined : problems[0]
+  if (!isAbsolute(citation.path)) {
+    const direct = resolve(workdir, citation.path)
+    if (relative(workdir, direct).startsWith("..")) return "outside the repo"
+    return existsSync(direct) ? lineProblem(citation, direct) : bestProblem(citation, filesEndingIn(citation.path.replace(/^\.\//, ""), workdir))
   }
   let file = isAbsolute(citation.path) ? citation.path : resolve(workdir, citation.path)
   const inside = relative(workdir, file)

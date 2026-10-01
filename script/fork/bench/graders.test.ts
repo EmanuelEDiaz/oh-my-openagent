@@ -107,6 +107,14 @@ describe("citationsExist", () => {
     expect((await citationsExist().grade(context({ answer: "see nope.ts:1" }))).pass).toBe(false)
   })
 
+  test("a path relative to a subdirectory matches the repo file ending in it", async () => {
+    mkdirSync(join(workdir, "src/http"), { recursive: true })
+    writeFileSync(join(workdir, "src/http/client.ts"), "x\n")
+    expect((await citationsExist().grade(context({ answer: "see http/client.ts:1" }))).pass).toBe(true)
+    expect((await citationsExist().grade(context({ answer: "see http/client.ts:5" }))).pass).toBe(false)
+    expect((await citationsExist().grade(context({ answer: "see http/server.ts" }))).pass).toBe(false)
+  })
+
   test("an elided or root-anchored path is read relative to the repo", async () => {
     expect((await citationsExist().grade(context({ answer: "in `/…/src/a.ts:2` and /src/a.ts:1" }))).pass).toBe(true)
     expect((await citationsExist().grade(context({ answer: "in /…/src/a.ts:7" }))).pass).toBe(false)

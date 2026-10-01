@@ -125,7 +125,7 @@ Los antiguos pasos transversales 2.3–2.11 se reparten en la Fase 4, dentro del
 ## Fase 3 — Banco de pruebas (antes de mejorar ningún agente)
 | Paso | Qué | Estado |
 |---|---|---|
-| 3.0 | **Banco de pruebas** propio en Bun (sin dependencias nuevas): OpenCode aislado y reutilizable, especialistas ejecutados como subagentes de verdad (parte `subtask` del SDK), correctores deterministas comunes (resultado en el repo, contrato `<report>`, herramienta obligatoria usada / prohibida no usada, **citas que existen** —archivo:línea, URL, versión de paquete—, tokens, coste, tiempo, turnos), pass@1 y pass^3, fallos de infraestructura (403, límites) separados de los del agente; modelos de `/omo-models`, agnóstico de proveedor. Incluye la parte de 2.6 que verifica contratos. | en curso — `plans/test-bench.md` |
+| 3.0 | **Banco de pruebas** propio en Bun (sin dependencias nuevas): OpenCode aislado y reutilizable, especialistas ejecutados como subagentes de verdad (parte `subtask` del SDK), correctores deterministas comunes (resultado en el repo, contrato `<report>`, herramienta obligatoria usada / prohibida no usada, **citas que existen** —archivo:línea, URL, versión de paquete—, tokens, coste, tiempo, turnos), pass@1 y pass^3, fallos de infraestructura (403, límites) separados de los del agente; modelos de `/omo-models`, agnóstico de proveedor. Incluye la parte de 2.6 que verifica contratos. | **hecho** (01-10-2026): banco en `script/fork/bench/` (44 tests), piloto `explore` 9/9 con `big-pickle`, informe en `docs/fork/evals/explore.md`; detecta cuelgues de modelos gratuitos y servidores que no responden; `regrade.ts` re-puntúa sin modelo. Evidencia en `.omo/evidence/3.0/` |
 
 ## Fase 4 — Especialistas uno a uno (plantilla común)
 Cada paso: investigar → contrato → 15–30 tareas (+30 % reservado) → medición base → análisis de fallos reales → 2–4
@@ -169,6 +169,7 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 - ~~Reglas de lenguaje/framework cargadas bajo demanda~~ — absorbido en 4.5 (antes 2.9), 29-09-2026.
 
 ## Registro de decisiones del roadmap
+- 01-10-2026 — 3.0 hecho. Siguiente: 4.1 `explore` (tareas 15–30 con conjunto reservado, lectura eficiente de código).
 - 01-10-2026 — 0.7 hecho. Descartado filtrar la cadena de reintentos de la delegación (rompía modelos con variante y no aporta con el modelo inicial ya válido). El banco (3.0) calienta la caché del plugin antes de las tareas.
 - 01-10-2026 — 0.7 añadido y priorizado antes del piloto de 3.0: el piloto mostró que 4 modelos gratuitos configurados (`deepseek-v4-flash-free`, `mimo-v2.5-free`, `north-mini-code-free`, `laguna-s-2.1-free`) están `deprecated` y OpenCode los borra; `explore` y `librarian` no pueden ejecutarse. El usuario cambia los modelos con `/omo-models`; el plugin se protege con 0.7.
 - 01-10-2026 — Planes visuales en 4.16: diagramas como código, porque los modelos sin visión leen y escriben su fuente; validados por código; skill `visual-plan` y HTML con `plan_render`. UI fiel al código en 4.13: diseño desde la app real con mapa de ids y comparación por código; skill común para cualquier herramienta de diseño, no un agente de Pencil.

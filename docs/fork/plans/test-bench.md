@@ -1,6 +1,6 @@
 # Paso 3.0 — Banco de pruebas de agentes
 
-Parte del roadmap: `docs/fork/roadmap.md`. Estado: **plan aprobado (01-10-2026)**. Base: `plans/per-agent-program.md`.
+Parte del roadmap: `docs/fork/roadmap.md`. Estado: **hecho (01-10-2026)**. Base: `plans/per-agent-program.md`.
 
 ## Qué debe hacer
 Ejecutar tareas reales contra un OpenCode **aislado** con el plugin del fork y medir, para cada especialista y para el
@@ -87,12 +87,35 @@ Repite cada tarea N veces y da `pass@1` y `pass^3`. No debe tocar nunca la confi
   citan. 3.0 comprueba `archivo:línea` y URL.
 
 ## Subtareas
-- [ ] 1. Tests de los correctores (con transcripciones de ejemplo, sin modelo) y del clasificador de fallos.
-- [ ] 2. Gestor de sandbox (reutilizable, limpieza garantizada aunque falle).
-- [ ] 3. Ejecutor (`subtask`/`primary`, repeticiones, presupuestos, reintentos de infraestructura).
-- [ ] 4. Informe (`jsonl` local + resumen `md`).
-- [ ] 5. **Piloto**: 3 tareas de `explore` (dev) ejecutadas de verdad, para validar el banco antes de la Fase 4.
-- [ ] 6. Docs, evidencia, merge y push; limpiar sandbox.
+- [x] 1. Tests de los correctores (con transcripciones de ejemplo, sin modelo) y del clasificador de fallos.
+- [x] 2. Gestor de sandbox: reutilizable, limpieza garantizada aunque falle, calentamiento de la caché del plugin.
+- [x] 3. Ejecutor:
+  - modos `subtask` y `primary`, repeticiones, presupuestos;
+  - reintentos de infraestructura y detección de estancamiento (240 s sin avance);
+  - reinicio del servidor si deja de responder.
+- [x] 4. Informe: `jsonl` local, resumen `md` y `regrade.ts`, que vuelve a puntuar sin llamar al modelo.
+- [x] 5. Piloto: 3 tareas de `explore` × 3 repeticiones, ejecutadas de verdad.
+- [x] 6. Docs, evidencia, merge y push; sandbox limpiado.
+
+## Resultado del piloto (01-10-2026, `docs/fork/evals/explore.md`)
+- **`explore` con `big-pickle`** (sus modelos configurados están retirados; ver 0.7):
+  - 9/9: pass@1 100 %, pass^3 100 %;
+  - ~10,7k tokens, 6,6 turnos y 83 s de media.
+- **Las tareas piloto son fáciles.** En 4.1 se amplían a 15–30, con un conjunto reservado, para que la medición
+  distinga mejoras.
+- **Lo que el piloto enseñó del propio banco** (todo corregido, con test):
+  - Los modelos gratuitos se cuelgan a mitad sin error: 4 cuelgues en 13 intentos en total. Ahora se detectan por
+    falta de avance y se reintentan como infraestructura.
+  - Tras un cuelgue, el servidor de OpenCode llegó a dejar de responder. Ahora se comprueba antes de cada tarea, se
+    reinicia si hace falta, y un fallo al crear la sesión cuenta como infraestructura.
+  - El corrector de citas daba por inventadas citas correctas: `retry.ts:4` sin carpeta, `http/client.ts` relativa
+    a `src/` y `/…/src/config.ts` abreviada. Ahora se resuelven contra el repo; una ruta que no existe sigue
+    fallando.
+  - Hace falta calentar la caché de proveedores del plugin. Sin ella, cada tarea era un primer arranque.
+- **Aislamiento:**
+  - `opencode.db` y `auth.json` reales sin cambios;
+  - los logs de OpenCode guardados en `.omo/evals/` sin ninguna clave;
+  - evidencia en `.omo/evidence/3.0/`.
 
 ## Criterios de aceptación
 ```gherkin
