@@ -19,6 +19,8 @@ export interface CodexComponentsDoctorDeps extends CodexDoctorDeps {
   readonly arch?: string
   readonly sgRunVersionProbeSync?: SgResolverOptions["runVersionProbeSync"]
   readonly sgWhich?: SgResolverOptions["which"]
+  /** Home directory searched for `~/.omo/runtime/ast-grep`; tests pin it so the user's real install is not found. */
+  readonly homeDir?: string
 }
 
 interface JsonRecord {
@@ -88,6 +90,7 @@ export async function checkCodexComponents(deps: CodexComponentsDoctorDeps = {})
     runtimeDir: runtimeSgDir,
     ...(deps.sgRunVersionProbeSync === undefined ? {} : { runVersionProbeSync: deps.sgRunVersionProbeSync }),
     ...(deps.sgWhich === undefined ? {} : { which: deps.sgWhich }),
+    ...(deps.homeDir === undefined ? {} : { homeDir: deps.homeDir }),
   })
   if (sg === null) {
     details.push("ast_grep: missing")

@@ -1,4 +1,6 @@
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readFileSync, realpathSync } from "node:fs"
+import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 
 import {
   LEGACY_PLUGIN_NAME,
@@ -44,6 +46,32 @@ function parsePluginVersion(entry: PluginEntry): string | null {
   return null
 }
 
+const MAX_PACKAGE_LOOKUP_DEPTH = 6
+
+/**
+ * A `file://` entry is this plugin when, after resolving symlinks, an ancestor package.json is named like it. Forks are
+ * often checked out or linked under other names (e.g. `~/.config/opencode/omo-fork`), so the path text alone is not
+ * enough (fork roadmap 0.6).
+ */
+function isPluginCheckout(fileUrl: string): boolean {
+  try {
+    let directory = dirname(realpathSync(fileURLToPath(fileUrl)))
+    for (let depth = 0; depth < MAX_PACKAGE_LOOKUP_DEPTH; depth++) {
+      const manifest = join(directory, "package.json")
+      if (existsSync(manifest)) {
+        const name = (JSON.parse(readFileSync(manifest, "utf-8")) as { name?: unknown }).name
+        if (name === PLUGIN_NAME || name === LEGACY_PLUGIN_NAME) return true
+      }
+      const parent = dirname(directory)
+      if (parent === directory) break
+      directory = parent
+    }
+  } catch {
+    return false
+  }
+  return false
+}
+
 function findPluginEntry(entries: PluginEntry[]): { entry: PluginEntry; isLocalDev: boolean } | null {
   for (const entry of entries) {
     const name = getPluginEntryName(entry)
@@ -53,7 +81,7 @@ function findPluginEntry(entries: PluginEntry[]): { entry: PluginEntry; isLocalD
     if (name === LEGACY_PLUGIN_NAME || name.startsWith(`${LEGACY_PLUGIN_NAME}@`)) {
       return { entry, isLocalDev: false }
     }
-    if (name.startsWith("file://") && (name.includes(PLUGIN_NAME) || name.includes(LEGACY_PLUGIN_NAME))) {
+    if (name.startsWith("file://") && (name.includes(PLUGIN_NAME) || name.includes(LEGACY_PLUGIN_NAME) || isPluginCheckout(name))) {
       return { entry, isLocalDev: true }
     }
   }

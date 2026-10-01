@@ -4,9 +4,38 @@ import { CHECK_IDS, CHECK_NAMES } from "../framework/constants"
 import type { CheckResult, DoctorIssue } from "../framework/types"
 import { loadAvailableModelsFromCache } from "./model-resolution-cache"
 import { loadOmoConfig } from "./model-resolution-config"
+import { fetchAvailableModels } from "../../../shared/model-availability"
+import { readConnectedProvidersCache } from "../../../shared/connected-providers-cache"
+import { paidModelCheck, setPreferFreeModels } from "../../../shared/free-model-preference"
+import { validatePluginConfig } from "../../../config/validate"
 import { buildModelResolutionDetails } from "./model-resolution-details"
 import { buildEffectiveResolution, getEffectiveModel } from "./model-resolution-effective-model"
 import type { AgentResolutionInfo, CategoryResolutionInfo, ModelResolutionInfo, OmoConfig } from "./model-resolution-types"
+import { resolveModelPipeline } from "../../../shared/model-resolution-pipeline"
+import type { ModelRequirement } from "../../../shared/model-requirements"
+
+import { SESSION_MODEL } from "./model-resolution-constants"
+
+export { SESSION_MODEL }
+
+/** What the running plugin knows when it picks models; with it the doctor mirrors the runtime choice (fork 0.6). */
+export type RuntimeModelContext = {
+  readonly availableModels: ReadonlySet<string>
+  readonly connectedProviders: readonly string[] | null
+  readonly isPaidModel?: (model: string) => boolean
+}
+
+function runtimeResolution(requirement: ModelRequirement, runtime: RuntimeModelContext): { model: string; resolution: string } {
+  const resolved = resolveModelPipeline({
+    constraints: { availableModels: new Set(runtime.availableModels), connectedProviders: runtime.connectedProviders ? [...runtime.connectedProviders] : null },
+    policy: { fallbackChain: requirement.fallbackChain, ...(runtime.isPaidModel ? { isPaidModel: runtime.isPaidModel } : {}) },
+  })
+  if (!resolved) {
+    return { model: SESSION_MODEL, resolution: "No configured or available model in its chain — runs on the session model" }
+  }
+  return { model: resolved.model, resolution: `Provider fallback (available): ${resolved.model}` }
+}
+
 
 export function parseProviderModel(value: string): { providerID: string; modelID: string } | null {
   const slashIndex = value.indexOf("/")
@@ -58,7 +87,14 @@ export function getModelResolutionInfo(): ModelResolutionInfo {
   return { agents, categories }
 }
 
-export function getModelResolutionInfoWithOverrides(config: OmoConfig): ModelResolutionInfo {
+export function getModelResolutionInfoWithOverrides(config: OmoConfig, runtime?: RuntimeModelContext): ModelResolutionInfo {
+  const effective = (requirement: ModelRequirement, userOverride: string | undefined) => {
+    if (!runtime || userOverride) {
+      return { effectiveModel: getEffectiveModel(requirement, userOverride), effectiveResolution: buildEffectiveResolution(requirement, userOverride) }
+    }
+    const { model, resolution } = runtimeResolution(requirement, runtime)
+    return { effectiveModel: model, effectiveResolution: resolution }
+  }
   const agents: AgentResolutionInfo[] = Object.entries(AGENT_MODEL_REQUIREMENTS).map(([name, requirement]) => {
     const userOverride = config.agents?.[name]?.model
     const userVariant = config.agents?.[name]?.variant
@@ -67,8 +103,7 @@ export function getModelResolutionInfoWithOverrides(config: OmoConfig): ModelRes
       requirement,
       userOverride,
       userVariant,
-      effectiveModel: getEffectiveModel(requirement, userOverride),
-      effectiveResolution: buildEffectiveResolution(requirement, userOverride),
+      ...effective(requirement, userOverride),
     })
   })
 
@@ -81,8 +116,7 @@ export function getModelResolutionInfoWithOverrides(config: OmoConfig): ModelRes
         requirement,
         userOverride,
         userVariant,
-        effectiveModel: getEffectiveModel(requirement, userOverride),
-        effectiveResolution: buildEffectiveResolution(requirement, userOverride),
+        ...effective(requirement, userOverride),
       })
     }
   )
@@ -116,9 +150,20 @@ export function collectCapabilityResolutionIssues(info: ModelResolutionInfo): Do
   return issues
 }
 
-export async function checkModels(): Promise<CheckResult> {
+/** The same inputs the running plugin uses to pick models, so the doctor shows the real choice (fork 0.6). */
+async function loadRuntimeModelContext(): Promise<RuntimeModelContext> {
+  const connectedProviders = readConnectedProvidersCache()
+  setPreferFreeModels(validatePluginConfig(process.cwd()).config.prefer_free_models === true)
+  const availableModels = await fetchAvailableModels(undefined, { connectedProviders: connectedProviders ?? undefined })
+  const isPaidModel = paidModelCheck()
+  return { availableModels, connectedProviders, ...(isPaidModel ? { isPaidModel } : {}) }
+}
+
+export async function checkModels(
+  loadRuntime: () => Promise<RuntimeModelContext> = loadRuntimeModelContext,
+): Promise<CheckResult> {
   const config = loadOmoConfig() ?? {}
-  const info = getModelResolutionInfoWithOverrides(config)
+  const info = getModelResolutionInfoWithOverrides(config, await loadRuntime())
   const available = loadAvailableModelsFromCache()
   const issues: DoctorIssue[] = []
 

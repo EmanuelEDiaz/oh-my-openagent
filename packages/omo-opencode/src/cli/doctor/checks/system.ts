@@ -166,7 +166,10 @@ export async function checkSystem(deps: SystemCheckDeps = defaultDeps): Promise<
     })
   }
 
+  // A local checkout (e.g. a fork loaded from file://) is updated with git, never by installing the published package
+  // over it, which would replace the checkout (fork roadmap 0.6).
   if (
+    !pluginInfo.isLocalDev &&
     systemInfo.loadedVersion &&
     latestVersion &&
     !deps.compareVersions(systemInfo.loadedVersion, latestVersion)

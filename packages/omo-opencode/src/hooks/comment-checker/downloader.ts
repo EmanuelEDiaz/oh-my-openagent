@@ -16,6 +16,7 @@ import {
   getCachedBinaryPath as getCachedBinaryPathShared,
 } from "../../shared/binary-downloader"
 import { log } from "../../shared/logger"
+import { clearDownloadFailure, readDownloadFailure, recordDownloadFailure } from "./download-failure"
 import { CACHE_DIR_NAME, PUBLISHED_PACKAGE_NAME } from "../../shared/plugin-identity"
 
 const DEBUG = process.env.COMMENT_CHECKER_DEBUG === "1"
@@ -54,6 +55,11 @@ export function getBinaryName(): string {
  */
 export function getCachedBinaryPath(): string | null {
   return getCachedBinaryPathShared(getCacheDir(), getBinaryName())
+}
+
+/** The last download failure, if the most recent attempt failed (fork 0.6: lets doctor tell it from "not yet"). */
+export function getLastDownloadFailure() {
+  return readDownloadFailure(getCacheDir())
 }
 
 /**
@@ -106,6 +112,7 @@ export async function downloadCommentChecker(): Promise<string | null> {
     // Set execute permission on Unix
     ensureExecutable(binaryPath)
     
+    clearDownloadFailure(cacheDir)
     debugLog(`Successfully downloaded binary to: ${binaryPath}`)
     log(`[${PUBLISHED_PACKAGE_NAME}] comment-checker binary ready.`)
     
@@ -113,6 +120,7 @@ export async function downloadCommentChecker(): Promise<string | null> {
     
   } catch (err) {
     debugLog(`Failed to download: ${err}`)
+    recordDownloadFailure(cacheDir, err)
     log(`[${PUBLISHED_PACKAGE_NAME}] Failed to download comment-checker: ${err instanceof Error ? err.message : err}`)
     log(`[${PUBLISHED_PACKAGE_NAME}] Comment checking disabled.`)
     return null

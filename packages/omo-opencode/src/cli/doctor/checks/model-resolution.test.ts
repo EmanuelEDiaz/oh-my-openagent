@@ -265,7 +265,11 @@ describe("model-resolution check", () => {
     it("includes resolution details in verbose mode details array", async () => {
       const { checkModelResolution } = await import("./model-resolution")
 
-      const result = await checkModelResolution()
+      // fork 0.6: the doctor mirrors the runtime; pin its inputs so the test does not depend on this machine's caches
+      const result = await checkModelResolution(async () => ({
+        availableModels: new Set(["anthropic/claude-opus-5-5", "openai/gpt-5.6-sol"]),
+        connectedProviders: ["anthropic", "openai"],
+      }))
 
       // then: Details should contain agent/category resolution info
       const details = expectDefined(result.details, "model resolution details")

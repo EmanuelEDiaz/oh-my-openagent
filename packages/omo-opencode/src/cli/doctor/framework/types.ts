@@ -50,6 +50,8 @@ export interface ToolsSummary {
   lspServers: Array<{ id: string; extensions: string[] }>
   astGrepCli: boolean
   commentChecker: boolean
+  /** Set when the last comment-checker download failed (error and time); absent means "not downloaded yet". */
+  commentCheckerDownloadFailure?: string
   ghCli: { installed: boolean; authenticated: boolean; username: string | null }
   mcpBuiltin: string[]
   mcpUser: string[]

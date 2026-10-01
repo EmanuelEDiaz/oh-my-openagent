@@ -153,3 +153,20 @@ describe("formatDefault", () => {
     expect(output).toContain("Update: npx lazycodex-ai install --no-tui --codex-autonomous")
   })
 })
+
+describe("formatDefault for a local checkout (fork 0.6)", () => {
+  it("never suggests installing the published package over a local checkout", () => {
+    // given
+    const result = createBaseResult()
+    result.systemInfo.isLocalDev = true
+    result.latestVersion = "9.9.9"
+
+    // when
+    const output = stripAnsi(formatDefault(result))
+
+    // then
+    expect(output).not.toContain("bunx oh-my-openagent install")
+    expect(output).toContain("Update: local checkout")
+    expect(output).toContain("git pull")
+  })
+})
