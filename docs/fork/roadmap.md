@@ -94,7 +94,7 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
 | 0.3 | **Ningún agente desaparece por su modelo**: Atlas se descarta sin aviso en el primer arranque o sin modelos de su cadena, y otros arrancan con modelos de pago sin credencial. Degradar (registrar sin modelo → usa el de la sesión) + aviso visible + big-pickle en la cadena de Atlas. `plans/robustness-fixes.md` | **hecho** (01-10-2026); hallazgo: con caché se eligen modelos de pago que fallan en cuentas gratuitas → propuesta "solo modelos gratuitos" |
 | 0.4 | **Prometheus solo escribe `.omo/*.md`**: hoy `apply_patch`, `hashline_edit rename` y `lsp_rename` lo esquivan y sin ruta deja pasar. Bloquear todas las vías y fallar cerrado. `plans/robustness-fixes.md` | **hecho** (01-10-2026); QA en vivo no concluyente por el 403 intermitente del plan gratuito, guarda demostrada por tests |
 | 0.5 | **Preferir modelos gratuitos (sin imponer)**: con la caché de proveedores la resolución automática elige modelos de pago que el proveedor lista (Zen: `opencode/claude-opus-5-5`…), que fallan en cuentas gratuitas. Opción `prefer_free_models` (activada en la config del usuario): la resolución **automática** (cadenas y respaldos) salta los modelos con coste según el precio de la caché de OpenCode; **lo elegido en `/omo-models` (o `agents.<x>.model`/`fallback_models`) siempre manda**, aunque sea de pago. | **hecho** (01-10-2026); activado en la config del usuario |
-| 0.6 | Restos de 0.3: `sisyphus-junior` hereda `anthropic/…` sin Atlas; el aviso no sale en `doctor`; tests del upstream que dependen de lo instalado en la máquina. | pendiente (baja prioridad) |
+| 0.6 | **`doctor` y tests fiables** (decidido 01-10-2026): (a) `doctor` consciente del fork — sin la falsa alarma "not registered" con `file://` y **sin recomendar nunca** `bun add oh-my-openagent@latest`, que reemplazaría el fork; (b) su sección de modelos aplica la degradación (0.3) y la preferencia por gratuitos (0.5); (c) los 3 tests del upstream que dependen de la máquina pasan a ser herméticos; (d) diagnosticar por qué no se descargó el binario del comment-checker y avisarlo claramente. `sisyphus-junior` → `anthropic/…` queda fuera (al usuario no le afecta: tiene modelo propio). | en curso |
 
 ## Fase 1 — Fundamento: índice, citas de chat y decisiones
 | Paso | Qué | Estado |
@@ -166,6 +166,7 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 - ~~Reglas de lenguaje/framework cargadas bajo demanda~~ — absorbido en 4.5 (antes 2.9), 29-09-2026.
 
 ## Registro de decisiones del roadmap
+- 01-10-2026 — 0.6 redefinido tras analizar `doctor`: su consejo de actualizar desde npm reemplazaría el fork.
 - 01-10-2026 — 0.5 hecho: las elecciones automáticas prefieren modelos gratuitos; lo elegido por el usuario manda.
 - 01-10-2026 — 0.4 hecho: Prometheus no puede escribir fuera de `.omo/*.md` por ninguna vía conocida (falla cerrado).
 - 01-10-2026 — 0.5: preferir modelos gratuitos en la elección automática, sin imponerlo: el modelo elegido en
