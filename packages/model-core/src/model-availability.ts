@@ -78,3 +78,21 @@ export function isModelAvailable(
 ): boolean {
 	return fuzzyMatchModel(targetModel, availableModels) !== null
 }
+
+/**
+ * True only when we hold the model list of the model's provider and the model is not in it, e.g. a free model OpenCode
+ * retired (fork roadmap 0.7). Unknown or custom providers (ollama, local gateways), an empty list and bare ids are
+ * never treated as missing, so nothing changes when nothing can be verified.
+ */
+export function isKnownMissingModel(model: string, availableModels: ReadonlySet<string>): boolean {
+	const slash = model.indexOf("/")
+	if (slash <= 0 || availableModels.size === 0 || availableModels.has(model)) return false
+	const provider = model.slice(0, slash)
+	const providerListed = [...availableModels].some((available) => available.startsWith(`${provider}/`))
+	return providerListed && fuzzyMatchModel(model, new Set(availableModels), [provider]) === null
+}
+
+/** The models in order, minus the ones known missing (see isKnownMissingModel). */
+export function withoutKnownMissingModels(models: readonly string[], availableModels: ReadonlySet<string>): string[] {
+	return models.filter((model) => !isKnownMissingModel(model, availableModels))
+}

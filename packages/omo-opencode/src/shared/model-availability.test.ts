@@ -80,6 +80,20 @@ describe("fetchAvailableModels", () => {
     expect(result.has("google/gemini-3.1-pro")).toBe(true)
   })
 
+  it("#given models.json with deprecated and alpha models #when fetchAvailableModels falls back to it #then they are left out like OpenCode does (fork 0.7)", async () => {
+    writeModelsCache({
+      opencode: { id: "opencode", models: {
+        "big-pickle": { id: "big-pickle" },
+        "deepseek-v4-flash-free": { id: "deepseek-v4-flash-free", status: "deprecated" },
+        "fledge-alpha-free": { id: "fledge-alpha-free", status: "alpha" },
+      } },
+    })
+
+    const result = await fetchAvailableModels(undefined, { connectedProviders: ["opencode"] })
+
+    expect([...result]).toEqual(["opencode/big-pickle"])
+  })
+
   it("#given connectedProviders unknown #when fetchAvailableModels called without options #then returns empty Set", async () => {
     writeModelsCache({
       openai: { id: "openai", models: { "gpt-5.4": { id: "gpt-5.4" } } },

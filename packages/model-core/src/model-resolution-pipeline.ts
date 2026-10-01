@@ -102,17 +102,11 @@ function findFallbackVariantForModel(
 
 
 /**
- * A configured primary is skipped only when we hold that provider's model list and the model is
- * not in it (e.g. a retired free model) and the user gave fallbacks. Unknown/custom providers
- * (ollama, local gateways) are still trusted as before.
+ * A configured primary is skipped when we hold that provider's model list and the model is not in it (e.g. a free
+ * model OpenCode retired), with or without user fallbacks (fork roadmap 0.7). Unknown/custom providers (ollama, local
+ * gateways) are still trusted as before.
  */
-function isKnownMissingWithFallbacks(
-  model: string,
-  availableModels: Set<string>,
-  userFallbackModels: string[] | undefined,
-  deps: ModelResolutionDeps,
-): boolean {
-  if (!userFallbackModels || userFallbackModels.length === 0) return false
+function isKnownMissing(model: string, availableModels: Set<string>, deps: ModelResolutionDeps): boolean {
   const provider = model.split("/")[0]
   if (!provider || model.indexOf("/") === -1) return false
   const providerPrefix = `${provider}/`
@@ -143,9 +137,9 @@ export function resolveModelPipeline(
   }
 
   const normalizedUserModel = normalizeModel(intent?.userModel)
-  if (normalizedUserModel && isKnownMissingWithFallbacks(normalizedUserModel, availableModels, intent?.userFallbackModels, deps)) {
+  if (normalizedUserModel && isKnownMissing(normalizedUserModel, availableModels, deps)) {
     attempted.push(normalizedUserModel)
-    log("Config model not available, trying user fallback_models", { model: normalizedUserModel })
+    log("Config model no longer offered by its provider, trying fallbacks", { model: normalizedUserModel })
   } else if (normalizedUserModel) {
     const inheritedVariant = findFallbackVariantForModel(
       normalizedUserModel,
