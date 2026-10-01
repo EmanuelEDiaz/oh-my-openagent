@@ -1,6 +1,10 @@
+import { isKnownMissingModel } from "@oh-my-opencode/model-core"
+
 import { normalizeFallbackModels, resolveModelPipeline } from "../../shared"
-import { transformModelForProvider } from "../../shared/provider-model-id-transform"
+import { recordAgentRegistrationIssue, recordConfiguredModel } from "../../shared/agent-registration-report"
 import { isPaidModel } from "../../shared/free-model-preference"
+import { log } from "../../shared/logger"
+import { transformModelForProvider } from "../../shared/provider-model-id-transform"
 
 /** Plain `provider/model` ids of the user's configured fallbacks (per-entry settings are applied later). */
 export function userFallbackModelIds(fallbackModels: Parameters<typeof normalizeFallbackModels>[0]): string[] | undefined {
@@ -82,4 +86,35 @@ export function keepFallbackOverRetiredModel<TConfig extends { model?: string }>
   if (overrideModel === undefined || resolution.model === overrideModel) return config
   if (!resolution.attempted?.includes(overrideModel)) return config
   return { ...config, model: resolution.model }
+}
+
+/**
+ * Final say on an agent's model after overrides were merged (fork roadmap 0.7): a configured model its provider no
+ * longer offers never survives. It is replaced by the resolved model, or removed so OpenCode runs the agent on the
+ * session model, and the user is told. Any other configured model keeps the previous behaviour.
+ */
+export function settleConfiguredModel<TConfig extends { model?: string }>(input: {
+  readonly agent: string
+  readonly config: TConfig
+  readonly resolution: { model: string; attempted?: string[] } | undefined
+  readonly overrideModel: string | undefined
+  readonly availableModels: ReadonlySet<string>
+}): TConfig {
+  const { agent, config, resolution, overrideModel, availableModels } = input
+  recordConfiguredModel(agent, overrideModel)
+  if (overrideModel === undefined || !isKnownMissingModel(overrideModel, availableModels)) {
+    return resolution ? keepFallbackOverRetiredModel(config, resolution, overrideModel) : config
+  }
+  const replacement = resolution && resolution.model !== overrideModel ? resolution.model : undefined
+  log("[agent-registration] Configured model no longer offered, replaced", { agent, configuredModel: overrideModel, replacement })
+  recordAgentRegistrationIssue({
+    agent,
+    status: "replaced",
+    detail: `${overrideModel} is no longer offered by its provider; uses ${replacement ?? "the session model"} (change it with /omo-models)`,
+    from: overrideModel,
+    ...(replacement ? { to: replacement } : {}),
+  })
+  if (replacement) return { ...config, model: replacement }
+  const { model: _retired, ...withoutModel } = config
+  return withoutModel as TConfig
 }

@@ -155,14 +155,16 @@ describe("resolveModelPipeline user primary availability", () => {
 		expect(result).toEqual({ model: "ollama/qwen3.5:4b", provenance: "override" })
 	})
 
-	test("keeps a missing primary when the user configured no fallbacks", () => {
+	test("skips a missing primary even when the user configured no fallbacks (fork 0.7)", () => {
 		// given
 		const result = resolveModelPipeline({
 			intent: { userModel: "opencode/retired-free" },
 			constraints: { availableModels: new Set(["opencode/big-pickle"]) },
+			policy: { systemDefaultModel: "opencode/big-pickle" },
 		})
 
 		// then
-		expect(result).toEqual({ model: "opencode/retired-free", provenance: "override" })
+		expect(result?.model).toBe("opencode/big-pickle")
+		expect(result?.attempted).toContain("opencode/retired-free")
 	})
 })

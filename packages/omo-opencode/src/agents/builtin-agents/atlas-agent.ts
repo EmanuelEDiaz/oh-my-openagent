@@ -1,11 +1,12 @@
 import type { AgentConfig } from "@opencode-ai/sdk"
+import { isKnownMissingModel } from "@oh-my-opencode/model-core"
 import type { AgentOverrides } from "../types"
 import type { CategoriesConfig, CategoryConfig } from "../../config/schema"
 import type { AvailableAgent, AvailableSkill } from "../dynamic-agent-prompt-builder"
 import { AGENT_MODEL_REQUIREMENTS } from "../../shared"
 import { log } from "../../shared/logger"
 import { applyOverrides } from "./agent-overrides"
-import { applyModelResolution, getConnectedFallbackModel, keepFallbackOverRetiredModel, userFallbackModelIds } from "./model-resolution"
+import { applyModelResolution, getConnectedFallbackModel, settleConfiguredModel, userFallbackModelIds } from "./model-resolution"
 import { recordAgentRegistrationIssue } from "../../shared/agent-registration-report"
 import { createAtlasAgent } from "../atlas"
 
@@ -50,7 +51,7 @@ export function maybeCreateAtlasConfig(input: {
     systemDefaultModel,
   })
 
-  if (!atlasResolution && orchestratorOverride?.model) {
+  if (!atlasResolution && orchestratorOverride?.model && !isKnownMissingModel(orchestratorOverride.model, availableModels)) {
     // User explicitly configured a model but resolution failed (e.g., cold cache, no system default).
     // Honor the user's choice directly instead of dropping Atlas entirely.
     atlasResolution = { model: orchestratorOverride.model, provenance: "override" as const }
@@ -84,9 +85,13 @@ export function maybeCreateAtlasConfig(input: {
   }
 
   orchestratorConfig = applyOverrides(orchestratorConfig, orchestratorOverride, mergedCategories, directory)
-  if (atlasResolution) {
-    orchestratorConfig = keepFallbackOverRetiredModel(orchestratorConfig, atlasResolution, orchestratorOverride?.model)
-  }
+  orchestratorConfig = settleConfiguredModel({
+    agent: "atlas",
+    config: orchestratorConfig,
+    resolution: atlasResolution,
+    overrideModel: orchestratorOverride?.model,
+    availableModels,
+  })
 
   return orchestratorConfig
 }

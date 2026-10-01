@@ -1,5 +1,6 @@
 import {
   fuzzyMatchModel,
+  isKnownMissingModel,
   normalizeModel,
   parseModelString,
   parseVariantFromModelID,
@@ -127,7 +128,10 @@ export function resolveModelForDelegateTask(
       }
     }
 
-    return userResult
+    if (!isKnownMissingModel(userResult.model, input.availableModels)) return userResult
+    // Its provider no longer offers it (e.g. a retired free model): fall through to the agent's registered model,
+    // fallbacks and chain instead of failing the task with "Model not found" (fork roadmap 0.7).
+    deps.log?.("[resolveModelForDelegateTask] user model no longer offered; trying other models", { userModel: userResult.model })
   }
 
   const connectedProviders = input.availableModels.size === 0 ? deps.connectedProviders : null

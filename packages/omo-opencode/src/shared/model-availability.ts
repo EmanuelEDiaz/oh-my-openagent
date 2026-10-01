@@ -126,6 +126,16 @@ export async function getConnectedProviders(client: OpencodeClient): Promise<str
 	}
 }
 
+/**
+ * OpenCode drops models.dev entries marked deprecated, and alpha ones unless experimental models are enabled
+ * (provider/provider.ts); the raw models.dev cache still lists them (fork roadmap 0.7).
+ */
+function isOfferedByOpenCode(status: string | undefined): boolean {
+	if (status === "deprecated") return false
+	if (status === "alpha") return /^(1|true)$/i.test(process.env.OPENCODE_ENABLE_EXPERIMENTAL_MODELS ?? "")
+	return true
+}
+
 export async function fetchAvailableModels(
 	client?: ModelListClient,
 	options?: { connectedProviders?: string[] | null }
@@ -219,7 +229,7 @@ export async function fetchAvailableModels(
 	} else {
 		try {
 			const content = readFileSync(cacheFile, "utf-8")
-			const data = JSON.parse(content) as Record<string, { id?: string; models?: Record<string, { id?: string }> }>
+			const data = JSON.parse(content) as Record<string, { id?: string; models?: Record<string, { id?: string; status?: string }> }>
 
 			const providerIds = Object.keys(data)
 			log("[fetchAvailableModels] providers found in models.json", { count: providerIds.length, providers: providerIds.slice(0, 10) })
@@ -233,7 +243,8 @@ export async function fetchAvailableModels(
 				const models = provider?.models
 				if (!models || typeof models !== "object") continue
 
-				for (const modelKey of Object.keys(models)) {
+				for (const [modelKey, model] of Object.entries(models)) {
+					if (!isOfferedByOpenCode(model?.status)) continue
 					modelSet.add(`${providerId}/${modelKey}`)
 				}
 			}

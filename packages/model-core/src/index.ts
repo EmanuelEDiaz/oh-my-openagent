@@ -28,7 +28,9 @@ export * from "./model-string-parser"
 export * from "./model-sanitizer"
 export {
 	fuzzyMatchModel,
+	isKnownMissingModel,
 	isModelAvailable,
+	withoutKnownMissingModels,
 } from "./model-availability"
 export {
 	transformModelForProvider,

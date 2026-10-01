@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { formatAgentRegistrationWarning } from "./agent-registration-warning"
+import { findRetiredConfiguredModels, formatAgentRegistrationWarning } from "./agent-registration-warning"
 
 describe("agent registration warning (fork 0.3)", () => {
   test("says which agents run on the session model, which are off, and how to fix it", () => {
@@ -41,5 +41,31 @@ describe("agent registration warning (fork 0.3)", () => {
 
     // then
     expect(message).toContain("agent-5 +3")
+  })
+})
+
+describe("retired models in the startup warning (fork 0.7)", () => {
+  test("names each agent with the retired model and what it uses now", () => {
+    // when
+    const message = formatAgentRegistrationWarning([
+      { agent: "explore", status: "replaced", detail: "x", from: "opencode/deepseek-v4-flash-free", to: "opencode/big-pickle" },
+      { agent: "atlas", status: "replaced", detail: "x", from: "opencode/deepseek-v4-flash-free" },
+    ])
+
+    // then
+    expect(message).toContain("Retired by their provider: atlas (opencode/deepseek-v4-flash-free → session model), explore (opencode/deepseek-v4-flash-free → opencode/big-pickle)")
+    expect(message).toContain("/omo-models")
+  })
+
+  test("after the provider list refreshes, configured models it no longer offers are reported once", () => {
+    // when
+    const retired = findRetiredConfiguredModels(
+      new Map([["explore", "opencode/deepseek-v4-flash-free"], ["oracle", "opencode/big-pickle"], ["librarian", "ollama/qwen3:8b"]]),
+      new Set(["opencode/big-pickle"]),
+      [{ agent: "atlas", status: "replaced", detail: "x", from: "opencode/deepseek-v4-flash-free" }],
+    )
+
+    // then
+    expect(retired).toEqual([{ agent: "explore", status: "replaced", detail: "opencode/deepseek-v4-flash-free is no longer offered; delegations use another model", from: "opencode/deepseek-v4-flash-free" }])
   })
 })

@@ -1,4 +1,5 @@
 import type { AgentConfig } from "@opencode-ai/sdk"
+import { isKnownMissingModel } from "@oh-my-opencode/model-core"
 import type { BuiltinAgentName, AgentOverrides, AgentPromptMetadata } from "../types"
 import type { CategoryConfig, GitMasterConfig } from "../../config/schema"
 import type { BrowserAutomationProvider } from "../../config/schema"
@@ -8,7 +9,7 @@ import { buildAgent, isFactory } from "../agent-builder"
 import { resolveAgentSkills } from "../agent-skill-resolution"
 import { applyOverrides } from "./agent-overrides"
 import { applyEnvironmentContext } from "./environment-context"
-import { applyModelResolution, getConnectedFallbackModel, keepFallbackOverRetiredModel, promptModelHint, userFallbackModelIds } from "./model-resolution"
+import { applyModelResolution, getConnectedFallbackModel, promptModelHint, settleConfiguredModel, userFallbackModelIds } from "./model-resolution"
 import { recordAgentRegistrationIssue } from "../../shared/agent-registration-report"
 import { log } from "../../shared/logger"
 
@@ -87,7 +88,7 @@ export function collectPendingBuiltinAgents(input: {
       systemDefaultModel,
     })
     if (!resolution) {
-      if (override?.model) {
+      if (override?.model && !isKnownMissingModel(override.model, availableModels)) {
         // User explicitly configured a model but resolution failed (e.g., cold cache).
         // Honor the user's choice directly instead of falling back to hardcoded chain.
         log("[agent-registration] User-configured model not resolved, using as-is", {
@@ -128,7 +129,7 @@ export function collectPendingBuiltinAgents(input: {
     }
 
     config = applyOverrides(config, override, mergedCategories, directory)
-    if (resolution) config = keepFallbackOverRetiredModel(config, resolution, override?.model)
+    config = settleConfiguredModel({ agent: agentName, config, resolution, overrideModel: override?.model, availableModels })
     config = resolveAgentSkills(config, { gitMasterConfig, browserProvider, disabledSkills, teamModeEnabled })
 
     // Store for later - will be added after sisyphus and hephaestus
