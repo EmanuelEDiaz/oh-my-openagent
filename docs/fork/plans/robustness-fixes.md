@@ -1,6 +1,6 @@
 # Pasos 0.3 y 0.4 — Robustez: agentes que desaparecen y escritura de Prometheus
 
-Parte del roadmap: `docs/fork/roadmap.md`. Estado: **0.3 hecho (01-10-2026); 0.4 plan**, investigado en vivo y en el código.
+Parte del roadmap: `docs/fork/roadmap.md`. Estado: **0.3 hecho (01-10-2026); 0.4 en curso; 0.5 decidido**, investigado en vivo y en el código.
 Rutas: `S/` = `packages/omo-opencode/src/`, `MC/` = `packages/model-core/src/`.
 
 ## 0.3 — Ningún agente desaparece por no resolver su modelo
@@ -52,6 +52,26 @@ y, si no encuentra ruta, **deja pasar** (`hook.ts:44-47`).
 distinguir mayúsculas); extraer **todas** las rutas (incluidas las cabeceras `*** Add/Update/Delete File:` / `*** Move to:`
 de `apply_patch` y `rename`); **fallar cerrado** si no hay ruta; `lsp_rename: deny` en los permisos de Prometheus. Tests
 de cada vía y del permiso.
+
+## 0.5 — Preferir modelos gratuitos sin imponerlos
+**Problema (QA de 0.3).** Con la caché de proveedores, la resolución automática asigna modelos de pago que el proveedor
+lista (Sisyphus `opencode/claude-opus-5-5`, Atlas `opencode/claude-sonnet-5`, explore/verifier `openai/…`); en una
+cuenta gratuita fallan ("Insufficient account funds").
+
+**Decisión del usuario (01-10-2026).** Preferir gratuitos **sin imponerlo**: lo elegido en `/omo-models` manda.
+- Opción `prefer_free_models` (true en la config del usuario).
+- Afecta solo a la resolución **automática**: cadena de respaldo, respaldo por proveedor conectado y modelo por defecto
+  del sistema. Salta los modelos con coste y, si en la cadena no queda ninguno gratuito, usa el modelo de la sesión
+  (degradado de 0.3) en vez de uno de pago.
+- **Nunca** toca `agents.<x>.model`, `fallback_models` ni categorías elegidas por el usuario (lo que escribe
+  `/omo-models`), aunque sean de pago.
+- "Gratuito" = coste de entrada y salida 0 en la caché de modelos de OpenCode, o sufijo `-free` / modelo de un proveedor
+  local (ollama). Si no hay datos de coste, no se descarta.
+- `/omo-models` muestra qué modelos son gratuitos (ya lo hace) y qué agentes usan la preferencia automática.
+- Tests:
+  - con la preferencia activa, Sisyphus/Atlas no reciben `opencode/claude-*` de la cadena;
+  - un modelo de pago elegido en `/omo-models` se respeta;
+  - sin datos de coste no se descarta nada.
 
 ## Otros hallazgos (sin paso propio)
 - Tests del upstream no aislados de la máquina (`codex-components.test.ts` asume que `sg` no está instalado;
