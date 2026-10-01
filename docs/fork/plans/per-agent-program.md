@@ -16,6 +16,9 @@ Parte del roadmap: `docs/fork/roadmap.md`. Estado: **plan aprobado (01-10-2026)*
   `pass@k`.
 
 ## Fase 3 — Banco de pruebas (3.0)
+> **Actualizado 01-10-2026:** se construye un banco **propio en Bun** en vez de promptfoo, con los modelos de
+> `/omo-models` (cualquier proveedor). Diseño y motivo: `plans/test-bench.md`. Lo de abajo es el planteamiento original.
+
 - **promptfoo** (MIT, TypeScript; https://www.promptfoo.dev/docs/providers/custom-api/) con un proveedor propio que:
   - levanta un OpenCode aislado por ejecución (XDG propio, como en las QA de este fork);
   - prepara un repo de prueba;
@@ -73,7 +76,7 @@ Estimación: 1,5–3 días por paso; 7–10 semanas a tiempo parcial en total.
 ```gherkin
 Feature: programa por agente
   Scenario: banco de pruebas reproducible
-    Given el proveedor de promptfoo y un repo de prueba
+    Given el banco de pruebas y un repo de prueba
     When se ejecuta la suite de un especialista con --repeat 3
     Then se obtienen pass@1, pass^3, tokens y citas verificadas por código, sin tocar la configuración real del usuario
   Scenario: mejora demostrada

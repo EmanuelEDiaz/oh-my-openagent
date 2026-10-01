@@ -1,0 +1,131 @@
+/**
+ * Isolated OpenCode for the bench: its own HOME and XDG roots, the plugin under test, the user's model choices
+ * (`/omo-models` → ~/.omo/omo.jsonc) and a copy of auth.json that is deleted with the sandbox. Never touches the real
+ * config, data or opencode.db.
+ */
+import { spawn, type ChildProcess } from "node:child_process"
+import { cpSync, existsSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { createServer } from "node:net"
+import { homedir } from "node:os"
+import { join, resolve, sep } from "node:path"
+
+export type Sandbox = { readonly root: string; readonly env: Readonly<Record<string, string>> }
+
+const REAL_HOME = homedir()
+
+// Both the defaults and any XDG override: the guard must hold whichever one OpenCode would use.
+function realRoots(): string[] {
+  const roots = [
+    REAL_HOME,
+    join(REAL_HOME, ".config"),
+    join(REAL_HOME, ".local/share"),
+    join(REAL_HOME, ".local/state"),
+    join(REAL_HOME, ".cache"),
+    process.env.XDG_CONFIG_HOME,
+    process.env.XDG_DATA_HOME,
+    process.env.XDG_STATE_HOME,
+    process.env.XDG_CACHE_HOME,
+  ]
+  return [...new Set(roots.filter((path): path is string => path !== undefined).map((path) => resolve(path)))]
+}
+
+/** The sandbox must be a fresh directory that is not, and does not contain, any real config/data root. */
+export function assertSafeSandboxRoot(root: string): void {
+  const target = resolve(root)
+  for (const real of realRoots()) {
+    if (target === real || real.startsWith(`${target}${sep}`)) throw new Error(`refusing sandbox at ${target}: it is or contains ${real}`)
+    if (real !== REAL_HOME && target.startsWith(`${real}${sep}opencode`)) throw new Error(`refusing sandbox inside OpenCode's real ${real}/opencode`)
+  }
+  if (existsSync(target)) throw new Error(`refusing to reuse existing directory ${target}; pass a new one`)
+}
+
+function copyIfExists(from: string, to: string): void {
+  if (existsSync(from)) cpSync(from, to, { recursive: true })
+}
+
+export function createSandbox(root: string, pluginEntry: string): Sandbox {
+  assertSafeSandboxRoot(root)
+  const dirs = ["home/.omo", "config/opencode", "data/opencode", "state", "cache/opencode", "work"]
+  for (const dir of dirs) mkdirSync(join(root, dir), { recursive: true })
+  const realConfig = join(process.env.XDG_CONFIG_HOME ?? join(REAL_HOME, ".config"), "opencode")
+  // Installed plugin dependencies: without them the first start installs everything and takes minutes.
+  for (const name of ["node_modules", "package.json", "package-lock.json"]) copyIfExists(join(realConfig, name), join(root, "config/opencode", name))
+  copyIfExists(join(process.env.XDG_DATA_HOME ?? join(REAL_HOME, ".local/share"), "opencode/auth.json"), join(root, "data/opencode/auth.json"))
+  copyIfExists(join(process.env.XDG_CACHE_HOME ?? join(REAL_HOME, ".cache"), "opencode/models.json"), join(root, "cache/opencode/models.json"))
+  // The models the user picked with /omo-models: the bench measures what the user actually runs.
+  copyIfExists(join(REAL_HOME, ".omo/omo.jsonc"), join(root, "home/.omo/omo.jsonc"))
+  writeFileSync(
+    join(root, "config/opencode/opencode.json"),
+    JSON.stringify({ $schema: "https://opencode.ai/config.json", plugin: [`file://${realpathSync(pluginEntry)}`] }, null, 2),
+  )
+  return {
+    root,
+    env: {
+      HOME: join(root, "home"),
+      XDG_CONFIG_HOME: join(root, "config"),
+      XDG_DATA_HOME: join(root, "data"),
+      XDG_STATE_HOME: join(root, "state"),
+      XDG_CACHE_HOME: join(root, "cache"),
+    },
+  }
+}
+
+/** Fresh git repo with the fixture's files, so the agent's changes and git usage are observable. */
+export function prepareWorkdir(sandbox: Sandbox, fixtureDir: string, name: string): string {
+  const workdir = join(sandbox.root, "work", name)
+  cpSync(fixtureDir, workdir, { recursive: true })
+  const git = (...args: string[]) => {
+    const result = Bun.spawnSync(["git", "-c", "user.name=bench", "-c", "user.email=bench@example.invalid", ...args], { cwd: workdir, env: { ...process.env, ...sandbox.env } })
+    if (result.exitCode !== 0) throw new Error(`git ${args.join(" ")} failed: ${result.stderr.toString()}`)
+  }
+  git("init", "-q")
+  git("add", "-A")
+  git("commit", "-qm", "fixture")
+  return workdir
+}
+
+async function freePort(): Promise<number> {
+  return new Promise((resolvePort) => {
+    const server = createServer()
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address()
+      server.close(() => resolvePort(typeof address === "object" && address ? address.port : 0))
+    })
+  })
+}
+
+export type Server = { readonly baseUrl: string; stop(): void }
+
+/** One `opencode serve` for the whole run; each task talks to it with its own workdir as `directory`. */
+export async function startServer(sandbox: Sandbox, startupTimeoutMs = 600_000): Promise<Server> {
+  const port = await freePort()
+  const child: ChildProcess = spawn("opencode", ["serve", "--port", String(port), "--hostname", "127.0.0.1"], {
+    cwd: join(sandbox.root, "work"),
+    env: { ...process.env, ...sandbox.env },
+    stdio: "ignore",
+    detached: true,
+  })
+  const stop = () => {
+    // Kill the whole process group: opencode spawns LSP and MCP children that would otherwise outlive the run.
+    if (child.pid !== undefined) {
+      try {
+        process.kill(-child.pid, "SIGKILL")
+      } catch {
+        // already gone
+      }
+    }
+  }
+  const baseUrl = `http://127.0.0.1:${port}`
+  const deadline = Date.now() + startupTimeoutMs
+  while (Date.now() < deadline) {
+    if (child.exitCode !== null) break
+    if (await fetch(`${baseUrl}/config`).then((response) => response.ok, () => false)) return { baseUrl, stop }
+    await Bun.sleep(1000)
+  }
+  stop()
+  throw new Error(`server did not start within ${startupTimeoutMs / 1000}s`)
+}
+
+export function destroySandbox(sandbox: Sandbox): void {
+  rmSync(sandbox.root, { recursive: true, force: true })
+}
