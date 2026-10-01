@@ -1,3 +1,4 @@
+import { SESSION_MODEL } from "./model-resolution-constants"
 import { join } from "node:path"
 
 import { getOpenCodeCacheDir } from "../../../shared"
@@ -36,7 +37,7 @@ export function buildModelResolutionDetails(options: {
   details.push("")
   details.push("Agents:")
   for (const agent of options.info.agents) {
-    const marker = agent.userOverride ? "●" : "○"
+    const marker = agent.userOverride ? "●" : agent.effectiveModel === SESSION_MODEL ? "◌" : "○"
     const display = formatModelWithVariant(
       agent.effectiveModel,
       getEffectiveVariant(agent.name, agent.requirement, options.config)
@@ -46,7 +47,7 @@ export function buildModelResolutionDetails(options: {
   details.push("")
   details.push("Categories:")
   for (const category of options.info.categories) {
-    const marker = category.userOverride ? "●" : "○"
+    const marker = category.userOverride ? "●" : category.effectiveModel === SESSION_MODEL ? "◌" : "○"
     const display = formatModelWithVariant(
       category.effectiveModel,
       getCategoryEffectiveVariant(category.name, category.requirement, options.config)
@@ -54,7 +55,7 @@ export function buildModelResolutionDetails(options: {
     details.push(`  ${marker} ${category.name}: ${display} [capabilities: ${formatCapabilityResolutionLabel(category.capabilityDiagnostics?.resolutionMode)}]`)
   }
   details.push("")
-  details.push("● = user override, ○ = provider fallback")
+  details.push("● = user override, ○ = provider fallback, ◌ = session model (no configured or available model)")
 
   return details
 }
