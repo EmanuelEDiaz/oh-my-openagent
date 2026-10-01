@@ -127,6 +127,8 @@ function buildDeps(fixture: Fixture, overrides: Partial<CodexComponentsDoctorDep
     // for the probe here instead of shipping a platform-specific executable stub.
     sgRunVersionProbeSync: () => "ast-grep 0.43.0",
     sgWhich: () => null,
+    // Keep the resolver out of the real ~/.omo/runtime (an installed sg there made these tests machine-dependent).
+    homeDir: fixture.root,
     ...overrides,
   }
 }
