@@ -2,6 +2,7 @@
 import { createOpencodeClient } from "@opencode-ai/sdk/v2"
 
 import { ranAs, withinBudget } from "./graders"
+import { createStallDetector, progressSignature } from "./progress"
 import { prepareWorkdir, type Sandbox } from "./sandbox"
 import { classifyFailure } from "./score"
 import { toTranscript, type RawMessage } from "./transcript"
@@ -49,14 +50,30 @@ async function finishedSubtask(client: Client, parentID: string): Promise<boolea
   return status === "completed" || status === "error"
 }
 
-async function waitUntil(condition: () => Promise<boolean>, timeoutMs: number, label: string): Promise<void> {
+const STALL_MS = 240_000
+
+async function waitUntil(
+  condition: () => Promise<boolean>,
+  progress: () => Promise<string>,
+  timeoutMs: number,
+  label: string,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs
+  const detector = createStallDetector(STALL_MS)
   // Give the server a moment to register the prompt before the first idle check.
   await Bun.sleep(POLL_MS)
   while (!(await condition().catch(() => false))) {
     if (Date.now() > deadline) throw new Error(`${label} timed out after ${timeoutMs / 1000}s`)
+    if (detector.stalled(await progress().catch(() => ""))) throw new Error(`${label} stalled: no progress for ${STALL_MS / 1000}s`)
     await Bun.sleep(POLL_MS)
   }
+}
+
+/** Progress of a session and its delegations. */
+async function sessionProgress(client: Client, sessionID: string): Promise<string> {
+  const own = progressSignature((await messagesOf(client, sessionID)) as never)
+  const children = await Promise.all((await childrenOf(client, sessionID)).map((child) => sessionProgress(client, child)))
+  return [own, ...children].join("#")
 }
 
 /** Runs the task once and returns the transcript of the evaluated session (the subagent's, in subtask mode). */
@@ -66,7 +83,7 @@ async function execute(client: Client, task: Task): Promise<Transcript> {
   if (task.mode === "primary") {
     await client.session.promptAsync({ sessionID: parentID, agent: task.agent, parts: [{ type: "text", text: task.prompt }] })
     try {
-      await waitUntil(() => isIdle(client, parentID), task.budget.timeoutMs, task.id)
+      await waitUntil(() => isIdle(client, parentID), () => sessionProgress(client, parentID), task.budget.timeoutMs, task.id)
     } finally {
       await client.session.abort({ sessionID: parentID }).catch(() => undefined)
     }
@@ -79,7 +96,7 @@ async function execute(client: Client, task: Task): Promise<Transcript> {
     parts: [{ type: "subtask", agent: task.agent, description: task.id, prompt: task.prompt }],
   })
   try {
-    await waitUntil(() => finishedSubtask(client, parentID), task.budget.timeoutMs, task.id)
+    await waitUntil(() => finishedSubtask(client, parentID), () => sessionProgress(client, parentID), task.budget.timeoutMs, task.id)
   } finally {
     // Stop the parent's follow-up turn: only the subagent is evaluated, and the parent must not keep working.
     await client.session.abort({ sessionID: parentID }).catch(() => undefined)
