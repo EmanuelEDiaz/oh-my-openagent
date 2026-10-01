@@ -147,6 +147,17 @@ export async function warmUp(sandbox: Sandbox, server: Server, timeoutMs = 120_0
   return false
 }
 
+/** True when the server answers within the timeout. */
+export async function isHealthy(server: Server, timeoutMs = 10_000): Promise<boolean> {
+  return fetch(`${server.baseUrl}/config`, { signal: AbortSignal.timeout(timeoutMs) }).then((response) => response.ok, () => false)
+}
+
+/** Copies OpenCode's own logs out of the sandbox (never auth.json) before it is deleted. */
+export function saveServerLogs(sandbox: Sandbox, to: string): void {
+  const logs = join(sandbox.root, "data/opencode/log")
+  if (existsSync(logs)) cpSync(logs, to, { recursive: true })
+}
+
 export function destroySandbox(sandbox: Sandbox): void {
   rmSync(sandbox.root, { recursive: true, force: true })
 }

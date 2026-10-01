@@ -14,6 +14,8 @@ describe("classifyFailure", () => {
       "503 Service Unavailable",
       "model is overloaded",
       "ProviderModelNotFoundError: big-pickle-free",
+      "server error creating session: {}",
+      "server unresponsive",
     ]) {
       expect(classifyFailure(error)).toBe("infra")
     }

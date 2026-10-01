@@ -79,7 +79,8 @@ async function sessionProgress(client: Client, sessionID: string): Promise<strin
 /** Runs the task once and returns the transcript of the evaluated session (the subagent's, in subtask mode). */
 async function execute(client: Client, task: Task): Promise<Transcript> {
   const session = await client.session.create({ title: `bench ${task.id}` })
-  const parentID = (session.data as { id: string }).id
+  const parentID = (session.data as { id?: string } | undefined)?.id
+  if (parentID === undefined) throw new Error(`server error creating session: ${JSON.stringify(session.error ?? {}).slice(0, 200)}`)
   if (task.mode === "primary") {
     await client.session.promptAsync({ sessionID: parentID, agent: task.agent, parts: [{ type: "text", text: task.prompt }] })
     try {

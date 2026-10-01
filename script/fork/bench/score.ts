@@ -14,7 +14,7 @@ const INFRA_PATTERNS = [
   /timed out|stalled/i,
   /ECONNREFUSED|ECONNRESET|ETIMEDOUT|fetch failed|socket hang up/i,
   /ProviderAuthError/i,
-  /server did not start/i,
+  /server did not start|server error|server unresponsive/i,
 ]
 
 // The setup is wrong (e.g. a model OpenCode retired is still configured): retrying cannot help, the run stops.

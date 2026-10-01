@@ -124,9 +124,14 @@ function citationProblem(citation: Citation, workdir: string): string | undefine
     const problems = candidates.map((file) => lineProblem(citation, file))
     return problems.includes(undefined) ? undefined : problems[0]
   }
-  const file = isAbsolute(citation.path) ? citation.path : resolve(workdir, citation.path)
+  let file = isAbsolute(citation.path) ? citation.path : resolve(workdir, citation.path)
   const inside = relative(workdir, file)
-  if (inside.startsWith("..") || isAbsolute(inside)) return "outside the repo"
+  if (inside.startsWith("..") || isAbsolute(inside)) {
+    // Agents elide or root-anchor repo paths (`/…/src/a.ts`, `/src/a.ts`): read them relative to the repo.
+    const asRepoPath = resolve(workdir, citation.path.replace(/^\/+/, ""))
+    if (!existsSync(asRepoPath)) return "outside the repo"
+    file = asRepoPath
+  }
   if (!existsSync(file)) return "no such file"
   return lineProblem(citation, file)
 }
