@@ -248,6 +248,37 @@ describe("system check", () => {
       expect(result.issues.some((issue) => issue.title === "Using legacy package name")).toBe(false)
     })
 
+    it("never tells a local checkout to install the published package over it (fork 0.6)", async () => {
+      //#given
+      mockGetPluginInfo.mockReturnValue({
+        registered: true,
+        entry: "file:///home/user/.config/opencode/omo-fork/dist/index.js",
+        isPinned: false,
+        pinnedVersion: null,
+        configPath: null,
+        isLocalDev: true,
+      })
+      mockGetLoadedPluginVersion.mockReturnValue({
+        cacheDir: "/home/user/.config/opencode",
+        cachePackagePath: "/tmp/package.json",
+        installedPackagePath: "/tmp/node_modules/oh-my-openagent/package.json",
+        expectedVersion: "5.0.1",
+        loadedVersion: "5.0.1",
+      })
+      mockGetLatestPluginVersion.mockResolvedValue("9.9.9")
+      mockGetSuggestedInstallTag.mockReturnValue("latest")
+      mockCompareVersions
+        .mockImplementationOnce(() => true)
+        .mockImplementationOnce(() => false)
+
+      //#when
+      const result = await checkSystem(createSystemDeps())
+
+      //#then
+      expect(result.issues.some((issue) => issue.title === "Loaded plugin is outdated")).toBe(false)
+      expect(result.issues.some((issue) => issue.fix?.includes("bun add"))).toBe(false)
+    })
+
     it("does not warn for a local-dev legacy entry", async () => {
       //#given
       mockGetPluginInfo.mockReturnValue({
