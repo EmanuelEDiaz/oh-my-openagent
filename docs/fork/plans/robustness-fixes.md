@@ -1,6 +1,6 @@
 # Pasos 0.3 y 0.4 — Robustez: agentes que desaparecen y escritura de Prometheus
 
-Parte del roadmap: `docs/fork/roadmap.md`. Estado: **plan (29-09-2026)**, investigado en vivo y en el código.
+Parte del roadmap: `docs/fork/roadmap.md`. Estado: **0.3 hecho (01-10-2026); 0.4 plan**, investigado en vivo y en el código.
 Rutas: `S/` = `packages/omo-opencode/src/`, `MC/` = `packages/model-core/src/`.
 
 ## 0.3 — Ningún agente desaparece por no resolver su modelo
@@ -26,6 +26,19 @@ Rutas: `S/` = `packages/omo-opencode/src/`, `MC/` = `packages/model-core/src/`.
 3. `opencode/big-pickle` al final de la cadena de Atlas (como Sisyphus y sisyphus-junior).
 4. Tests: Atlas en primer arranque sin `config.model`; caché solo con ollama/groq → Atlas registrado sin modelo y aviso;
    el respaldo no se usa si su proveedor no está conectado.
+
+**Resultado (01-10-2026): hecho.**
+- Agentes sin modelo se registran sin `model` (usan el de la sesión).
+- El respaldo solo usa proveedores conectados y modelos listados.
+- Hephaestus conserva la suposición GPT en el primer arranque, avisada, o se desactiva con motivo.
+- Aviso al arrancar con orquestadores primero y remisión a `/omo-models`.
+- `big-pickle` al final de la cadena de Atlas.
+- QA real en `.omo/evidence/20261001-model-resolution-robustness/`.
+- Pendiente:
+  - `doctor` no lo muestra (corre en otro proceso);
+  - `sisyphus-junior` hereda `anthropic/…` cuando Atlas no tiene modelo;
+  - **hallazgo**: con caché, la resolución elige modelos de pago que el proveedor lista (Zen), que fallan en cuentas
+    gratuitas → propuesta de opción "solo modelos gratuitos" (decisión del usuario).
 
 ## 0.4 — Prometheus no puede escribir fuera de `.omo/*.md`
 **Problema (verificado en el código).** El bloqueo solo mira `write`/`edit` (`S/hooks/prometheus-md-only/constants.ts:12`)
