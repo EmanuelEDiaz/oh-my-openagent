@@ -10,7 +10,10 @@ function formatOkSummary(result: DoctorResult, headline: string, installedVersio
     ` ${color.green(SYMBOLS.check)} ${color.green(
       `${headline} · Edition: ${EDITION_LABELS[target]} · Installed: ${installedVersion} · Latest: ${latest}`
     )}`,
-    `   Update: ${UPDATE_COMMANDS[target]}`,
+    // A local checkout (e.g. a fork loaded from file://) is updated with git; the published installer would replace it.
+    result.systemInfo.isLocalDev
+      ? "   Update: local checkout — git pull and rebuild it (the published installer would replace it)"
+      : `   Update: ${UPDATE_COMMANDS[target]}`,
   ]
 }
 
