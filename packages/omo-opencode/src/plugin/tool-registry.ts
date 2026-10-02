@@ -14,6 +14,7 @@ import { defaultToolRegistryFactories } from "./tool-registry-factories"
 import {
   createHashlineToolsRecord,
   createMonitorToolsRecord,
+  createProcessToolsRecord,
   createTaskToolsRecord,
   getTaskSystemEnabled,
 } from "./tool-registry-gated-tools"
@@ -29,7 +30,7 @@ export type ToolRegistryResult = {
 export function createToolRegistry(args: {
   ctx: PluginContext
   pluginConfig: OhMyOpenCodeConfig
-  managers: Pick<Managers, "backgroundManager" | "tmuxSessionManager" | "skillMcpManager" | "modelFallbackControllerAccessor" | "monitorManager">
+  managers: Pick<Managers, "backgroundManager" | "tmuxSessionManager" | "skillMcpManager" | "modelFallbackControllerAccessor" | "monitorManager" | "processManager">
   skillContext: SkillContext
   availableCategories: AvailableCategory[]
   interactiveBashEnabled?: boolean
@@ -61,6 +62,7 @@ export function createToolRegistry(args: {
     ...(interactiveBashEnabled ? { interactive_bash: factories.interactive_bash } : {}),
     ...createTeamModeToolsRecord({ pluginConfig, ctx, managers, factories }),
     ...createMonitorToolsRecord({ pluginConfig, ctx, managers, factories }),
+    ...createProcessToolsRecord({ managers }),
     ...createTaskToolsRecord({ taskSystemEnabled, pluginConfig, ctx, factories }),
     ...createHashlineToolsRecord({ pluginConfig, ctx, factories }),
   }

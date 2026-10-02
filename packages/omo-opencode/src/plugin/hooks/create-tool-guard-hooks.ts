@@ -22,6 +22,7 @@ import {
   createNotepadWriteGuardHook,
   createPlanFormatValidatorHook,
 } from "../../hooks"
+import { createManagedProcessGuardHook } from "../../hooks/managed-process-guard/hook"
 import {
   getOpenCodeVersion,
   isOpenCodeVersionAtLeast,
@@ -48,6 +49,7 @@ export type ToolGuardHooks = {
   tasksTodowriteDisabler: ReturnType<typeof createTasksTodowriteDisablerHook> | null
   writeExistingFileGuard: ReturnType<typeof createWriteExistingFileGuardHook> | null
   bashFileReadGuard: ReturnType<typeof createBashFileReadGuardHook> | null
+  managedProcessGuard: ReturnType<typeof createManagedProcessGuardHook> | null
   hashlineReadEnhancer: ReturnType<typeof createHashlineReadEnhancerHook> | null
   jsonErrorRecovery: ReturnType<typeof createJsonErrorRecoveryHook> | null
   readImageResizer: ReturnType<typeof createReadImageResizerHook> | null
@@ -141,6 +143,11 @@ export function createToolGuardHooks(args: {
     ? safeHook("write-existing-file-guard", () => createWriteExistingFileGuardHook(ctx))
     : null
 
+  // Long-running commands must use process_start; self-destructive kills are refused (fork roadmap 0.8b).
+  const managedProcessGuard = isHookEnabled("managed-process-guard") && pluginConfig.processes?.enabled !== false
+    ? safeHook("managed-process-guard", () => createManagedProcessGuardHook({ enforceLongRunning: pluginConfig.processes?.enforce !== false }))
+    : null
+
   const bashFileReadGuard = isHookEnabled("bash-file-read-guard")
     ? safeHook("bash-file-read-guard", () => createBashFileReadGuardHook())
     : null
@@ -195,6 +202,7 @@ export function createToolGuardHooks(args: {
     tasksTodowriteDisabler,
     writeExistingFileGuard,
     bashFileReadGuard,
+    managedProcessGuard,
     hashlineReadEnhancer,
     jsonErrorRecovery,
     readImageResizer,

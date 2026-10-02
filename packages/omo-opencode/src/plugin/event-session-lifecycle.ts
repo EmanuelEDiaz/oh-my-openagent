@@ -133,6 +133,7 @@ export async function handleSessionDeletedEvent(args: {
   if (!sessionID) return;
 
   await args.managers.monitorManager?.stopSessionMonitors(sessionID);
+  await args.managers.processManager?.stopSession(sessionID).catch(() => undefined);
   const wasSyncSubagentSession = syncSubagentSessions.has(sessionID);
   clearSessionAgent(sessionID);
   handedBackSyncSessions.delete(sessionID);

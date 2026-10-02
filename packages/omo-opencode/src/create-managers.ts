@@ -6,6 +6,7 @@ import type { SubagentSessionCreatedEvent } from "./features/background-agent"
 import { BackgroundManager } from "./features/background-agent"
 import type { MonitorManager } from "./features/monitor"
 import { createMonitorManager } from "./features/monitor"
+import { createPluginProcessManager, type ProcessManager } from "./features/managed-process"
 import { SkillMcpManager } from "./features/skill-mcp-manager"
 import { cleanupSessionTeamRuns } from "./features/team-mode/team-runtime/session-cleanup"
 import { lookupTeamSession } from "./features/team-mode/team-session-registry"
@@ -57,6 +58,7 @@ export type Managers = {
   modelFallbackControllerAccessor: ModelFallbackControllerAccessor
   tuiStateMirror?: TuiStateMirror
   monitorManager?: MonitorManager
+  processManager?: ProcessManager
 }
 
 export function createManagers(args: {
@@ -103,6 +105,20 @@ export function createManagers(args: {
     })
     : undefined
 
+  // Managed background processes (fork roadmap 0.8b), on unless processes.enabled is false.
+  const processManager = pluginConfig.processes?.enabled === false
+    ? undefined
+    : createPluginProcessManager(ctx, pluginConfig.processes)
+  const shutdownProcesses = async (): Promise<void> => {
+    const failures = await processManager?.shutdown().catch((error) => {
+      log("[create-managers] process cleanup error during shutdown:", error)
+      return []
+    }) ?? []
+    for (const failure of failures) {
+      log("[create-managers] managed process survived shutdown", { name: failure.record.name, manual: failure.result.manualCommand })
+    }
+  }
+
   const cleanupTeamModeRuns = async (): Promise<void> => {
     if (!pluginConfig.team_mode?.enabled) return
     const report = await deps.cleanupSessionTeamRunsFn({
@@ -127,6 +143,7 @@ export function createManagers(args: {
       await monitorManager?.shutdown().catch((error) => {
         log("[create-managers] monitor cleanup error during process shutdown:", error)
       })
+      await shutdownProcesses()
     },
   })
 
@@ -191,6 +208,7 @@ export function createManagers(args: {
       await monitorManager?.shutdown().catch((error) => {
         log("[create-managers] monitor cleanup error during shutdown:", error)
       })
+      await shutdownProcesses()
     },
     enableParentSessionNotifications: backgroundNotificationHookEnabled,
     modelFallbackControllerAccessor,
@@ -223,5 +241,6 @@ export function createManagers(args: {
     modelFallbackControllerAccessor,
     tuiStateMirror,
     monitorManager,
+    processManager,
   }
 }

@@ -5,6 +5,7 @@ import type { PluginContext } from "./types"
 import type { ToolRegistryFactories } from "./tool-registry-factories"
 
 import { isTaskSystemEnabled } from "../shared"
+import { createProcessTools } from "../tools/process/tools"
 
 export function createTaskToolsRecord(args: {
   readonly taskSystemEnabled: boolean
@@ -45,4 +46,10 @@ export function createMonitorToolsRecord(args: {
 
 export function getTaskSystemEnabled(pluginConfig: OhMyOpenCodeConfig): boolean {
   return isTaskSystemEnabled(pluginConfig)
+}
+
+export function createProcessToolsRecord(args: {
+  readonly managers: Pick<Managers, "processManager">
+}): Record<string, ToolDefinition> {
+  return args.managers.processManager ? createProcessTools(args.managers.processManager) : {}
 }
