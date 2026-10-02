@@ -9,6 +9,8 @@ import { applyCommandConfig } from "./command-config-handler";
 import { applyHookConfig } from "./hook-config-handler";
 import { applyMcpConfig } from "./mcp-config-handler";
 import { applyProviderConfig } from "./provider-config-handler";
+import { applyChunkTimeoutDefaults } from "./stall-chunk-timeout";
+import { readConnectedProvidersCache } from "../shared/connected-providers-cache";
 import { loadPluginComponents } from "./plugin-components-loader";
 import { applyToolConfig } from "./tool-config-handler";
 import { clearFormatterCache } from "../tools/hashline-edit/formatter-trigger"
@@ -97,6 +99,9 @@ export function createConfigHandler(deps: ConfigHandlerDeps) {
 
     setAdditionalAllowedMcpEnvVars(pluginConfig.mcp_env_allowlist ?? [])
     applyOpenGatewayProviderConfig(config);
+    if (pluginConfig.stall?.enabled !== false) {
+      applyChunkTimeoutDefaults(config, readConnectedProvidersCache() ?? [], pluginConfig.stall?.chunk_timeout_ms ?? 90_000)
+    }
     applyProviderConfig({
       config,
       modelCacheState,

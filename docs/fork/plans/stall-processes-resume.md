@@ -1,6 +1,6 @@
 # Paso 0.8 — Diseño detallado: cuelgues, procesos en segundo plano y reanudación
 
-Parte del roadmap: `docs/fork/roadmap.md`. Estado: **aprobado (02-10-2026)**; en curso 0.8a.
+Parte del roadmap: `docs/fork/roadmap.md`. Estado: **aprobado (02-10-2026)**; **0.8a hecho**, sigue 0.8b.
 Base: decisiones en `plans/robustness-fixes.md` (0.8) y `plans/bounded-retry-resume.md`. Rutas: `S/` =
 `packages/omo-opencode/src/`. Todo funciona en Windows y Linux (0.11).
 
@@ -30,8 +30,36 @@ Base: decisiones en `plans/robustness-fixes.md` (0.8) y `plans/bounded-retry-res
      reintentado con Y"), una notificación en segundo plano, o un "continúa" interno en la sesión principal.
    - Al agotar el presupuesto, el trabajo se **pausa** (con 0.8c completo, con su tarjeta de reanudación; hasta
      entonces, con el motivo guardado).
-5. **Umbrales bajos donde ya existían:** segundo plano 45 → 10 min y síncrona 30 → 10 min, solo como red de
-   seguridad, porque el vigilante actúa antes. Configurable.
+5. ~~**Umbrales bajos donde ya existían** (45 → 10 min en segundo plano, 30 → 10 min en síncrona).~~ **Descartado
+   al implementarlo (02-10-2026).** Esos temporizadores no distinguen una herramienta larga legítima (unos tests de
+   15 min) de un cuelgue: con 10 min habrían cancelado trabajo válido, y un test del original lo detectó. Se quedan
+   en 45 y 30 min como red de seguridad; el vigilante, que sí excluye las herramientas en marcha, actúa a los 4 min.
+
+### Resultado de 0.8a (02-10-2026)
+- **Hecho:**
+  - `chunkTimeout` 90 s por defecto (`S/plugin-handlers/stall-chunk-timeout.ts`);
+  - vigilante (`S/features/stall-watchdog/`, `S/hooks/stall-watchdog/`);
+  - delegación síncrona y segundo plano reintentan con el siguiente modelo;
+  - la sesión principal continúa con el respaldo;
+  - presupuesto de 2 recuperaciones por tarea; configuración `stall`.
+- **Encontrado y corregido durante la QA:**
+  - **Fallo del original:** el respaldo por agente no encontraba la configuración cuando la sesión daba el nombre
+    visible ("Sisyphus - ultraworker" frente a `sisyphus`); afectaba también a `runtime-fallback`
+    (`hooks/runtime-fallback/fallback-models.ts`).
+  - **"SSE read timed out"** (el corte de `chunkTimeout`) no se consideraba reintentable con otro modelo; ahora sí
+    (`model-core/src/model-error-classifier.ts`).
+  - **La sesión principal que termina con ese corte** tras los reintentos de OpenCode ahora continúa con el modelo de
+    respaldo.
+- **Descartado:** bajar los temporizadores antiguos a 10 min (ver punto 5).
+- **QA aislada** con un proveedor simulado que se cuelga a demanda (evidencia en `.omo/evidence/0.8a/`):
+  - A (sesión principal, vigilante a 60 s) → continúa con el respaldo y responde;
+  - B (`chunkTimeout`) → "SSE read timed out", reintentos de OpenCode y, al agotarse, continúa con el respaldo;
+  - C (subagente colgado en la delegación síncrona) → reintento con el respaldo y la tarea termina bien;
+  - `opencode.db` y `auth.json` reales sin cambios.
+- **Tests:**
+  - 8822 del plugin en verde; 99 fallan solo en la ejecución conjunta (contaminación conocida) y los 13 archivos
+    afectados pasan uno a uno;
+  - tipado limpio.
 
 ### 0.8b — Procesos largos en segundo plano, obligatorios
 1. **Herramientas** (se amplía `monitor`, que pasa a estar activado por defecto):

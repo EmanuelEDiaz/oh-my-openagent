@@ -10,6 +10,7 @@ import { shouldAttemptPollErrorRecovery } from "./sync-poll-error-recovery"
 import type { SyncTaskDeps } from "./sync-task-deps"
 import { getNextSyncFallbackModel, retrySyncPromptWithFallbacks } from "./sync-task-fallback"
 import type { DelegatedModelConfig, DelegateTaskArgs, ToolContextWithMetadata } from "./types"
+import { stallBudgetExceeded } from "../../features/stall-watchdog"
 
 type SyncTaskRunnerInput = {
   readonly args: DelegateTaskArgs
@@ -168,6 +169,11 @@ export async function runSyncTaskLoop(input: SyncTaskRunnerInput): Promise<strin
             textContent: recoveredResult.textContent,
           })
         }
+      }
+
+      // A stalled model is retried on the next one at most `stall.max_stalls_per_task` times (fork roadmap 0.8a).
+      if (stallBudgetExceeded(pollError, taskId ?? input.sessionID)) {
+        return `${pollError}. Stopped after repeated stalls instead of retrying forever: retry with another model or ask the user.`
       }
 
       const nextFallbackModel = shouldRetryPollErrorWithFallback(pollError, deps)

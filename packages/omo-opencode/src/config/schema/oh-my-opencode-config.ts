@@ -20,6 +20,7 @@ import { ModelCapabilitiesConfigSchema } from "./model-capabilities"
 import { GoalConfigSchema } from "./goal"
 import { KnowledgeConfigSchema } from "./knowledge"
 import { MonitorConfigSchema } from "./monitor"
+import { StallConfigSchema } from "./stall"
 import { RuntimeFallbackConfigSchema } from "./runtime-fallback"
 import { TeamModeConfigSchema } from "./team-mode"
 import { SkillsConfigSchema } from "./skills"
@@ -92,6 +93,8 @@ export const OhMyOpenCodeConfigSchema = z.object({
   /** Plugin i18n settings */
   i18n: I18nConfigSchema.optional(),
   monitor: MonitorConfigSchema.optional(),
+  /** Silent model stalls: default chunk timeout and stall watchdog (fork roadmap 0.8) */
+  stall: StallConfigSchema.optional(),
   team_mode: TeamModeConfigSchema.optional(),
   keyword_detector: KeywordDetectorConfigSchema.optional(),
   babysitting: BabysittingConfigSchema.optional(),

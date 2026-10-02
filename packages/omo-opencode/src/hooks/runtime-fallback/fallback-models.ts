@@ -2,6 +2,7 @@ import type { OhMyOpenCodeConfig } from "../../config"
 import type { FallbackModelObject } from "../../config/schema/fallback-models"
 import { agentPattern } from "./agent-resolver"
 import { HOOK_NAME } from "./constants"
+import { getAgentConfigKey } from "../../shared/agent-display-names"
 import { log } from "../../shared/logger"
 import { SessionCategoryRegistry } from "../../shared/session-category-registry"
 import { normalizeFallbackModels, flattenToFallbackModelStrings } from "../../shared/model-resolver"
@@ -78,7 +79,8 @@ function getRawFallbackModelsForSession(
   }
 
   if (agent) {
-    const result = tryGetFallbackFromAgent(agent)
+    // Sessions report display names ("Sisyphus - ultraworker"); config is keyed by "sisyphus".
+    const result = tryGetFallbackFromAgent(agent) ?? tryGetFallbackFromAgent(getAgentConfigKey(agent))
     if (result) return result
     const planFallback = tryGetPrometheusFallbackForPlan(agent)
     if (planFallback) return planFallback

@@ -12,6 +12,7 @@ import {
 } from "../../hooks"
 import { safeCreateHook } from "../../shared/safe-create-hook"
 import { createLosslessCompactionHook } from "../../hooks/lossless-compaction"
+import { createPluginStallWatchdogHook } from "../../hooks/stall-watchdog"
 import { createUnstableAgentBabysitter } from "../unstable-agent-babysitter"
 
 export type ContinuationHooks = {
@@ -19,6 +20,7 @@ export type ContinuationHooks = {
   compactionContextInjector: ReturnType<typeof createCompactionContextInjector> | null
   compactionTodoPreserver: ReturnType<typeof createCompactionTodoPreserverHook> | null
   losslessCompaction: ReturnType<typeof createLosslessCompactionHook> | null
+  stallWatchdog: ReturnType<typeof createPluginStallWatchdogHook> | null
   todoContinuationEnforcer: ReturnType<typeof createTodoContinuationEnforcer> | null
   unstableAgentBabysitter: ReturnType<typeof createUnstableAgentBabysitter> | null
   backgroundNotificationHook: ReturnType<typeof createBackgroundNotificationHook> | null
@@ -92,11 +94,16 @@ export function createContinuationHooks(args: {
     ? safeHook("lossless-compaction", () => createLosslessCompactionHook(ctx))
     : null
 
+  const stallWatchdog = isHookEnabled("stall-watchdog") && pluginConfig.stall?.enabled !== false
+    ? safeHook("stall-watchdog", () => createPluginStallWatchdogHook(ctx, pluginConfig))
+    : null
+
   return {
     stopContinuationGuard,
     compactionContextInjector,
     compactionTodoPreserver,
     losslessCompaction,
+    stallWatchdog,
     todoContinuationEnforcer,
     unstableAgentBabysitter,
     backgroundNotificationHook,
