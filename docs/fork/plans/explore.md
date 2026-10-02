@@ -110,7 +110,9 @@ es una dependencia.
   - este fork fijado en un commit (grande, TypeScript, sin red);
   - un repo pequeño de Python y uno de Go, públicos y fijados por commit, que se clonan una vez a una caché local y
     no se versionan;
-  - el `ts-service` actual.
+  - el `ts-service` actual;
+  - **2–3 prompts reales sobre la copia de `codegenerator`** (decisión del usuario, 02-10-2026), p. ej. "¿qué pasa
+    desde que el CLI recibe un JSON hasta que se escriben los archivos?".
 - **Métricas:**
   - acierto (respuesta y citas comprobadas por código);
   - **tokens de entrada**, turnos y tiempo;
