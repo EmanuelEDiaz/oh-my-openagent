@@ -81,6 +81,10 @@
       "types": "./src/process-tree.ts",
       "import": "./src/process-tree.ts"
     },
+    "./process-tree-termination": {
+      "types": "./src/process-tree-termination.ts",
+      "import": "./src/process-tree-termination.ts"
+    },
     "./prompt-async-gate": {
       "types": "./src/prompt-async-gate.ts",
       "import": "./src/prompt-async-gate.ts"

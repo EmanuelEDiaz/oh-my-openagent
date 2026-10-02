@@ -9670,6 +9670,31 @@
       ],
       "additionalProperties": false
     },
+    "processes": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        },
+        "enforce": {
+          "default": true,
+          "type": "boolean"
+        },
+        "timeout_ms": {
+          "default": 7200000,
+          "type": "integer",
+          "minimum": 60000,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "enabled",
+        "enforce",
+        "timeout_ms"
+      ],
+      "additionalProperties": false
+    },
     "team_mode": {
       "type": "object",
       "properties": {

@@ -1,6 +1,7 @@
 import type { DefaultModeConfig } from "../config/schema/default-mode"
 import { reconcileSisyphusRuntimePrompt } from "../agents/sisyphus-runtime-prompt-reconciler"
 import { GROUNDING_TAG } from "../features/knowledge/grounding"
+import { PROCESS_GUIDANCE_TAG } from "../features/managed-process/guidance"
 
 const ULTRAWORK_MODE_TAG = "<ultrawork-mode>"
 
@@ -27,6 +28,7 @@ export function createSystemTransformHandler(
   getUltraworkMessage?: (agentName?: string, modelID?: string) => string,
   ultraworkRestoration?: UltraworkRestoration | null,
   groundingGuidance?: string,
+  processGuidance?: string,
 ): (
   input: { sessionID?: string; model: { id: string; providerID: string; [key: string]: unknown } },
   output: { system: string[] },
@@ -40,6 +42,10 @@ export function createSystemTransformHandler(
 
     if (groundingGuidance && !output.system.some((part) => part.includes(GROUNDING_TAG))) {
       output.system.push(groundingGuidance)
+    }
+
+    if (processGuidance && !output.system.some((part) => part.includes(PROCESS_GUIDANCE_TAG))) {
+      output.system.push(processGuidance)
     }
 
     const restoredGuidance = input.sessionID

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { parseModel } from "./plugin-deps"
+import { parseModel } from "../../shared/session-target"
 
 describe("parseModel", () => {
   test("splits provider, model and optional variant", () => {
