@@ -15,6 +15,7 @@ import { join } from "node:path"
 
 import { resolveFixture } from "./fixtures"
 import { renderReport } from "./report"
+import { pendingRuns } from "./resume"
 import { runTask } from "./runner"
 import { createSandbox, destroySandbox, isHealthy, saveServerLogs, startServer, warmUp, type Sandbox, type Server } from "./sandbox"
 import { isConfigError, summarize } from "./score"
@@ -75,7 +76,13 @@ async function main(): Promise<void> {
   const date = new Date().toISOString().slice(0, 10)
   const evalsDir = join(REPO, ".omo/evals")
   mkdirSync(evalsDir, { recursive: true })
-  const rawFile = join(evalsDir, `${date}-${agent}-${label.replaceAll(/\W+/g, "-")}-${Date.now()}.jsonl`)
+  // --resume <file>: continue a broken run into the same file, skipping what it already scored.
+  const resumeFile = option("resume")
+  if (resumeFile !== undefined && !existsSync(resumeFile)) throw new Error(`--resume file ${resumeFile} not found`)
+  const rawFile = resumeFile ?? join(evalsDir, `${date}-${agent}-${label.replaceAll(/\W+/g, "-")}-${Date.now()}.jsonl`)
+  const previousResults: RunResult[] = resumeFile === undefined
+    ? []
+    : readFileSync(resumeFile, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line) as RunResult)
 
   let sandbox: Sandbox | undefined
   let server: Server | undefined
@@ -95,7 +102,9 @@ async function main(): Promise<void> {
     })
   }
 
-  const results: RunResult[] = []
+  const results: RunResult[] = [...previousResults]
+  const pending = pendingRuns(previousResults, tasks.map((task) => task.id), repeats, INFRA_RETRIES)
+  if (resumeFile !== undefined) console.log(`resuming ${resumeFile}: ${previousResults.length} saved result(s), ${pending.length} run(s) to go`)
   try {
     sandbox = createSandbox(join(tmpdir(), `omo-bench-${process.pid}-${Date.now()}`), plugin)
     console.log(`sandbox ${sandbox.root}; starting OpenCode (the first start can take minutes)…`)
@@ -105,9 +114,10 @@ async function main(): Promise<void> {
       return started
     }
     server = await start(sandbox)
-    for (const task of tasks) {
-      for (let repeat = 0; repeat < repeats; repeat++) {
-        for (let attempt = 0; attempt <= INFRA_RETRIES; attempt++) {
+    for (const { taskId, repeat, nextAttempt } of pending) {
+      const task = tasks.find((candidate) => candidate.id === taskId)!
+      {
+        for (let attempt = nextAttempt; attempt <= INFRA_RETRIES; attempt++) {
           // A stalled model can leave the server unresponsive: restart it rather than failing every later task.
           if (!(await isHealthy(server))) {
             console.log("warning: server unresponsive; restarting it")

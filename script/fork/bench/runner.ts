@@ -3,6 +3,9 @@ import { createOpencodeClient } from "@opencode-ai/sdk/v2"
 
 import { gradersFor } from "./graders"
 import { createStallDetector, progressSignature } from "./progress"
+import { rmSync } from "node:fs"
+import { join } from "node:path"
+
 import { prepareWorkdir, type Sandbox } from "./sandbox"
 import { classifyFailure } from "./score"
 import { toTranscript, type RawMessage } from "./transcript"
@@ -119,8 +122,17 @@ export type RunOptions = {
 }
 
 export async function runTask(task: Task, options: RunOptions): Promise<RunResult> {
-  const name = `${task.id.replaceAll("/", "_")}-r${options.repeat}-a${options.attempt}`
-  const workdir = prepareWorkdir(options.sandbox, options.fixtureDir, name)
+  const workdirName = `${task.id.replaceAll("/", "_")}-r${options.repeat}-a${options.attempt}`
+  try {
+    return await runInWorkdir(task, options, workdirName)
+  } finally {
+    // Large fixtures (a whole repo) fill a RAM-backed /tmp fast; regrade.ts uses a fresh copy, so nothing is lost.
+    rmSync(join(options.sandbox.root, "work", workdirName), { recursive: true, force: true })
+  }
+}
+
+async function runInWorkdir(task: Task, options: RunOptions, workdirName: string): Promise<RunResult> {
+  const workdir = prepareWorkdir(options.sandbox, options.fixtureDir, workdirName)
   const base = { taskId: task.id, repeat: options.repeat, attempt: options.attempt, workdir }
   let transcript: Transcript
   try {
