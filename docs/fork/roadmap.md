@@ -171,6 +171,7 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 - ~~Reglas de lenguaje/framework cargadas bajo demanda~~ — absorbido en 4.5 (antes 2.9), 29-09-2026.
 
 ## Registro de decisiones del roadmap
+- 02-10-2026 — Requisito común de 0.8 y 0.9: nada se reintenta para siempre; tras unos pocos intentos se avisa al usuario y se puede reanudar sin pérdidas (en investigación).
 - 02-10-2026 — Añadido 0.9 (integridad de tests, rompe-bucles con búsqueda y pregunta al usuario, errores de tipos), en código; no es un agente nuevo: lo vigila el plugin y mejoran test-writer, debugger y test-reviewer.
 - 02-10-2026 — 0.8: A + B; procesos largos en segundo plano con aviso adelantados desde 4.14; las herramientas del fork que sustituyen prácticas peligrosas son **obligatorias** (bloqueo por código de la alternativa + regla explícita en el prompt), no opcionales.
 - 02-10-2026 — Añadido 0.8 (cuelgues silenciosos del modelo): investigar formas eficientes de detectarlo y de mostrárselo al modelo, y presentar variantes antes de diseñar.

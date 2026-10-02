@@ -251,6 +251,11 @@ Feature: modelos retirados
   - Lo mismo para las demás herramientas del fork que sustituyen a una práctica peligrosa: el prompt las presenta
     como obligatorias y el código bloquea la alternativa.
 - El resto de 4.14 (skills por categoría de implementador) sigue en su sitio.
+- **Límite y reanudación sin pérdidas (requisito del usuario, 02-10-2026):** ningún reintento es infinito.
+  - Tras unos pocos intentos se para y se avisa al usuario.
+  - Lo que se estaba haciendo queda guardado para **reanudar sin perder nada**: petición, plan y paso, cambios y
+    estado.
+  - Diseño pendiente de investigación (común a 0.8 y 0.9).
 
 ## Otros hallazgos (sin paso propio)
 - Tests del upstream no aislados de la máquina (`codex-components.test.ts` asume que `sg` no está instalado;

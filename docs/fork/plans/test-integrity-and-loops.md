@@ -49,6 +49,12 @@ Rutas: `S/` = `packages/omo-opencode/src/`.
   - el buscador web del plugin (Exa);
   - SearXNG propio si el usuario configura una instancia (opcional).
 
+- **Límite y reanudación sin pérdidas (requisito del usuario, 02-10-2026):** ningún reintento es infinito.
+  - Tras unos pocos intentos se para y se avisa al usuario.
+  - Lo que se estaba haciendo queda guardado para **reanudar sin perder nada**: petición, plan y paso, cambios y
+    estado.
+  - Diseño pendiente de investigación (común a 0.8 y 0.9).
+
 ## Diseño (por código; los prompts solo refuerzan)
 1. **Guardián de integridad de tests** (`tool.execute.before/after`):
    - durante un arreglo, los tests existentes son **de solo lectura** para los implementadores; solo `test-writer`
