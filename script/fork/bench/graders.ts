@@ -76,16 +76,34 @@ function urlsIn(text: string): string[] {
 
 // A path needs a directory separator or a line number, and an extension with a letter: this keeps out prose
 // ("e.g."), versions ("3.23.8") and bare domains.
-const CITATION_PATTERN = /(?<![\w/.-])((?:\.{0,2}\/)?[\w@.-]+(?:\/[\w@.-]+)*\.[A-Za-z][\w]{0,9})(?::(\d+)(?:-(\d+))?)?/g
+const CITATION_PATTERN = /(?<![\w/.\-~>}$])((?:\.{0,2}\/)?[\w@.-]+(?:\/[\w@.-]+)*\.[A-Za-z][\w]{0,9})(?::(\d+)(?:-(\d+))?)?/g
+
+function repoMentions(text: string, workdir: string): boolean {
+  const run = Bun.spawnSync(["grep", "-rqF", "--exclude-dir=.git", "--exclude-dir=node_modules", "--", text, "."], { cwd: workdir })
+  return run.exitCode === 0
+}
+
+const SOURCE_EXTENSION = /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|kt|php|rb|cs|c|cc|cpp|h|hpp|swift|scala|vue|svelte|md|sh)$/i
+
+const EXAMPLE_LEAD = /(e\.g\.|i\.e\.|for example|example:|por ejemplo|p\. ?ej\.)[\s`*"']*$/i
 
 type Citation = { readonly text: string; readonly path: string; readonly line?: number; readonly endLine?: number }
 
 function citationsIn(text: string): Citation[] {
-  const withoutUrls = text.replace(URL_PATTERN, " ")
+  // Quoted code is not a citation: `/-free$/i.test(id)` would otherwise read as the path `/i.test`.
+  // Proposed next steps may name files to create; only the evidence parts of the answer are citations.
+  const withoutUrls = text
+    .replace(/<next_steps>[\s\S]*?(<\/next_steps>|$)/g, " ")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(URL_PATTERN, " ")
   const found = new Map<string, Citation>()
   for (const match of withoutUrls.matchAll(CITATION_PATTERN)) {
     const [whole, path, line, endLine] = match
+    // An illustrative path ("e.g. out/app/models.py") describes output, it does not cite the repo.
+    if (EXAMPLE_LEAD.test(withoutUrls.slice(Math.max(0, match.index - 16), match.index))) continue
     if (!path || (!path.includes("/") && line === undefined)) continue
+    // Without a line, only source files count: `.db`/`.json` paths are usually runtime locations, not repo files.
+    if (line === undefined && !SOURCE_EXTENSION.test(path)) continue
     found.set(whole, {
       text: whole,
       path,
@@ -124,6 +142,11 @@ function bestProblem(citation: Citation, candidates: readonly string[]): string 
 }
 
 function citationProblem(citation: Citation, workdir: string): string | undefined {
+  const elided = /(?:^|\/)(?:\.{3}|…)\/(.+)$/.exec(citation.path)
+  if (elided?.[1]) {
+    // `/tmp/.../src/a.ts` or `/…/src/a.ts`: the agent shortened the prefix, so match by the part it kept.
+    return bestProblem(citation, filesEndingIn(elided[1], workdir))
+  }
   if (!isAbsolute(citation.path)) {
     const direct = resolve(workdir, citation.path)
     if (relative(workdir, direct).startsWith("..")) return "outside the repo"
@@ -133,8 +156,13 @@ function citationProblem(citation: Citation, workdir: string): string | undefine
   const inside = relative(workdir, file)
   if (inside.startsWith("..") || isAbsolute(inside)) {
     // Agents elide or root-anchor repo paths (`/…/src/a.ts`, `/src/a.ts`): read them relative to the repo.
-    const asRepoPath = resolve(workdir, citation.path.replace(/^\/+/, ""))
-    if (!existsSync(asRepoPath)) return "outside the repo"
+    const repoPath = citation.path.replace(/^\/+/, "")
+    const asRepoPath = resolve(workdir, repoPath)
+    if (!existsSync(asRepoPath)) {
+      // `/x/…/a.ts` reaches here as `/a.ts`: the kept tail must still name a repo file.
+      const candidates = filesEndingIn(repoPath, workdir)
+      return candidates.length === 0 ? "outside the repo" : bestProblem(citation, candidates)
+    }
     file = asRepoPath
   }
   if (!existsSync(file)) return "no such file"
@@ -151,6 +179,8 @@ export function citationsExist(options: { readonly min?: number } = {}): Grader 
       const invented = citations
         .map((citation) => ({ citation, problem: citationProblem(citation, workdir) }))
         .filter((entry) => entry.problem !== undefined)
+        // A path the repo itself contains as text (e.g. a generator's `relative_path="src/x.py"`) is quoted, not invented.
+        .filter((entry) => entry.problem !== "no such file" || entry.citation.line !== undefined || !repoMentions(entry.citation.path, workdir))
       if (invented.length > 0) {
         return result(name, false, `invented: ${invented.map((entry) => `${entry.citation.text} (${entry.problem})`).join("; ")}`)
       }
@@ -186,6 +216,33 @@ export function answerMatches(patterns: readonly RegExp[]): Grader {
       return result(name, missing.length === 0, missing.length === 0 ? undefined : `missing: ${missing.map((pattern) => pattern.source).join(", ")}`)
     },
   }
+}
+
+function escapeRegExp(text: string): string {
+  return text.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+/** The answer cites `pathSuffix` at a line overlapping [from, to] (as `file:12`, `file:12-15` or `file line 12`). */
+export function citesLine(pathSuffix: string, from: number, to: number): Grader {
+  const name = `citesLine:${pathSuffix}:${from}-${to}`
+  const pattern = new RegExp(`${escapeRegExp(pathSuffix)}\`?(?::|[^\\n]{0,60}?\\blines?\\s+)(\\d+)(?:\\s*[-–]\\s*(\\d+))?`, "gi")
+  return {
+    name,
+    grade: ({ transcript }) => {
+      const cited = [...transcript.answer.matchAll(pattern)].map((match) => [Number(match[1]), Number(match[2] ?? match[1])] as const)
+      const hit = cited.some(([start, end]) => start <= to && end >= from)
+      return result(name, hit, cited.length === 0 ? "file not cited with a line" : `cited ${cited.map(([start, end]) => (start === end ? start : `${start}-${end}`)).join(", ")}`)
+    },
+  }
+}
+
+// "There is no X", "X was not found", "does not implement", "doesn't exist", "nothing …".
+const ABSENT = /\b(there (is|are) no|no \w[\w\s-]{0,40}(is|are|was|were) (found|implemented|present)|(was|were|is|are) not (found|implemented|present)|(does|do)(n't| not) (exist|implement|support|have|contain|import)|not found|nothing\b)/i
+
+/** For "where is X?" when X does not exist: the answer must say so instead of inventing a location. */
+export function saysAbsent(): Grader {
+  const name = "saysAbsent"
+  return { name, grade: ({ transcript }) => result(name, ABSENT.test(transcript.answer)) }
 }
 
 /** A check on the final state of the repo the agent worked in. */

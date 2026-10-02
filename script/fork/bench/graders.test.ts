@@ -6,6 +6,8 @@ import { join } from "node:path"
 import {
   answerMatches,
   citationsExist,
+  citesLine,
+  saysAbsent,
   contract,
   delegatedTo,
   EXPLORE_CONTRACT,
@@ -96,6 +98,36 @@ describe("citationsExist", () => {
     expect((await citationsExist().grade(context({ answer: "see /etc/hostname-like/thing.ts" }))).pass).toBe(false)
   })
 
+  test("runtime paths with placeholders and data files without a line are not citations", async () => {
+    const answer = "Stored in `<dataDir>/opencode/opencode.db`, `~/.omo/omo.jsonc`, `$XDG_DATA_HOME/x/y.db`, `<project>/.omo/cache/knowledge.db` and `.omo/omo.jsonc`; see src/a.ts:1"
+    expect((await citationsExist().grade(context({ answer }))).pass).toBe(true)
+    expect((await citationsExist().grade(context({ answer: "see src/invented.ts" }))).pass).toBe(false)
+    expect((await citationsExist().grade(context({ answer: "see config/app.json:3" }))).pass).toBe(false)
+  })
+
+  test("a path that the repo itself contains as text is quoted data, not invented", async () => {
+    writeFileSync(join(workdir, "src/components.py"), 'relative_path="src/config/urls.py"\n')
+    expect((await citationsExist().grade(context({ answer: "generates `src/config/urls.py`" }))).pass).toBe(true)
+    expect((await citationsExist().grade(context({ answer: "generates `src/config/nope.py`" }))).pass).toBe(false)
+  })
+
+  test("paths proposed in <next_steps> are not evidence citations", async () => {
+    const answer = "<answer>see src/a.ts:1</answer>\n<next_steps>Add tests/test_new_thing.py</next_steps>"
+    expect((await citationsExist().grade(context({ answer }))).pass).toBe(true)
+    expect((await citationsExist().grade(context({ answer: "<answer>see src/gone.ts:1</answer>" }))).pass).toBe(false)
+  })
+
+  test("an example path after 'e.g.' is not a citation", async () => {
+    expect((await citationsExist().grade(context({ answer: "writes to output, e.g. `out/src/apps/product/models.py`; see src/a.ts:1" }))).pass).toBe(true)
+    expect((await citationsExist().grade(context({ answer: "por ejemplo out/x.py" }))).pass).toBe(true)
+    expect((await citationsExist().grade(context({ answer: "defined in out/x.py" }))).pass).toBe(false)
+  })
+
+  test("code quoted in fenced blocks is not a citation", async () => {
+    const answer = "See src/a.ts:2\n\n```ts\n2: if (/-free$/i.test(id)) return import(\"./missing.ts\")\n```"
+    expect((await citationsExist().grade(context({ answer }))).pass).toBe(true)
+  })
+
   test("URLs, versions and prose with dots are not file citations", async () => {
     const answer = "Docs at https://example.com/a/b.html, zod 3.23.8, e.g. this. Also src/a.ts."
     expect((await citationsExist().grade(context({ answer }))).pass).toBe(true)
@@ -118,6 +150,9 @@ describe("citationsExist", () => {
   test("an elided or root-anchored path is read relative to the repo", async () => {
     expect((await citationsExist().grade(context({ answer: "in `/…/src/a.ts:2` and /src/a.ts:1" }))).pass).toBe(true)
     expect((await citationsExist().grade(context({ answer: "in /…/src/a.ts:7" }))).pass).toBe(false)
+    expect((await citationsExist().grade(context({ answer: "in /tmp/.../src/a.ts:2 and /x/…/a.ts" }))).pass).toBe(true)
+    expect((await citationsExist().grade(context({ answer: "in /tmp/.../src/zz.ts" }))).pass).toBe(false)
+    expect((await citationsExist().grade(context({ answer: "in .../src/a.ts:2 and …/a.ts" }))).pass).toBe(true)
   })
 
   test("requiring at least one citation fails an answer that cites nothing", async () => {
@@ -166,5 +201,32 @@ describe("answer, outcome, delegation, agent and budget", () => {
     expect((await withinBudget({ maxTokens: 200, maxTurns: 2, timeoutMs: 1 }).grade(context())).pass).toBe(true)
     expect((await withinBudget({ maxTokens: 100, timeoutMs: 1 }).grade(context())).pass).toBe(false)
     expect((await withinBudget({ maxTurns: 1, timeoutMs: 1 }).grade(context())).pass).toBe(false)
+  })
+})
+
+describe("citesLine", () => {
+  test("passes when the answer cites the file at a line inside the expected range", async () => {
+    expect((await citesLine("src/http/retry.ts", 4, 4).grade(context({ answer: "see /tmp/x/src/http/retry.ts:4" }))).pass).toBe(true)
+    expect((await citesLine("retry.ts", 3, 6).grade(context({ answer: "`retry.ts:5-9`" }))).pass).toBe(true)
+    expect((await citesLine("retry.ts", 4, 4).grade(context({ answer: "retry.ts line 4" }))).pass).toBe(true)
+    expect((await citesLine("http/retry.ts", 4, 4).grade(context({ answer: "- /x/src/http/retry.ts - THE answer. Line 4 defines it" }))).pass).toBe(true)
+    expect((await citesLine("retry.ts", 4, 4).grade(context({ answer: "retry.ts is the file\nLine 4 of client.ts" }))).pass).toBe(false)
+  })
+
+  test("fails for a wrong line or another file", async () => {
+    expect((await citesLine("retry.ts", 4, 4).grade(context({ answer: "retry.ts:13" }))).pass).toBe(false)
+    expect((await citesLine("retry.ts", 4, 4).grade(context({ answer: "client.ts:4" }))).pass).toBe(false)
+  })
+})
+
+describe("saysAbsent", () => {
+  test("recognises an explicit 'does not exist' answer", async () => {
+    for (const answer of ["There is no GraphQL generator in this repo.", "No WebSocket support was found.", "It does not implement async commands", "Not found: nothing stores data in PostgreSQL"]) {
+      expect((await saysAbsent().grade(context({ answer }))).pass).toBe(true)
+    }
+  })
+
+  test("fails an answer that claims a location", async () => {
+    expect((await saysAbsent().grade(context({ answer: "It is implemented in src/ws.ts:10." }))).pass).toBe(false)
   })
 })

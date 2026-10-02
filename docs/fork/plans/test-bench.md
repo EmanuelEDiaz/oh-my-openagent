@@ -117,6 +117,30 @@ Repite cada tarea N veces y da `pass@1` y `pass^3`. No debe tocar nunca la confi
   - los logs de OpenCode guardados en `.omo/evals/` sin ninguna clave;
   - evidencia en `.omo/evidence/3.0/`.
 
+## Ampliaciones (02-10-2026, durante 4.1)
+- **Repos fijados por commit o etiqueta** (`fixtures.ts`): repos locales sin su árbol de trabajo, y públicos
+  (click 8.2.2, chi v5.3.2), extraídos una vez a `.omo/bench-cache/`. Incluye la copia de `codegenerator`.
+- **Correctores nuevos:**
+  - `citesLine`: cita el archivo en el rango correcto;
+  - `saysAbsent`: responde "no existe" en vez de inventar.
+- **Correctores afinados con respuestas reales**, sin dejar de detectar citas inventadas (comprobado con un caso
+  real):
+  - rutas sin carpeta o abreviadas (`.../`, `…/`);
+  - código citado en bloques;
+  - rutas de ejecución (`~/`, `<dataDir>/`);
+  - ejemplos ("e.g.");
+  - rutas que el repo contiene como texto;
+  - archivos propuestos en `<next_steps>`.
+- **`--resume <archivo>`:** continúa una medición rota sin repetir lo ya puntuado. `regrade.ts` vuelve a puntuar
+  sin llamar al modelo.
+- **Disco:**
+  - cada carpeta de trabajo se borra al puntuarla;
+  - OpenCode sin instantáneas en el sandbox (`snapshot: false`);
+  - motivo: un repo grande llenó el `/tmp` en RAM.
+- **Memoria:** `earlyoom` del sistema mata al servidor del sandbox cuando falta RAM (7 veces el 02-10). El banco lo
+  ve como "servidor sin respuesta", lo reinicia y reintenta; no cuenta contra el agente.
+- **Windows:** el banco es una herramienta de desarrollo y puede exigir Linux, WSL o Git Bash (decisión 0.11).
+
 ## Criterios de aceptación
 ```gherkin
 Feature: banco de pruebas

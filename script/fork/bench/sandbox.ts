@@ -58,7 +58,8 @@ export function createSandbox(root: string, pluginEntry: string): Sandbox {
   copyIfExists(join(REAL_HOME, ".omo/omo.jsonc"), join(root, "home/.omo/omo.jsonc"))
   writeFileSync(
     join(root, "config/opencode/opencode.json"),
-    JSON.stringify({ $schema: "https://opencode.ai/config.json", plugin: [`file://${realpathSync(pluginEntry)}`] }, null, 2),
+    // No file snapshots: the bench never undoes, and OpenCode would copy every task's repo into its data dir.
+    JSON.stringify({ $schema: "https://opencode.ai/config.json", plugin: [`file://${realpathSync(pluginEntry)}`], snapshot: false }, null, 2),
   )
   return {
     root,

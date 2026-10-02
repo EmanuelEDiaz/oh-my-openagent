@@ -1,6 +1,6 @@
 # Pasos 0.3–0.5 y 0.7 — Robustez: agentes que desaparecen, escritura de Prometheus, modelos gratuitos y retirados
 
-Parte del roadmap: `docs/fork/roadmap.md`. Estado: **0.3, 0.4, 0.5 y 0.7 hechos (01-10-2026)**, investigado en vivo y en el código.
+Parte del roadmap: `docs/fork/roadmap.md`. Estado: **0.3, 0.4, 0.5 y 0.7 hechos (01-10-2026); 0.8 en diseño (02-10-2026)**, investigado en vivo y en el código.
 Rutas: `S/` = `packages/omo-opencode/src/`, `MC/` = `packages/model-core/src/`.
 
 ## 0.3 — Ningún agente desaparece por no resolver su modelo
@@ -208,6 +208,54 @@ Feature: modelos retirados
     Given el omo.jsonc real del usuario con los modelos retirados, en un sandbox
     Then el piloto de 3.0 ejecuta explore sin "Model not found"
 ```
+
+## 0.8 — Cuelgues silenciosos del modelo + procesos largos en segundo plano con aviso
+
+### Hechos (investigado 02-10-2026)
+- **OpenCode 1.18.26 no limita el streaming por defecto.**
+  - `provider.<id>.options.chunkTimeout`/`timeout`/`headerTimeout` existen pero son opcionales
+    (`provider/provider.ts:37-83,1795-1825`); `headerTimeout` solo tiene valor por defecto para openai.
+  - `chunkTimeout` falla como `APIError` reintentable y OpenCode lo reintenta hasta 5 veces (`session/retry.ts`).
+  - La 1.18.27 pone 5 min por defecto.
+- **Abortar un streaming colgado puede no terminar nunca:** `Fiber.interrupt` espera finalizadores no
+  interrumpibles (`iter.return()` → `reader.cancel()`). Con una recarga de instancia, eso puede bloquear todo el
+  servidor (deducido del código, no reproducido). Es mejor que falle la descarga que abortar.
+- **Incidencias abiertas:** #43519 (los keepalive reinician `chunkTimeout`), #47605 (sin `Content-Type` no hay
+  corte), #48675, #46030 (big-pickle narrando en bucle).
+- **El plugin ya tiene piezas, con umbrales de 30–60 min:**
+  - tareas en segundo plano: inactividad a los 45 min, cancela sin reintentar;
+  - delegación síncrona: 30 min, reintenta con el siguiente modelo;
+  - `runtime_fallback`: apagado, solo vigila la primera respuesta.
+- **La herramienta `monitor` existe pero está apagada:** procesos con salida que despierta a la sesión.
+  Los procesos gestionados estaban planeados en `plans/process-lifecycle.md` (antes en 4.14).
+
+### Decisiones del usuario (02-10-2026)
+- **Variante A + B:**
+  - A: el plugin pone `chunkTimeout` (90 s) a los proveedores que no lo tengan, sin pisar lo configurado por el
+    usuario.
+  - B: un vigilante que actúa tras 4 min sin ningún token **y sin herramienta ni proceso gestionado en marcha**.
+    Avisa al usuario y al orquestador y reintenta con el siguiente modelo de respaldo. Aborta con tiempo límite, sin
+    bloquear al plugin, y si el servidor no responde avisa en vez de insistir.
+  - Umbrales configurables.
+- **Procesos largos en segundo plano con aviso:** se adelantan aquí desde 4.14.
+  - `process_start` con `wait_for` (termina / aparece un texto / abre un puerto) y aviso al agente con el resultado
+    y las últimas líneas del log, sin gastar turnos mientras espera.
+  - Tiempo máximo por proceso, generoso y configurable; si se excede, **se avisa al usuario**, no se mata a ciegas.
+  - Aviso al terminar la sesión de los procesos que siguen vivos.
+- **Obligatorio, no opcional (petición explícita):** el agente debe saber que para procesos largos usar
+  `process_start` **es obligatorio**.
+  - Se hace cumplir **por código**: `tool.execute.before` bloquea en `bash` las instalaciones, descargas, builds,
+    servidores y watchers conocidos (`npm/pnpm/bun/pip/uv install`, `docker build/pull`, `curl/wget` de descargas,
+    `dev`/`serve`/`watch`…). El mensaje dice qué usar en su lugar.
+  - Además, una regla explícita en el prompt de todos los agentes que ejecutan comandos.
+  - Lo mismo para las demás herramientas del fork que sustituyen a una práctica peligrosa: el prompt las presenta
+    como obligatorias y el código bloquea la alternativa.
+- El resto de 4.14 (skills por categoría de implementador) sigue en su sitio.
+- **Límite y reanudación sin pérdidas (requisito del usuario, 02-10-2026):** ningún reintento es infinito.
+  - Tras unos pocos intentos se para y se avisa al usuario.
+  - Lo que se estaba haciendo queda guardado para **reanudar sin perder nada**: petición, plan y paso, cambios y
+    estado.
+  - Diseño pendiente de investigación (común a 0.8 y 0.9).
 
 ## Otros hallazgos (sin paso propio)
 - Tests del upstream no aislados de la máquina (`codex-components.test.ts` asume que `sg` no está instalado;

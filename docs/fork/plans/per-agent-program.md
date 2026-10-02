@@ -59,6 +59,25 @@ Orden (impacto × riesgo): 4.1 `explore` → 4.2 `librarian` + `api-lookup` → 
 Estimación: 1,5–3 días por paso; 7–10 semanas a tiempo parcial en total.
 
 ## Fase 5 — Evaluación conjunta (5.1)
+> **Requisito del usuario (02-10-2026):** la prueba final usa el proyecto real
+> `/mnt/datos/emanuel/Programacion/codegenerator/`. Es un generador de código en Python, hexagonal y con plugins
+> (pluggy), que a partir de un JSON crea un backend o un frontend sin IA.
+> - Las pruebas las hace **OpenCode con este plugin a partir de prompts**, como un usuario que pide una
+>   funcionalidad; nunca código escrito por el asistente.
+> - Cada agente y cada función del fork debe quedar cubierto por al menos un prompt (matriz de cobertura).
+> - **Decisiones del usuario (02-10-2026):**
+>   - **Copia aislada** fijada en el último commit (`649fcd7`). El repo del usuario no se toca y sus cambios sin
+>     commitear no entran. Lo que salga bien se le ofrece como rama para revisar.
+>   - **También por agente:** cada paso de la Fase 4 añade a su banco 2–3 prompts reales sobre esa copia.
+>   - **Agentes que falten:** si en la prueba (final o por agente) se ve que en la vida real hace falta un
+>     especialista que no existe, se registra con su evidencia (qué prompt, qué falló o qué hizo a mano el
+>     orquestador) y **se propone al usuario para diseñarlo juntos**. Nunca se crea sin su aprobación.
+>   - **Correctores ocultos** que el agente no ve:
+>     - generar con un JSON de prueba y comprobar el proyecto generado;
+>     - `pytest` y `ruff`;
+>     - la regla de dependencias hexagonal comprobada por código;
+>     - en qué especialistas delegó y con qué identidad hizo commit.
+
 - 15–30 tareas completas, en tres tipos:
   - repos pequeños con tests que fallan (estilo SWE-bench, o 10–20 de SWE-bench Verified-mini);
   - investigación;
