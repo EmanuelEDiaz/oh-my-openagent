@@ -127,6 +127,7 @@ describe("citationsExist", () => {
     expect((await citationsExist().grade(context({ answer: "in /…/src/a.ts:7" }))).pass).toBe(false)
     expect((await citationsExist().grade(context({ answer: "in /tmp/.../src/a.ts:2 and /x/…/a.ts" }))).pass).toBe(true)
     expect((await citationsExist().grade(context({ answer: "in /tmp/.../src/zz.ts" }))).pass).toBe(false)
+    expect((await citationsExist().grade(context({ answer: "in .../src/a.ts:2 and …/a.ts" }))).pass).toBe(true)
   })
 
   test("requiring at least one citation fails an answer that cites nothing", async () => {

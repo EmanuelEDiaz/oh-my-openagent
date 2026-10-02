@@ -125,6 +125,11 @@ function bestProblem(citation: Citation, candidates: readonly string[]): string 
 }
 
 function citationProblem(citation: Citation, workdir: string): string | undefined {
+  const elided = /(?:^|\/)(?:\.{3}|…)\/(.+)$/.exec(citation.path)
+  if (elided?.[1]) {
+    // `/tmp/.../src/a.ts` or `/…/src/a.ts`: the agent shortened the prefix, so match by the part it kept.
+    return bestProblem(citation, filesEndingIn(elided[1], workdir))
+  }
   if (!isAbsolute(citation.path)) {
     const direct = resolve(workdir, citation.path)
     if (relative(workdir, direct).startsWith("..")) return "outside the repo"
@@ -132,11 +137,6 @@ function citationProblem(citation: Citation, workdir: string): string | undefine
   }
   let file = isAbsolute(citation.path) ? citation.path : resolve(workdir, citation.path)
   const inside = relative(workdir, file)
-  const elided = /(?:^|\/)(?:\.{3}|…)\/(.+)$/.exec(citation.path)
-  if (elided?.[1]) {
-    // `/tmp/.../src/a.ts` or `/…/src/a.ts`: the agent shortened the prefix, so match by the part it kept.
-    return bestProblem(citation, filesEndingIn(elided[1], workdir))
-  }
   if (inside.startsWith("..") || isAbsolute(inside)) {
     // Agents elide or root-anchor repo paths (`/…/src/a.ts`, `/src/a.ts`): read them relative to the repo.
     const repoPath = citation.path.replace(/^\/+/, "")
