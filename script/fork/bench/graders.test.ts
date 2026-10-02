@@ -105,6 +105,12 @@ describe("citationsExist", () => {
     expect((await citationsExist().grade(context({ answer: "see config/app.json:3" }))).pass).toBe(false)
   })
 
+  test("a path that the repo itself contains as text is quoted data, not invented", async () => {
+    writeFileSync(join(workdir, "src/components.py"), 'relative_path="src/config/urls.py"\n')
+    expect((await citationsExist().grade(context({ answer: "generates `src/config/urls.py`" }))).pass).toBe(true)
+    expect((await citationsExist().grade(context({ answer: "generates `src/config/nope.py`" }))).pass).toBe(false)
+  })
+
   test("an example path after 'e.g.' is not a citation", async () => {
     expect((await citationsExist().grade(context({ answer: "writes to output, e.g. `out/src/apps/product/models.py`; see src/a.ts:1" }))).pass).toBe(true)
     expect((await citationsExist().grade(context({ answer: "por ejemplo out/x.py" }))).pass).toBe(true)

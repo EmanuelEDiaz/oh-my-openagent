@@ -78,6 +78,11 @@ function urlsIn(text: string): string[] {
 // ("e.g."), versions ("3.23.8") and bare domains.
 const CITATION_PATTERN = /(?<![\w/.\-~>}$])((?:\.{0,2}\/)?[\w@.-]+(?:\/[\w@.-]+)*\.[A-Za-z][\w]{0,9})(?::(\d+)(?:-(\d+))?)?/g
 
+function repoMentions(text: string, workdir: string): boolean {
+  const run = Bun.spawnSync(["grep", "-rqF", "--exclude-dir=.git", "--exclude-dir=node_modules", "--", text, "."], { cwd: workdir })
+  return run.exitCode === 0
+}
+
 const SOURCE_EXTENSION = /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|kt|php|rb|cs|c|cc|cpp|h|hpp|swift|scala|vue|svelte|md|sh)$/i
 
 const EXAMPLE_LEAD = /(e\.g\.|i\.e\.|for example|example:|por ejemplo|p\. ?ej\.)[\s`*"']*$/i
@@ -170,6 +175,8 @@ export function citationsExist(options: { readonly min?: number } = {}): Grader 
       const invented = citations
         .map((citation) => ({ citation, problem: citationProblem(citation, workdir) }))
         .filter((entry) => entry.problem !== undefined)
+        // A path the repo itself contains as text (e.g. a generator's `relative_path="src/x.py"`) is quoted, not invented.
+        .filter((entry) => entry.problem !== "no such file" || entry.citation.line !== undefined || !repoMentions(entry.citation.path, workdir))
       if (invented.length > 0) {
         return result(name, false, `invented: ${invented.map((entry) => `${entry.citation.text} (${entry.problem})`).join("; ")}`)
       }
