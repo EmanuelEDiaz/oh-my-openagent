@@ -80,6 +80,8 @@ const CITATION_PATTERN = /(?<![\w/.\-~>}$])((?:\.{0,2}\/)?[\w@.-]+(?:\/[\w@.-]+)
 
 const SOURCE_EXTENSION = /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|kt|php|rb|cs|c|cc|cpp|h|hpp|swift|scala|vue|svelte|md|sh)$/i
 
+const EXAMPLE_LEAD = /(e\.g\.|i\.e\.|for example|example:|por ejemplo|p\. ?ej\.)[\s`*"']*$/i
+
 type Citation = { readonly text: string; readonly path: string; readonly line?: number; readonly endLine?: number }
 
 function citationsIn(text: string): Citation[] {
@@ -88,6 +90,8 @@ function citationsIn(text: string): Citation[] {
   const found = new Map<string, Citation>()
   for (const match of withoutUrls.matchAll(CITATION_PATTERN)) {
     const [whole, path, line, endLine] = match
+    // An illustrative path ("e.g. out/app/models.py") describes output, it does not cite the repo.
+    if (EXAMPLE_LEAD.test(withoutUrls.slice(Math.max(0, match.index - 16), match.index))) continue
     if (!path || (!path.includes("/") && line === undefined)) continue
     // Without a line, only source files count: `.db`/`.json` paths are usually runtime locations, not repo files.
     if (line === undefined && !SOURCE_EXTENSION.test(path)) continue

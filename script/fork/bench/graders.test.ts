@@ -105,6 +105,12 @@ describe("citationsExist", () => {
     expect((await citationsExist().grade(context({ answer: "see config/app.json:3" }))).pass).toBe(false)
   })
 
+  test("an example path after 'e.g.' is not a citation", async () => {
+    expect((await citationsExist().grade(context({ answer: "writes to output, e.g. `out/src/apps/product/models.py`; see src/a.ts:1" }))).pass).toBe(true)
+    expect((await citationsExist().grade(context({ answer: "por ejemplo out/x.py" }))).pass).toBe(true)
+    expect((await citationsExist().grade(context({ answer: "defined in out/x.py" }))).pass).toBe(false)
+  })
+
   test("code quoted in fenced blocks is not a citation", async () => {
     const answer = "See src/a.ts:2\n\n```ts\n2: if (/-free$/i.test(id)) return import(\"./missing.ts\")\n```"
     expect((await citationsExist().grade(context({ answer }))).pass).toBe(true)
