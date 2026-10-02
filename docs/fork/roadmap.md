@@ -169,6 +169,7 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 - ~~Reglas de lenguaje/framework cargadas bajo demanda~~ — absorbido en 4.5 (antes 2.9), 29-09-2026.
 
 ## Registro de decisiones del roadmap
+- 02-10-2026 — Fase 5: la prueba final se hace sobre el proyecto real `codegenerator` (Python, hexagonal, plugins), con prompts de funcionalidad ejecutados por OpenCode + este plugin; cubre todos los agentes y funciones del fork.
 - 01-10-2026 — 4.1: motor de símbolos ast-grep (ya descargado por el plugin) + LSP, sin dependencias nuevas, detrás de una interfaz para poder cambiarlo; 3 herramientas en vez de 4–6 (menos herramientas = menos errores en modelos pequeños); repos de prueba: fork + ts-service + 2 públicos (Python, Go).
 - 01-10-2026 — 3.0 hecho. Siguiente: 4.1 `explore` (tareas 15–30 con conjunto reservado, lectura eficiente de código).
 - 01-10-2026 — 0.7 hecho. Descartado filtrar la cadena de reintentos de la delegación (rompía modelos con variante y no aporta con el modelo inicial ya válido). El banco (3.0) calienta la caché del plugin antes de las tareas.

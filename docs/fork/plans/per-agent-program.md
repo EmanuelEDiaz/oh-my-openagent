@@ -59,6 +59,14 @@ Orden (impacto × riesgo): 4.1 `explore` → 4.2 `librarian` + `api-lookup` → 
 Estimación: 1,5–3 días por paso; 7–10 semanas a tiempo parcial en total.
 
 ## Fase 5 — Evaluación conjunta (5.1)
+> **Requisito del usuario (02-10-2026):** la prueba final usa el proyecto real
+> `/mnt/datos/emanuel/Programacion/codegenerator/`. Es un generador de código en Python, hexagonal y con plugins
+> (pluggy), que a partir de un JSON crea un backend o un frontend sin IA.
+> - Las pruebas las hace **OpenCode con este plugin a partir de prompts**, como un usuario que pide una
+>   funcionalidad; nunca código escrito por el asistente.
+> - Cada agente y cada función del fork debe quedar cubierto por al menos un prompt (matriz de cobertura).
+> - Diseño de detalle pendiente de las decisiones del usuario: copia o repo real, correctores ocultos y alcance.
+
 - 15–30 tareas completas, en tres tipos:
   - repos pequeños con tests que fallan (estilo SWE-bench, o 10–20 de SWE-bench Verified-mini);
   - investigación;
