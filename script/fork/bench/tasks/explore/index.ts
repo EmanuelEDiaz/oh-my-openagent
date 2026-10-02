@@ -1,6 +1,7 @@
 /**
  * `explore` suite (fork roadmap 4.1, docs/fork/plans/explore.md): 24 tasks over 5 repos, 7 of them holdout.
- * Expected answers were checked by hand against each pinned snapshot.
+ * Expected answers were checked by hand against each pinned snapshot. Line checks match the file name, since agents
+ * often cite `file.ts:12` without its directory; ambiguous names add a check on the package.
  */
 import type { Fixture, GitFixture } from "../../fixtures"
 import { answerMatches, citationsExist, citesLine, contract, EXPLORE_CONTRACT, saysAbsent, toolNotUsed } from "../../graders"
@@ -49,11 +50,11 @@ export const EXPLORE_TASKS: readonly Task[] = [
   // ts-service (bundled, 10 files)
   task("retry-delay", "ts-service", "Where is the delay between HTTP retries configured? Give the file and the line.", [
     answerMatches([/250/]),
-    citesLine("http/retry.ts", 4, 4),
+    citesLine("retry.ts", 4, 4),
   ]),
   task("api-token-readers", "ts-service", "Find every place in the code that reads the environment variable API_TOKEN.", [
     citesLine("config.ts", 4, 4),
-    citesLine("auth/token.ts", 2, 2),
+    citesLine("token.ts", 2, 2),
   ]),
   task("email-callers", "ts-service", "Which function validates email addresses, and which non-test source files call it?", [
     answerMatches([/isValidEmail/, /users\/validate\.ts/, /users\/service\.ts/, /admin\/invite\.ts/]),
@@ -62,19 +63,19 @@ export const EXPLORE_TASKS: readonly Task[] = [
   // this fork (large TypeScript monorepo)
   task("fork-paid-model", FORK, "Which function decides whether a model counts as paid for the prefer_free_models option? Give the file and the line.", [
     answerMatches([/isPaidModel/]),
-    citesLine("shared/free-model-preference.ts", 36, 36),
+    citesLine("free-model-preference.ts", 36, 36),
   ], { budget: LARGE }),
   task("fork-known-missing-callers", FORK, "Which source files (not tests, not index re-exports) call `isKnownMissingModel`? Do not confuse it with functions that have similar names.", [
     answerMatches([/delegate-core\/src\/model-selection\.ts/, /agent-registration-warning\.ts/, /builtin-agents\/model-resolution\.ts/, /general-agents\.ts/, /atlas-agent\.ts/]),
   ], { budget: LARGE }),
   task("fork-compaction-flow", FORK, "How does the lossless-compaction state card end up in the compaction prompt? Follow the flow from the hook to where it is added.", [
     answerMatches([/lossless-compaction\/index\.ts/, /session-compacting\.ts/, /compaction-snapshot\.ts/]),
-    citesLine("plugin/session-compacting.ts", 120, 136),
+    citesLine("session-compacting.ts", 120, 136),
   ], { budget: LARGE }),
   task("fork-postgres", FORK, "Where does the plugin store its data in PostgreSQL?", [saysAbsent()], { budget: LARGE }),
   task("fork-lsp-timeout", FORK, "What is the timeout of an LSP request in lsp-core, and where is it defined?", [
-    answerMatches([/15[_,.\s]?000|15\s*s/]),
-    citesLine("lsp-core/src/lsp/constants.ts", 6, 6),
+    answerMatches([/15[_,.\s]?000|15\s*s/, /lsp-core/]),
+    citesLine("constants.ts", 6, 6),
   ], { budget: LARGE }),
   task("fork-prometheus-blocked-tools", FORK, "Which tools does the Prometheus md-only hook block, including tools that rewrite the workspace?", [
     answerMatches([/apply_patch/, /hashline_edit/, /multiedit/, /lsp_rename/, /ast_grep_rewrite/]),
