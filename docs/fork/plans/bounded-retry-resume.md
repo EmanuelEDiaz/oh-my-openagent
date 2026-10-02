@@ -73,6 +73,23 @@ Rutas: `S/` = `packages/omo-opencode/src/`, `BS/` = `packages/boulder-state/src/
    - `/handoff` guarda su resumen en `.omo/runs/`;
    - los contadores se guardan en disco.
 
+## Cierres por memoria (hallado 02-10-2026, decisiones del usuario)
+- **Causa encontrada:** `earlyoom` (vigilante del sistema) envía **SIGTERM** al proceso que más memoria usa cuando la
+  RAM disponible baja del 10 % y la swap se agota. En un PC de 7,5 GB, un OpenCode con una conversación larga
+  (1–1,3 GB) es la víctima habitual.
+  - Explica los cierres repentinos que el usuario ha sufrido; no se puede confirmar en el pasado porque el journal no
+    es persistente.
+  - Hoy mató 7 veces a los OpenCode del banco de pruebas: varios "servidor no responde" eran esto.
+- **Decidido:**
+  - **guardar al recibir SIGTERM:** el plugin captura la señal y escribe al instante la tarjeta de reanudación y la
+    referencia WIP antes de salir, para que un cierre no pierda nada;
+  - **vigilante de memoria:** si OpenCode pasa de un umbral configurable, avisa ("sesión grande: compacta o abre una
+    nueva; el estado ya está guardado") y guarda el estado por adelantado;
+  - **investigar fugas:** medir cuánto crece OpenCode con y sin el plugin en sesiones largas (índice de conocimiento,
+    LSP, tareas en segundo plano, cachés) y corregir lo que sea del plugin.
+- Ajustar `earlyoom`/swap queda en manos del usuario (requiere sudo); no se documenta por ahora.
+- Para confirmar un cierre: `journalctl -b | grep earlyoom` justo después.
+
 ## Criterios de aceptación
 ```gherkin
 Feature: reintentos limitados y reanudación
@@ -83,6 +100,9 @@ Feature: reintentos limitados y reanudación
     Given un trabajo pausado con cambios a medio hacer
     When el usuario cierra OpenCode y luego ejecuta /omo-resume
     Then los cambios siguen recuperables por refs/omo/wip y el agente continúa desde el paso pendiente sin repetir los intentos fallidos
+  Scenario: cierre por memoria
+    When earlyoom envía SIGTERM a OpenCode durante una tarea
+    Then antes de salir queda escrita la tarjeta de reanudación y /omo-resume continúa sin pérdidas
   Scenario: stop no destruye
     When el usuario ejecuta /stop-continuation
     Then el trabajo queda pausado y reanudable
