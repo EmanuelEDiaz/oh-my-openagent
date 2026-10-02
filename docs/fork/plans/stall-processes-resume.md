@@ -1,6 +1,6 @@
 # Paso 0.8 — Diseño detallado: cuelgues, procesos en segundo plano y reanudación
 
-Parte del roadmap: `docs/fork/roadmap.md`. Estado: **aprobado (02-10-2026)**; **0.8a hecho**, sigue 0.8b.
+Parte del roadmap: `docs/fork/roadmap.md`. Estado: **aprobado (02-10-2026)**; **0.8a y 0.8b hechos**, sigue 0.8c.
 Base: decisiones en `plans/robustness-fixes.md` (0.8) y `plans/bounded-retry-resume.md`. Rutas: `S/` =
 `packages/omo-opencode/src/`. Todo funciona en Windows y Linux (0.11).
 
@@ -83,6 +83,35 @@ Base: decisiones en `plans/robustness-fixes.md` (0.8) y `plans/bounded-retry-res
    `tmux kill-server`.
 7. **Prompt:** regla explícita en todos los agentes que ejecutan comandos: "para procesos largos, `process_start` es
    obligatorio".
+
+### Resultado de 0.8b (02-10-2026)
+- **Hecho:**
+  - módulo `S/features/managed-process/`: shell según plataforma (bash; Git Bash o `cmd` en Windows), log en
+    `.omo/proc/` (con `.gitignore`), espera `exit`/patrón/puerto con un único aviso, aviso a las 2 h sin matar,
+    parada del árbol con `terminateProcessTree` y comando manual si algo sobrevive, registro en
+    `.omo/proc/processes.json` y parada al cerrar la sesión salvo `keep_alive`;
+  - herramientas `process_start/status/logs/list/stop`, que respetan el permiso de `bash` del agente;
+  - guarda `managed-process-guard` en `bash` (procesos largos y comandos que se matan a sí mismos);
+  - regla obligatoria en el prompt de sistema de todas las sesiones;
+  - el vigilante de 0.8a no considera colgada una sesión que espera un proceso;
+  - configuración `processes` (`enabled`, `enforce`, `timeout_ms`).
+- **Decidido al implementarlo:**
+  - es un módulo nuevo en vez de ampliar `monitor`, que está pensado para vigilar con salida continua, lanza sin
+    shell, mata al llegar al tiempo máximo y usa `kill(-pid)`, que no funciona en Windows. Se reutilizan sus filtros
+    de patrón;
+  - la espera de la salida se limita a 2 s tras el fin: un nieto que deje las tuberías abiertas no bloquea el aviso.
+- **QA:**
+  - D, en un OpenCode aislado con el proveedor simulado: `npm install` en `bash` bloqueado con la alternativa,
+    `pkill -f` bloqueado, `process_start` en segundo plano, aviso "finished (exit code 0)" con la salida y respuesta
+    del agente;
+  - árbol real (un proceso con 2 nietos) parado entero;
+  - evidencia en `.omo/evidence/0.8b/`; `opencode.db` y `auth.json` reales sin cambios.
+- **Tests:**
+  - 9745 en verde (omo-opencode, utils, model-core); los fallos solo aparecen en la ejecución conjunta (13 archivos,
+    todos pasan uno a uno; la auditoría de mocks necesita más tiempo bajo carga);
+  - tipado limpio;
+  - **Windows:** las ramas `win32` (`taskkill`, Git Bash/`cmd`) tienen test unitario; falta probarlas en el CI de
+    Windows (0.11).
 
 ### 0.8c — Reanudación sin pérdidas (común con 0.9)
 1. **Al pausar** (presupuesto agotado, parada del usuario o SIGTERM):
