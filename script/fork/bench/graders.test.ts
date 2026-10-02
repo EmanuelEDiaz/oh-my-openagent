@@ -120,6 +120,8 @@ describe("citationsExist", () => {
   test("an elided or root-anchored path is read relative to the repo", async () => {
     expect((await citationsExist().grade(context({ answer: "in `/…/src/a.ts:2` and /src/a.ts:1" }))).pass).toBe(true)
     expect((await citationsExist().grade(context({ answer: "in /…/src/a.ts:7" }))).pass).toBe(false)
+    expect((await citationsExist().grade(context({ answer: "in /tmp/.../src/a.ts:2 and /x/…/a.ts" }))).pass).toBe(true)
+    expect((await citationsExist().grade(context({ answer: "in /tmp/.../src/zz.ts" }))).pass).toBe(false)
   })
 
   test("requiring at least one citation fails an answer that cites nothing", async () => {

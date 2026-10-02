@@ -131,10 +131,20 @@ function citationProblem(citation: Citation, workdir: string): string | undefine
   }
   let file = isAbsolute(citation.path) ? citation.path : resolve(workdir, citation.path)
   const inside = relative(workdir, file)
+  const elided = /(?:^|\/)(?:\.{3}|…)\/(.+)$/.exec(citation.path)
+  if (elided?.[1]) {
+    // `/tmp/.../src/a.ts` or `/…/src/a.ts`: the agent shortened the prefix, so match by the part it kept.
+    return bestProblem(citation, filesEndingIn(elided[1], workdir))
+  }
   if (inside.startsWith("..") || isAbsolute(inside)) {
     // Agents elide or root-anchor repo paths (`/…/src/a.ts`, `/src/a.ts`): read them relative to the repo.
-    const asRepoPath = resolve(workdir, citation.path.replace(/^\/+/, ""))
-    if (!existsSync(asRepoPath)) return "outside the repo"
+    const repoPath = citation.path.replace(/^\/+/, "")
+    const asRepoPath = resolve(workdir, repoPath)
+    if (!existsSync(asRepoPath)) {
+      // `/x/…/a.ts` reaches here as `/a.ts`: the kept tail must still name a repo file.
+      const candidates = filesEndingIn(repoPath, workdir)
+      return candidates.length === 0 ? "outside the repo" : bestProblem(citation, candidates)
+    }
     file = asRepoPath
   }
   if (!existsSync(file)) return "no such file"
