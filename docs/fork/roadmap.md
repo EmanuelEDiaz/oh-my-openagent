@@ -174,6 +174,7 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 - ~~Reglas de lenguaje/framework cargadas bajo demanda~~ — absorbido en 4.5 (antes 2.9), 29-09-2026.
 
 ## Registro de decisiones del roadmap
+- 02-10-2026 — 4.1: medición base del `explore` actual: acierto 98 % (pass^3 94 %), ~54k tokens por pregunta en el fork y 27k–40k en los otros repos; la mejora a buscar es de coste. Orden: se hacen antes 0.8 y 0.9 (protegen las mediciones con modelos gratuitos) y luego las herramientas de 4.1.
 - 02-10-2026 — Cierres repentinos de OpenCode: causa encontrada (earlyoom mata al proceso más grande por falta de memoria). Añadido a la reanudación (0.8/0.9): guardar al recibir SIGTERM, vigilante de memoria con aviso e investigación de fugas.
 - 02-10-2026 — Control del PC con IA (documento del usuario): navegador en 4.13, escritorio en 4.17 con el motor propio `senpi-desktop` (no MCP de terceros), OCR tesseract.js como respaldo aprobado; Windows: plugin nativo (0.11) y herramientas de desarrollo con Linux/WSL; descartado exigir WSL.
 - 02-10-2026 — Añadido 0.10 (ver tareas en segundo plano): progreso en vivo, `/bg`, panel Jobs con clic y documentación de tmux/attach; después de 0.8 y 0.9.

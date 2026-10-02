@@ -128,6 +128,30 @@ es una dependencia.
 
 Cada iteración se mide en el conjunto de trabajo. La mejor configuración se mide una sola vez en el reservado.
 
+## Medición base (02-10-2026, `explore` actual, conjunto de trabajo, `big-pickle`, k = 3)
+Informe: `docs/fork/evals/explore.md`. Datos: `.omo/evals/2026-10-02-explore-baseline-explore-actual--*.regraded.jsonl`.
+
+- **Acierto ya casi en el techo:** pass@1 98 %, pass^3 94 %.
+  - Único fallo real: una cita inventada (`fork-postgres`, `boulder-state/src/read-state.ts` en vez de
+    `src/storage/read-state.ts`).
+  - **La mejora a buscar es de coste**, sin perder acierto.
+- **Coste por pregunta (media):**
+
+| Repo | Tokens | De entrada | Turnos | Segundos | Herramientas |
+|---|---|---|---|---|---|
+| ts-service (10 archivos) | 9,5k–16,5k | 7,5k–13k | 4–5 | 59–82 | 11–20 |
+| fork (9k archivos, TS) | **53,9k** | 49,5k | 6,6 | 102 | 16 |
+| codegenerator (Python) | 26,6k | 20,3k | 8,6 | 105 | 26 |
+| click (Python) | 33,7k | 29,7k | 7,7 | 96 | 18 |
+| chi (Go) | 39,7k | 35,6k | 7,1 | 76 | 17 |
+
+- **Infraestructura:** 11 fallos (cuelgues del modelo y servidores matados por `earlyoom`), reintentados y no
+  puntuados. `fork-compaction-flow` solo tiene 2 repeticiones válidas.
+- **Correctores:** se afinaron durante la medición con respuestas reales (`plans/test-bench.md`, "Ampliaciones") y
+  toda la medición se volvió a puntuar con ellos.
+- **Objetivo de 4.1, sin cambios:** ≥ 50 % menos tokens de entrada sin perder acierto, sobre todo en los repos
+  grandes; el control final se hace en el conjunto reservado.
+
 ## 6. Decisiones del usuario (01-10-2026)
 - **D1 — Motor de símbolos: `sg` ya descargado + LSP.**
   - Sin dependencias nuevas, ya probado, ~25 lenguajes.
