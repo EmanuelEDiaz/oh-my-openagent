@@ -98,6 +98,11 @@ describe("citationsExist", () => {
     expect((await citationsExist().grade(context({ answer: "see /etc/hostname-like/thing.ts" }))).pass).toBe(false)
   })
 
+  test("code quoted in fenced blocks is not a citation", async () => {
+    const answer = "See src/a.ts:2\n\n```ts\n2: if (/-free$/i.test(id)) return import(\"./missing.ts\")\n```"
+    expect((await citationsExist().grade(context({ answer }))).pass).toBe(true)
+  })
+
   test("URLs, versions and prose with dots are not file citations", async () => {
     const answer = "Docs at https://example.com/a/b.html, zod 3.23.8, e.g. this. Also src/a.ts."
     expect((await citationsExist().grade(context({ answer }))).pass).toBe(true)

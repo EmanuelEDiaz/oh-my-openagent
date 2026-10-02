@@ -81,7 +81,8 @@ const CITATION_PATTERN = /(?<![\w/.-])((?:\.{0,2}\/)?[\w@.-]+(?:\/[\w@.-]+)*\.[A
 type Citation = { readonly text: string; readonly path: string; readonly line?: number; readonly endLine?: number }
 
 function citationsIn(text: string): Citation[] {
-  const withoutUrls = text.replace(URL_PATTERN, " ")
+  // Quoted code is not a citation: `/-free$/i.test(id)` would otherwise read as the path `/i.test`.
+  const withoutUrls = text.replace(/```[\s\S]*?```/g, " ").replace(URL_PATTERN, " ")
   const found = new Map<string, Citation>()
   for (const match of withoutUrls.matchAll(CITATION_PATTERN)) {
     const [whole, path, line, endLine] = match
