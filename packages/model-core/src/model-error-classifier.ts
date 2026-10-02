@@ -12,6 +12,8 @@ const RETRYABLE_ERROR_NAMES = new Set([
   "modelunavailableerror",
   "providerconnectionerror",
   "authenticationerror",
+  // OpenCode's chunkTimeout cut on a stalled stream (fork roadmap 0.8a)
+  "providerresponsestreamerror",
 ])
 
 const STOP_ERROR_NAMES = new Set([
@@ -62,6 +64,8 @@ const RETRYABLE_MESSAGE_PATTERNS = [
   "connection error",
   "network error",
   "timeout",
+  // A stalled stream cut by OpenCode's chunkTimeout (fork roadmap 0.8a)
+  "timed out",
   "service unavailable",
   "internal_server_error",
   "free usage",

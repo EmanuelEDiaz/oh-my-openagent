@@ -90,4 +90,27 @@ describe("stall watchdog hook (fork 0.8a)", () => {
     expect(calls.continued[0]?.model).toBe("opencode/model-a")
     hook.dispose()
   })
+
+  test("a main session that ended on a stream timeout continues on the next fallback model", async () => {
+    // given
+    const { hook, calls } = setup()
+
+    // when
+    await hook.event({ event: { type: "session.error", properties: { sessionID: MAIN, error: { name: "APIError", data: { message: "SSE read timed out" } } } } })
+    await Bun.sleep(1)
+
+    // then
+    expect(calls.continued[0]?.model).toBe("opencode/model-b")
+    expect(calls.aborted).toEqual([])
+    hook.dispose()
+  })
+
+  test("other errors and subagent errors are not handled here", async () => {
+    const { hook, calls } = setup()
+    await hook.event({ event: { type: "session.error", properties: { sessionID: MAIN, error: { name: "APIError", data: { message: "401 unauthorized" } } } } })
+    await hook.event({ event: { type: "session.error", properties: { sessionID: "ses_child_9", error: { data: { message: "SSE read timed out" } } } } })
+    await Bun.sleep(1)
+    expect(calls.continued).toEqual([])
+    hook.dispose()
+  })
 })
