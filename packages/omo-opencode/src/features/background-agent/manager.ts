@@ -123,6 +123,7 @@ import type {
   LaunchInput,
   ResumeInput,
 } from "./types"
+import { getStallWatchdog, stallErrorMessage } from "../stall-watchdog"
 
 type OpencodeClient = PluginInput["client"]
 
@@ -3018,6 +3019,24 @@ The task was re-queued on a fallback model after a retryable failure.
     })
   }
 
+  /**
+   * The stall watchdog saw no model output for its window (fork roadmap 0.8a): retry on the next fallback model, or,
+   * over the per-task stall budget or with no fallback left, cancel with a reason the parent and the user can act on.
+   */
+  private async recoverStalledTask(task: BackgroundTask, sessionID: string): Promise<boolean> {
+    const watchdog = getStallWatchdog()
+    if (!watchdog?.isStalled(sessionID)) return false
+    const stalls = watchdog.recordStall(task.id)
+    watchdog.forget(sessionID)
+    const errorInfo = { name: "SessionStall", message: stallErrorMessage(sessionID) }
+    if (stalls <= watchdog.maxStallsPerTask && await this.tryFallbackRetry(task, errorInfo, "stall-watchdog")) return true
+    await this.cancelTask(task.id, {
+      source: "stall-watchdog",
+      reason: `the model stalled ${stalls} time(s) with no output; stopped to avoid retrying forever. Retry with another model or ask the user.`,
+    })
+    return true
+  }
+
   private async pollRunningTasks(): Promise<void> {
     if (this.pollingInFlight) return
     this.pollingInFlight = true
@@ -3054,6 +3073,8 @@ The task was re-queued on a fallback model after a retryable failure.
         if (!sessionID) continue
 
         try {
+          if (await this.recoverStalledTask(task, sessionID)) continue
+
           const sessionStatus = allStatuses?.[sessionID]
           // Handle retry before checking running state
           if (sessionStatus?.type === "retry") {

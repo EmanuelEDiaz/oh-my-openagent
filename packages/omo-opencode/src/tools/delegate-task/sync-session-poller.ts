@@ -2,6 +2,7 @@ import type { ToolContextWithMetadata, OpencodeClient } from "./types"
 import type { SessionMessage } from "./executor-types"
 import { getDefaultSyncPollTimeoutMs, getTimingConfig } from "./timing"
 import { getTerminalSessionError, isSessionComplete } from "./sync-session-turns"
+import { getStallWatchdog, stallErrorMessage } from "../../features/stall-watchdog"
 import { log } from "../../shared/logger"
 import { normalizeSDKResponse } from "../../shared"
 
@@ -122,6 +123,13 @@ export async function pollSyncSession(
     if (inactiveElapsedMs >= maxPollTimeMs) {
       timedOut = true
       break
+    }
+
+    // The stall watchdog saw no model output for its window: stop here so the runner retries on the next model.
+    if (getStallWatchdog()?.isStalled(input.sessionID)) {
+      log("[task] Subagent stalled", { sessionID: input.sessionID, pollCount })
+      abortSyncSession(client, input.sessionID, "stalled")
+      return stallErrorMessage(input.sessionID)
     }
 
     if (ctx.abort?.aborted) {

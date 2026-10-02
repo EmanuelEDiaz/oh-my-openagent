@@ -30,8 +30,10 @@ Base: decisiones en `plans/robustness-fixes.md` (0.8) y `plans/bounded-retry-res
      reintentado con Y"), una notificación en segundo plano, o un "continúa" interno en la sesión principal.
    - Al agotar el presupuesto, el trabajo se **pausa** (con 0.8c completo, con su tarjeta de reanudación; hasta
      entonces, con el motivo guardado).
-5. **Umbrales bajos donde ya existían:** segundo plano 45 → 10 min y síncrona 30 → 10 min, solo como red de
-   seguridad, porque el vigilante actúa antes. Configurable.
+5. ~~**Umbrales bajos donde ya existían** (45 → 10 min en segundo plano, 30 → 10 min en síncrona).~~ **Descartado
+   al implementarlo (02-10-2026).** Esos temporizadores no distinguen una herramienta larga legítima (unos tests de
+   15 min) de un cuelgue: con 10 min habrían cancelado trabajo válido, y un test del original lo detectó. Se quedan
+   en 45 y 30 min como red de seguridad; el vigilante, que sí excluye las herramientas en marcha, actúa a los 4 min.
 
 ### 0.8b — Procesos largos en segundo plano, obligatorios
 1. **Herramientas** (se amplía `monitor`, que pasa a estar activado por defecto):

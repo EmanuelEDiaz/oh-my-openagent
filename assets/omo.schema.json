@@ -11937,6 +11937,55 @@
           ],
           "additionalProperties": false
         },
+        "stall": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "chunk_timeout_ms": {
+              "default": 90000,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 10000,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "boolean",
+                  "const": false
+                }
+              ]
+            },
+            "inactivity_ms": {
+              "default": 240000,
+              "type": "integer",
+              "minimum": 60000,
+              "maximum": 9007199254740991
+            },
+            "check_interval_ms": {
+              "default": 15000,
+              "type": "integer",
+              "minimum": 1000,
+              "maximum": 9007199254740991
+            },
+            "max_stalls_per_task": {
+              "default": 2,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 5
+            }
+          },
+          "required": [
+            "enabled",
+            "chunk_timeout_ms",
+            "inactivity_ms",
+            "check_interval_ms",
+            "max_stalls_per_task"
+          ],
+          "additionalProperties": false
+        },
         "team_mode": {
           "type": "object",
           "properties": {
@@ -29949,6 +29998,55 @@
                   "ring_max_lines",
                   "line_max_bytes",
                   "pattern_max_length"
+                ],
+                "additionalProperties": false
+              },
+              "stall": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "chunk_timeout_ms": {
+                    "default": 90000,
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 10000,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "boolean",
+                        "const": false
+                      }
+                    ]
+                  },
+                  "inactivity_ms": {
+                    "default": 240000,
+                    "type": "integer",
+                    "minimum": 60000,
+                    "maximum": 9007199254740991
+                  },
+                  "check_interval_ms": {
+                    "default": 15000,
+                    "type": "integer",
+                    "minimum": 1000,
+                    "maximum": 9007199254740991
+                  },
+                  "max_stalls_per_task": {
+                    "default": 2,
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 5
+                  }
+                },
+                "required": [
+                  "enabled",
+                  "chunk_timeout_ms",
+                  "inactivity_ms",
+                  "check_interval_ms",
+                  "max_stalls_per_task"
                 ],
                 "additionalProperties": false
               },
