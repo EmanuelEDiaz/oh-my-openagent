@@ -195,7 +195,7 @@ function escapeRegExp(text: string): string {
 /** The answer cites `pathSuffix` at a line overlapping [from, to] (as `file:12`, `file:12-15` or `file line 12`). */
 export function citesLine(pathSuffix: string, from: number, to: number): Grader {
   const name = `citesLine:${pathSuffix}:${from}-${to}`
-  const pattern = new RegExp(`${escapeRegExp(pathSuffix)}\`?(?::|,?\\s+lines?\\s+)(\\d+)(?:\\s*[-–]\\s*(\\d+))?`, "gi")
+  const pattern = new RegExp(`${escapeRegExp(pathSuffix)}\`?(?::|[^\\n]{0,60}?\\blines?\\s+)(\\d+)(?:\\s*[-–]\\s*(\\d+))?`, "gi")
   return {
     name,
     grade: ({ transcript }) => {

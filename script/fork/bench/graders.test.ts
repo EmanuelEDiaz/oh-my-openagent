@@ -176,6 +176,8 @@ describe("citesLine", () => {
     expect((await citesLine("src/http/retry.ts", 4, 4).grade(context({ answer: "see /tmp/x/src/http/retry.ts:4" }))).pass).toBe(true)
     expect((await citesLine("retry.ts", 3, 6).grade(context({ answer: "`retry.ts:5-9`" }))).pass).toBe(true)
     expect((await citesLine("retry.ts", 4, 4).grade(context({ answer: "retry.ts line 4" }))).pass).toBe(true)
+    expect((await citesLine("http/retry.ts", 4, 4).grade(context({ answer: "- /x/src/http/retry.ts - THE answer. Line 4 defines it" }))).pass).toBe(true)
+    expect((await citesLine("retry.ts", 4, 4).grade(context({ answer: "retry.ts is the file\nLine 4 of client.ts" }))).pass).toBe(false)
   })
 
   test("fails for a wrong line or another file", async () => {
