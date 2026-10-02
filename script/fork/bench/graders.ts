@@ -91,7 +91,11 @@ type Citation = { readonly text: string; readonly path: string; readonly line?: 
 
 function citationsIn(text: string): Citation[] {
   // Quoted code is not a citation: `/-free$/i.test(id)` would otherwise read as the path `/i.test`.
-  const withoutUrls = text.replace(/```[\s\S]*?```/g, " ").replace(URL_PATTERN, " ")
+  // Proposed next steps may name files to create; only the evidence parts of the answer are citations.
+  const withoutUrls = text
+    .replace(/<next_steps>[\s\S]*?(<\/next_steps>|$)/g, " ")
+    .replace(/```[\s\S]*?```/g, " ")
+    .replace(URL_PATTERN, " ")
   const found = new Map<string, Citation>()
   for (const match of withoutUrls.matchAll(CITATION_PATTERN)) {
     const [whole, path, line, endLine] = match

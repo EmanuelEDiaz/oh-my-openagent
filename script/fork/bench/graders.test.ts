@@ -111,6 +111,12 @@ describe("citationsExist", () => {
     expect((await citationsExist().grade(context({ answer: "generates `src/config/nope.py`" }))).pass).toBe(false)
   })
 
+  test("paths proposed in <next_steps> are not evidence citations", async () => {
+    const answer = "<answer>see src/a.ts:1</answer>\n<next_steps>Add tests/test_new_thing.py</next_steps>"
+    expect((await citationsExist().grade(context({ answer }))).pass).toBe(true)
+    expect((await citationsExist().grade(context({ answer: "<answer>see src/gone.ts:1</answer>" }))).pass).toBe(false)
+  })
+
   test("an example path after 'e.g.' is not a citation", async () => {
     expect((await citationsExist().grade(context({ answer: "writes to output, e.g. `out/src/apps/product/models.py`; see src/a.ts:1" }))).pass).toBe(true)
     expect((await citationsExist().grade(context({ answer: "por ejemplo out/x.py" }))).pass).toBe(true)
