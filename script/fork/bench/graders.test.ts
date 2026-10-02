@@ -6,6 +6,8 @@ import { join } from "node:path"
 import {
   answerMatches,
   citationsExist,
+  citesLine,
+  saysAbsent,
   contract,
   delegatedTo,
   EXPLORE_CONTRACT,
@@ -166,5 +168,30 @@ describe("answer, outcome, delegation, agent and budget", () => {
     expect((await withinBudget({ maxTokens: 200, maxTurns: 2, timeoutMs: 1 }).grade(context())).pass).toBe(true)
     expect((await withinBudget({ maxTokens: 100, timeoutMs: 1 }).grade(context())).pass).toBe(false)
     expect((await withinBudget({ maxTurns: 1, timeoutMs: 1 }).grade(context())).pass).toBe(false)
+  })
+})
+
+describe("citesLine", () => {
+  test("passes when the answer cites the file at a line inside the expected range", async () => {
+    expect((await citesLine("src/http/retry.ts", 4, 4).grade(context({ answer: "see /tmp/x/src/http/retry.ts:4" }))).pass).toBe(true)
+    expect((await citesLine("retry.ts", 3, 6).grade(context({ answer: "`retry.ts:5-9`" }))).pass).toBe(true)
+    expect((await citesLine("retry.ts", 4, 4).grade(context({ answer: "retry.ts line 4" }))).pass).toBe(true)
+  })
+
+  test("fails for a wrong line or another file", async () => {
+    expect((await citesLine("retry.ts", 4, 4).grade(context({ answer: "retry.ts:13" }))).pass).toBe(false)
+    expect((await citesLine("retry.ts", 4, 4).grade(context({ answer: "client.ts:4" }))).pass).toBe(false)
+  })
+})
+
+describe("saysAbsent", () => {
+  test("recognises an explicit 'does not exist' answer", async () => {
+    for (const answer of ["There is no GraphQL generator in this repo.", "No WebSocket support was found.", "It does not implement async commands", "Not found: nothing stores data in PostgreSQL"]) {
+      expect((await saysAbsent().grade(context({ answer }))).pass).toBe(true)
+    }
+  })
+
+  test("fails an answer that claims a location", async () => {
+    expect((await saysAbsent().grade(context({ answer: "It is implemented in src/ws.ts:10." }))).pass).toBe(false)
   })
 })

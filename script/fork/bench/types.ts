@@ -1,3 +1,5 @@
+import type { Fixture } from "./fixtures"
+
 /** Shared types of the agent test bench (fork roadmap 3.0, docs/fork/plans/test-bench.md). */
 
 export type ToolCall = {
@@ -54,8 +56,8 @@ export type Task = {
   readonly agent: string
   /** `subtask`: a specialist runs as a real subagent; `primary`: an orchestrator gets the prompt directly. */
   readonly mode: "subtask" | "primary"
-  /** Directory under script/fork/bench/fixtures/. */
-  readonly fixture: string
+  /** A directory under script/fork/bench/fixtures/, or a git repo pinned to a commit or tag. */
+  readonly fixture: Fixture
   readonly prompt: string
   readonly expect: readonly Grader[]
   /** `holdout` tasks are never looked at while tuning an agent. */

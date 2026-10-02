@@ -188,6 +188,33 @@ export function answerMatches(patterns: readonly RegExp[]): Grader {
   }
 }
 
+function escapeRegExp(text: string): string {
+  return text.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&")
+}
+
+/** The answer cites `pathSuffix` at a line overlapping [from, to] (as `file:12`, `file:12-15` or `file line 12`). */
+export function citesLine(pathSuffix: string, from: number, to: number): Grader {
+  const name = `citesLine:${pathSuffix}:${from}-${to}`
+  const pattern = new RegExp(`${escapeRegExp(pathSuffix)}\`?(?::|,?\\s+lines?\\s+)(\\d+)(?:\\s*[-–]\\s*(\\d+))?`, "gi")
+  return {
+    name,
+    grade: ({ transcript }) => {
+      const cited = [...transcript.answer.matchAll(pattern)].map((match) => [Number(match[1]), Number(match[2] ?? match[1])] as const)
+      const hit = cited.some(([start, end]) => start <= to && end >= from)
+      return result(name, hit, cited.length === 0 ? "file not cited with a line" : `cited ${cited.map(([start, end]) => (start === end ? start : `${start}-${end}`)).join(", ")}`)
+    },
+  }
+}
+
+// "There is no X", "X was not found", "does not implement", "doesn't exist", "nothing …".
+const ABSENT = /\b(there (is|are) no|no \w[\w\s-]{0,40}(is|are|was|were) (found|implemented|present)|(was|were|is|are) not (found|implemented|present)|(does|do)(n't| not) (exist|implement|support|have|contain|import)|not found|nothing\b)/i
+
+/** For "where is X?" when X does not exist: the answer must say so instead of inventing a location. */
+export function saysAbsent(): Grader {
+  const name = "saysAbsent"
+  return { name, grade: ({ transcript }) => result(name, ABSENT.test(transcript.answer)) }
+}
+
 /** A check on the final state of the repo the agent worked in. */
 export function outcome(label: string, check: (workdir: string) => boolean | Promise<boolean>): Grader {
   const name = `outcome:${label}`

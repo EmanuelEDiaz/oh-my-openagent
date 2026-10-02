@@ -13,6 +13,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFil
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
+import { resolveFixture } from "./fixtures"
 import { renderReport } from "./report"
 import { runTask } from "./runner"
 import { createSandbox, destroySandbox, isHealthy, saveServerLogs, startServer, warmUp, type Sandbox, type Server } from "./sandbox"
@@ -23,6 +24,7 @@ import type { RunResult, Task } from "./types"
 const REPO = join(import.meta.dir, "../../..")
 const SUITES: Record<string, readonly Task[]> = { explore: EXPLORE_TASKS }
 const INFRA_RETRIES = 2
+const FIXTURE_CACHE = join(REPO, ".omo/bench-cache")
 
 function flag(name: string): boolean {
   return process.argv.includes(`--${name}`)
@@ -115,7 +117,7 @@ async function main(): Promise<void> {
           const result = await runTask(task, {
             baseUrl: server.baseUrl,
             sandbox,
-            fixtureDir: join(import.meta.dir, "fixtures", task.fixture),
+            fixtureDir: await resolveFixture(task.fixture, FIXTURE_CACHE),
             repeat,
             attempt,
             ...(flag("offline") ? {} : { fetchStatus }),
