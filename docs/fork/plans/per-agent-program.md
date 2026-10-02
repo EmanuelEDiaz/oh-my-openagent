@@ -69,6 +69,9 @@ Estimación: 1,5–3 días por paso; 7–10 semanas a tiempo parcial en total.
 >   - **Copia aislada** fijada en el último commit (`649fcd7`). El repo del usuario no se toca y sus cambios sin
 >     commitear no entran. Lo que salga bien se le ofrece como rama para revisar.
 >   - **También por agente:** cada paso de la Fase 4 añade a su banco 2–3 prompts reales sobre esa copia.
+>   - **Agentes que falten:** si en la prueba (final o por agente) se ve que en la vida real hace falta un
+>     especialista que no existe, se registra con su evidencia (qué prompt, qué falló o qué hizo a mano el
+>     orquestador) y **se propone al usuario para diseñarlo juntos**. Nunca se crea sin su aprobación.
 >   - **Correctores ocultos** que el agente no ve:
 >     - generar con un JSON de prueba y comprobar el proyecto generado;
 >     - `pytest` y `ruff`;
