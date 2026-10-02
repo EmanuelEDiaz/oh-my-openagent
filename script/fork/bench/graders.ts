@@ -76,7 +76,9 @@ function urlsIn(text: string): string[] {
 
 // A path needs a directory separator or a line number, and an extension with a letter: this keeps out prose
 // ("e.g."), versions ("3.23.8") and bare domains.
-const CITATION_PATTERN = /(?<![\w/.-])((?:\.{0,2}\/)?[\w@.-]+(?:\/[\w@.-]+)*\.[A-Za-z][\w]{0,9})(?::(\d+)(?:-(\d+))?)?/g
+const CITATION_PATTERN = /(?<![\w/.\-~>}$])((?:\.{0,2}\/)?[\w@.-]+(?:\/[\w@.-]+)*\.[A-Za-z][\w]{0,9})(?::(\d+)(?:-(\d+))?)?/g
+
+const SOURCE_EXTENSION = /\.(ts|tsx|js|jsx|mjs|cjs|py|go|rs|java|kt|php|rb|cs|c|cc|cpp|h|hpp|swift|scala|vue|svelte|md|sh)$/i
 
 type Citation = { readonly text: string; readonly path: string; readonly line?: number; readonly endLine?: number }
 
@@ -87,6 +89,8 @@ function citationsIn(text: string): Citation[] {
   for (const match of withoutUrls.matchAll(CITATION_PATTERN)) {
     const [whole, path, line, endLine] = match
     if (!path || (!path.includes("/") && line === undefined)) continue
+    // Without a line, only source files count: `.db`/`.json` paths are usually runtime locations, not repo files.
+    if (line === undefined && !SOURCE_EXTENSION.test(path)) continue
     found.set(whole, {
       text: whole,
       path,

@@ -98,6 +98,13 @@ describe("citationsExist", () => {
     expect((await citationsExist().grade(context({ answer: "see /etc/hostname-like/thing.ts" }))).pass).toBe(false)
   })
 
+  test("runtime paths with placeholders and data files without a line are not citations", async () => {
+    const answer = "Stored in `<dataDir>/opencode/opencode.db`, `~/.omo/omo.jsonc`, `$XDG_DATA_HOME/x/y.db`, `<project>/.omo/cache/knowledge.db` and `.omo/omo.jsonc`; see src/a.ts:1"
+    expect((await citationsExist().grade(context({ answer }))).pass).toBe(true)
+    expect((await citationsExist().grade(context({ answer: "see src/invented.ts" }))).pass).toBe(false)
+    expect((await citationsExist().grade(context({ answer: "see config/app.json:3" }))).pass).toBe(false)
+  })
+
   test("code quoted in fenced blocks is not a citation", async () => {
     const answer = "See src/a.ts:2\n\n```ts\n2: if (/-free$/i.test(id)) return import(\"./missing.ts\")\n```"
     expect((await citationsExist().grade(context({ answer }))).pass).toBe(true)
