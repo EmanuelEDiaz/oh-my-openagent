@@ -1,5 +1,6 @@
 import { TASK_CLEANUP_DELAY_MS } from "../../features/background-agent/constants"
 import { handedBackSyncSessions } from "../../features/claude-code-session-state"
+import { isSessionRetained } from "../../features/resume/retention"
 import { log } from "../../shared/logger"
 import type { OpencodeClient } from "./types"
 
@@ -22,6 +23,11 @@ export function scheduleSyncSessionDeletion(
   if (typeof deleteSession !== "function") return
   const timer = setTimeout(() => {
     pendingDeletionTimers.delete(sessionID)
+    // Sessions of a plan that is still active or paused stay for a lossless resume (fork roadmap 0.8c).
+    if (isSessionRetained(sessionID)) {
+      log("[task] Keeping sync session of an unfinished plan", { sessionID })
+      return
+    }
     try {
       void deleteSession({ path: { id: sessionID } }).then(() => {
       handedBackSyncSessions.delete(sessionID)

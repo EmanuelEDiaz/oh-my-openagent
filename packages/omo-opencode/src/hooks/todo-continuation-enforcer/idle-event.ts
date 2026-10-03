@@ -8,12 +8,13 @@ import { latestAssistantTurnBlocksInternalPrompt } from "@oh-my-opencode/utils/p
 
 import { isLastAssistantMessageAborted } from "./abort-detection"
 import { acknowledgeCompactionGuard, isCompactionGuardActive } from "./compaction-guard"
-import { ABORT_WINDOW_MS, CONTINUATION_COOLDOWN_MS, DEFAULT_SKIP_AGENTS, FAILURE_RESET_WINDOW_MS, HOOK_NAME, MAX_CONSECUTIVE_FAILURES } from "./constants"
+import { ABORT_WINDOW_MS, CONTINUATION_COOLDOWN_MS, DEFAULT_SKIP_AGENTS, FAILURE_RESET_WINDOW_MS, HOOK_NAME, MAX_CONSECUTIVE_FAILURES, MAX_STAGNATION_COUNT } from "./constants"
 import { startCountdown } from "./countdown"
 import { hasUnansweredQuestion } from "./pending-question-detection"
 import { resolveLatestMessageInfo } from "./resolve-message-info"
 import type { SessionStateStore } from "./session-state"
 import { shouldStopForStagnation } from "./stagnation-detection"
+import { reportWorkStoppedWithClient } from "../../features/resume/work-stopped"
 import { getIncompleteCount } from "./todo"
 import type { MessageWithInfo, ResolvedMessageInfo, Todo } from "./types"
 
@@ -233,6 +234,10 @@ export async function handleSessionIdle(args: {
     return
   }
   if (shouldStopForStagnation({ sessionID, incompleteCount, progressUpdate })) {
+    // First stop only: tell the user and save the work (fork roadmap 0.8c).
+    if (progressUpdate.stagnationCount === MAX_STAGNATION_COUNT) {
+      void reportWorkStoppedWithClient(ctx.client as never, sessionID, `${incompleteCount} todo(s) made no progress after ${MAX_STAGNATION_COUNT} continuations`)
+    }
     return
   }
   startCountdown({

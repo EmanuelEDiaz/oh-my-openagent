@@ -38,6 +38,8 @@ export type ResumeCard = {
   readonly attempts: readonly { readonly model?: string; readonly outcome: string }[]
   readonly wip?: WipCapture
   readonly nextAction: string
+  /** Free-form summary written by the agent (e.g. a /handoff), shown verbatim. */
+  readonly notes?: string
   /** Set when a session picked the work up again; resumed cards are kept as history but not listed as paused. */
   readonly resumedAt?: string
 }
@@ -115,6 +117,7 @@ export function renderResumeMarkdown(card: ResumeCard): string {
     "## Do not repeat",
     list(card.attempts.map((attempt) => `${attempt.outcome}${attempt.model ? ` with ${attempt.model}` : ""}`)),
     "",
+    ...(card.notes ? ["## Handoff summary", card.notes, ""] : []),
     "## Next action",
     card.nextAction,
     "",

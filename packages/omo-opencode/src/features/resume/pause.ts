@@ -19,6 +19,7 @@ export type PauseInput = {
   readonly snapshot: () => Pick<CompactionSnapshot, "userMessages" | "decisions" | "filesChanged" | "errors"> | undefined
   readonly target: () => Promise<{ agent?: string; model?: string }>
   readonly now?: () => Date
+  readonly notes?: string
 }
 
 /** One card per session: a newer pause replaces the older one. */
@@ -73,6 +74,7 @@ export async function pauseWork(input: PauseInput): Promise<ResumeCard> {
     errors: snapshot?.errors ?? [],
     attempts: input.attempts,
     ...(wip ? { wip } : {}),
+    ...(input.notes ? { notes: input.notes } : {}),
     nextAction: planned?.plan.currentTask
       ? `Continue the plan at: ${planned.plan.currentTask}`
       : "Continue the user's last request from where it stopped.",

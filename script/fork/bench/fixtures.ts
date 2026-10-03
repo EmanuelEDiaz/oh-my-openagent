@@ -3,10 +3,19 @@
  * or URL) pinned to a commit or tag, extracted once into a local cache without its .git and never modified there.
  */
 import { existsSync, mkdirSync, renameSync, rmSync } from "node:fs"
+import { homedir } from "node:os"
 import { join } from "node:path"
 
 export type GitFixture = { readonly name: string; readonly repo: string; readonly ref: string }
 export type Fixture = string | GitFixture
+
+/**
+ * Outside the repository on purpose: a full repo copy inside the project would be scanned by repo-wide tools and
+ * tests (it broke the mock-module audit). `OMO_BENCH_CACHE` overrides it.
+ */
+export function defaultFixtureCache(): string {
+  return process.env.OMO_BENCH_CACHE ?? join(process.env.XDG_CACHE_HOME ?? join(homedir(), ".cache"), "omo-bench", "fixtures")
+}
 
 export function fixtureKey(fixture: GitFixture): string {
   return `${fixture.name}@${fixture.ref.slice(0, 12)}`.replaceAll(/[^\w@.-]/g, "_")
