@@ -1,6 +1,6 @@
 # Paso 0.8 — Diseño detallado: cuelgues, procesos en segundo plano y reanudación
 
-Parte del roadmap: `docs/fork/roadmap.md`. Estado: **aprobado (02-10-2026)**; **0.8a y 0.8b hechos**, sigue 0.8c.
+Parte del roadmap: `docs/fork/roadmap.md`. Estado: **aprobado (02-10-2026)**; **0.8a, 0.8b y 0.8c hechos** (quedan pendientes menores al final).
 Base: decisiones en `plans/robustness-fixes.md` (0.8) y `plans/bounded-retry-resume.md`. Rutas: `S/` =
 `packages/omo-opencode/src/`. Todo funciona en Windows y Linux (0.11).
 
@@ -137,6 +137,43 @@ Base: decisiones en `plans/robustness-fixes.md` (0.8) y `plans/bounded-retry-res
    lo que hacías", "retoma", "resume" o "continue where you left off" en el mensaje añaden un recordatorio con el id.
 7. **Fugas de memoria:** medición con y sin el plugin en una sesión larga (índice de conocimiento, LSP, tareas en
    segundo plano, cachés); se corrige lo que sea del plugin.
+
+### Resultado de 0.8c (03-10-2026)
+- **Hecho:**
+  - `S/features/resume/`:
+    - tarjeta `.omo/runs/<id>/RESUME.md` + `resume.json` (una por sesión, la más reciente);
+    - cambios a medio hacer en `refs/omo/wip/<id>` con un índice temporal, sin tocar índice, archivos, rama ni
+      historial; incluye archivos nuevos y respeta `.gitignore`;
+    - `pauseBoulderWork` en `boulder-state`, y la reanudación lo vuelve a activar.
+  - **Disparadores:**
+    - presupuesto de cuelgues agotado en la sesión principal;
+    - cierre del proceso (SIGTERM de `earlyoom`, Ctrl+C, salida), solo para las sesiones que estaban trabajando;
+    - vigilante de memoria (1,2 GB o 85 %; en Linux, `MemAvailable`);
+    - `/stop-continuation`, que ahora pausa en vez de borrar.
+  - **Reanudar:**
+    - herramienta `resume_task` y comando `/omo-resume`;
+    - prompt enfocado (tarjeta, diff guardado, pista, aviso si los archivos cambiaron, intentos que no hay que
+      repetir);
+    - **sin comando:** línea en el prompt de sistema cuando hay trabajo pausado y recordatorio con el id cuando el
+      usuario escribe "reanuda", "sigue con lo de antes" o "continue where you left off".
+- **Encontrado y corregido durante la QA:**
+  - el guardado ante SIGTERM no llegaba a ejecutarse: la limpieza ordenada del plugin sale del proceso al acabar sus
+    gestores. Ahora el guardado se registra en esa limpieza, que lo espera;
+  - `Bun.spawnSync` cambiado por las utilidades compartidas, que exige la auditoría del original.
+- **QA aislada con proveedor simulado** (evidencia en `.omo/evidence/0.8c/`):
+  - E: SIGTERM a mitad de tarea → tarjeta con la petición y la referencia WIP (`app.ts` modificado + `app.test.ts`
+    nuevo); archivos e historial intactos; tras reiniciar, `resume_task` lista y reanuda con la petición, el diff, la
+    pista, "coincide" y la regla;
+  - F: vigilante de memoria → tarjeta guardada por adelantado;
+  - G: "reanuda lo que estabas haciendo" sin comando → recordatorio con el id y reanudación directa;
+  - `opencode.db` y `auth.json` reales sin cambios.
+- **Tests:** suites de omo-opencode, utils, model-core y boulder-state en verde (lo que falla en la ejecución
+  conjunta pasa uno a uno); tipado limpio.
+- **Pendientes menores (la tarjeta ya cubre lo esencial):**
+  - conservar las sesiones de subagentes de un trabajo pausado (hoy se borran a los 10 min);
+  - que `/handoff` guarde su resumen;
+  - guardar en disco los contadores de Atlas y de la continuación de tareas y avisar al usuario;
+  - medir las fugas de memoria con y sin el plugin.
 
 ## QA aislada (sin depender de que un modelo gratuito se cuelgue)
 - **Proveedor simulado:** un servidor local compatible con OpenAI dentro del sandbox que emite unos tokens y **se

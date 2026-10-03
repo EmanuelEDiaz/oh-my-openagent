@@ -7,6 +7,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
+import { spawnSync } from "../../shared/bun-spawn-shim"
 import { writeFileAtomically } from "../../shared/write-file-atomically"
 
 export type ResumeItem = { readonly locator: string; readonly text: string }
@@ -46,8 +47,8 @@ const RUNS_DIR = [".omo", "runs"]
 const WIP_IDENTITY = { GIT_AUTHOR_NAME: "omo-wip", GIT_AUTHOR_EMAIL: "omo-wip@localhost", GIT_COMMITTER_NAME: "omo-wip", GIT_COMMITTER_EMAIL: "omo-wip@localhost" }
 
 function git(cwd: string, args: readonly string[], env: Record<string, string> = {}): { ok: boolean; out: string } {
-  const run = Bun.spawnSync(["git", ...args], { cwd, env: { ...process.env, ...env }, stdout: "pipe", stderr: "pipe" })
-  return { ok: run.exitCode === 0, out: run.stdout.toString().trim() }
+  const run = spawnSync(["git", ...args], { cwd, env: { ...process.env, ...env }, stdout: "pipe", stderr: "pipe" })
+  return { ok: run.exitCode === 0, out: (run.stdout?.toString() ?? "").trim() }
 }
 
 function runsDir(projectDir: string): string {

@@ -1,12 +1,13 @@
 /** What a resumed agent is given: a focused card, not a replay of the old transcript (fork roadmap 0.8c). */
+import { spawnSync } from "../../shared/bun-spawn-shim"
 import { renderResumeMarkdown, restoreCheck, type ResumeCard } from "./store"
 
 const MAX_DIFF = 6000
 
 function diffOf(projectDir: string, card: ResumeCard): string {
   if (!card.wip) return ""
-  const run = Bun.spawnSync(["git", "diff", card.wip.base, card.wip.ref], { cwd: projectDir, stdout: "pipe", stderr: "pipe" })
-  const diff = run.stdout.toString()
+  const run = spawnSync(["git", "diff", card.wip.base, card.wip.ref], { cwd: projectDir, stdout: "pipe", stderr: "pipe" })
+  const diff = run.stdout?.toString() ?? ""
   return diff.length > MAX_DIFF ? `${diff.slice(0, MAX_DIFF)}\n… (diff truncated; see git diff ${card.wip.base.slice(0, 12)} ${card.wip.ref})` : diff
 }
 
