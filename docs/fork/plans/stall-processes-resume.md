@@ -132,7 +132,10 @@ Base: decisiones en `plans/robustness-fixes.md` (0.8) y `plans/bounded-retry-res
    - `/stop-continuation` pausa en vez de borrar;
    - `/handoff` guarda su resumen;
    - los contadores de Atlas y de la continuación de tareas se guardan en disco y avisan al usuario.
-6. **Fugas de memoria:** medición con y sin el plugin en una sesión larga (índice de conocimiento, LSP, tareas en
+6. **Reanudar sin comando** (pedido 02-10-2026): si hay trabajo pausado, una línea en el prompt de sistema lo dice y
+   ordena llamar a `resume_task` cuando el usuario pida reanudar; además, "reanuda", "continúa lo de antes", "sigue con
+   lo que hacías", "retoma", "resume" o "continue where you left off" en el mensaje añaden un recordatorio con el id.
+7. **Fugas de memoria:** medición con y sin el plugin en una sesión larga (índice de conocimiento, LSP, tareas en
    segundo plano, cachés); se corrige lo que sea del plugin.
 
 ## QA aislada (sin depender de que un modelo gratuito se cuelgue)
