@@ -22,6 +22,7 @@ import { KnowledgeConfigSchema } from "./knowledge"
 import { MonitorConfigSchema } from "./monitor"
 import { StallConfigSchema } from "./stall"
 import { ProcessesConfigSchema } from "./processes"
+import { ResumeConfigSchema } from "./resume"
 import { RuntimeFallbackConfigSchema } from "./runtime-fallback"
 import { TeamModeConfigSchema } from "./team-mode"
 import { SkillsConfigSchema } from "./skills"
@@ -98,6 +99,8 @@ export const OhMyOpenCodeConfigSchema = z.object({
   stall: StallConfigSchema.optional(),
   /** Managed background processes; long-running commands must use process_start (fork roadmap 0.8b) */
   processes: ProcessesConfigSchema.optional(),
+  /** Lossless resume: cards, SIGTERM save, memory watch, /omo-resume (fork roadmap 0.8c) */
+  resume: ResumeConfigSchema.optional(),
   team_mode: TeamModeConfigSchema.optional(),
   keyword_detector: KeywordDetectorConfigSchema.optional(),
   babysitting: BabysittingConfigSchema.optional(),

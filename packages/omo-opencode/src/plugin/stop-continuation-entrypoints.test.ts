@@ -71,6 +71,12 @@ describe("stop continuation entrypoints", () => {
     rmSync(testDirectory, { recursive: true, force: true })
   })
 
+  // /stop-continuation pauses the session's work instead of deleting the boulder state (fork roadmap 0.8c).
+  function sessionWorkStatus(): string | undefined {
+    const state = readBoulderState(testDirectory)
+    return state?.works ? Object.values(state.works)[0]?.status : state?.status
+  }
+
   function seedBoulderState(): void {
     writeBoulderState(
       testDirectory,
@@ -97,7 +103,7 @@ describe("stop continuation entrypoints", () => {
     expect(calls.stoppedSessions).toEqual(["ses-stop"])
     expect(calls.cancelledCountdowns).toEqual(["cancelled"])
     expect(calls.clearedGoals).toEqual(["ses-stop"])
-    expect(readBoulderState(testDirectory)).toBeNull()
+    expect(sessionWorkStatus()).toBe("paused")
   })
 
   test("#given native expansion is unavailable #when raw /stop-continuation reaches chat.message #then every mechanism stops", async () => {
@@ -133,7 +139,7 @@ describe("stop continuation entrypoints", () => {
     expect(calls.stoppedSessions).toEqual(["ses-stop"])
     expect(calls.cancelledCountdowns).toEqual(["cancelled"])
     expect(calls.clearedGoals).toEqual(["ses-stop"])
-    expect(readBoulderState(testDirectory)).toBeNull()
+    expect(sessionWorkStatus()).toBe("paused")
   })
 
   test("#given ordinary text #when it mentions /stop-continuation inside a code block #then continuations stay active", async () => {
@@ -188,6 +194,6 @@ describe("stop continuation entrypoints", () => {
     expect(calls.stoppedSessions).toEqual(["ses-stop"])
     expect(calls.cancelledCountdowns).toEqual(["cancelled"])
     expect(calls.clearedGoals).toEqual(["ses-stop"])
-    expect(readBoulderState(testDirectory)).toBeNull()
+    expect(sessionWorkStatus()).toBe("paused")
   })
 })

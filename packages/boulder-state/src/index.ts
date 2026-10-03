@@ -30,6 +30,7 @@ export {
   resolveBoulderPlanPathForWork,
   resolveStaleWorkThresholdMs,
   selectActiveWork,
+  pauseBoulderWork,
   STALE_WORK_THRESHOLD_ENV_KEY,
   startTaskTimer,
   upsertTaskSessionState,

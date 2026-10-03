@@ -74,6 +74,19 @@ $ARGUMENTS
 </user-request>`,
       argumentHint: "[plan-name] [--worktree <path>] [--make-pr] [--ship]",
     },
+    "omo-resume": {
+      description: "(builtin) Resume work that stopped (retries spent, OpenCode closed, memory pressure) without losing it",
+      template: `<command-instruction>
+Call the resume_task tool. If the user gave an id, call resume_task({ id, hint }) with the rest of their text as the hint;
+otherwise call resume_task() to list paused work and ask the user which one to resume (use the question tool).
+Then continue exactly as the returned card says.
+</command-instruction>
+
+<user-request>
+$ARGUMENTS
+</user-request>`,
+      argumentHint: "[run_id] [hint]",
+    },
     "stop-continuation": {
       description: "(builtin) Stop all continuation mechanisms (ralph loop, todo continuation, boulder) for this session",
       template: `<command-instruction>

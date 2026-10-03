@@ -37,6 +37,8 @@ export interface BoulderWorkState {
   elapsed_ms?: number
   updated_at?: string
   stale_since?: string
+  pause_reason?: string
+  resume_id?: string
   session_ids: string[]
   session_origins?: Record<string, BoulderSessionOrigin>
   agent?: string
@@ -200,6 +202,7 @@ export declare function resolveBoulderPlanPathForWork(
   work: Pick<BoulderWorkState, "active_plan" | "worktree_path">,
 ): string
 export declare function selectActiveWork(directory: string, workId: string): BoulderState | null
+export declare function pauseBoulderWork(directory: string, workId: string, input: { reason: string; resumeId?: string }): BoulderState | null
 export declare function startTaskTimer(directory: string, workId: string, input: TaskTimerInput): BoulderState | null
 export declare function upsertTaskSessionState(directory: string, input: TaskSessionInput): BoulderState | null
 export declare function upsertTaskSessionStateForWork(

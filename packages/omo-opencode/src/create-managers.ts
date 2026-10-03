@@ -7,6 +7,8 @@ import { BackgroundManager } from "./features/background-agent"
 import type { MonitorManager } from "./features/monitor"
 import { createMonitorManager } from "./features/monitor"
 import { createPluginProcessManager, type ProcessManager } from "./features/managed-process"
+import { createPluginResumeService } from "./features/resume/plugin"
+import type { ResumeService } from "./features/resume/service"
 import { SkillMcpManager } from "./features/skill-mcp-manager"
 import { cleanupSessionTeamRuns } from "./features/team-mode/team-runtime/session-cleanup"
 import { lookupTeamSession } from "./features/team-mode/team-session-registry"
@@ -59,6 +61,7 @@ export type Managers = {
   tuiStateMirror?: TuiStateMirror
   monitorManager?: MonitorManager
   processManager?: ProcessManager
+  resumeService?: ResumeService
 }
 
 export function createManagers(args: {
@@ -109,7 +112,11 @@ export function createManagers(args: {
   const processManager = pluginConfig.processes?.enabled === false
     ? undefined
     : createPluginProcessManager(ctx, pluginConfig.processes)
+  // Lossless resume (fork roadmap 0.8c), on unless resume.enabled is false.
+  const resumeService = pluginConfig.resume?.enabled === false ? undefined : createPluginResumeService(ctx, pluginConfig.resume)
+
   const shutdownProcesses = async (): Promise<void> => {
+    resumeService?.dispose()
     const failures = await processManager?.shutdown().catch((error) => {
       log("[create-managers] process cleanup error during shutdown:", error)
       return []
@@ -242,5 +249,6 @@ export function createManagers(args: {
     tuiStateMirror,
     monitorManager,
     processManager,
+    resumeService,
   }
 }

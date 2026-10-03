@@ -26,11 +26,12 @@ export function stripSessionPlatform(sessionId: string): string {
  * paused any other way (no `stale_since`) keeps its status.
  */
 export function restoreDemotedWork(work: BoulderWorkState): BoulderWorkState {
-  if (work.status !== "paused" || work.stale_since === undefined) {
+  if (work.status !== "paused" || (work.stale_since === undefined && work.pause_reason === undefined)) {
     return work
   }
 
-  const { stale_since: _staleSince, ...restored } = work
+  // Stale demotion and a fork pause for resume (0.8c) both end when a session picks the work up again.
+  const { stale_since: _staleSince, pause_reason: _pauseReason, resume_id: _resumeId, ...restored } = work
   return { ...restored, status: "active" }
 }
 
