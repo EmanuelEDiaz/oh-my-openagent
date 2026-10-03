@@ -1,6 +1,8 @@
 /** Real OpenCode wiring for lossless resume (fork roadmap 0.8c). */
+import { isMainThread } from "node:worker_threads"
+
 import type { ResumeConfig } from "../../config/schema/resume"
-import { getMainSessionID } from "../claude-code-session-state"
+import { registerManagerForCleanup } from "../background-agent/process-cleanup"
 import { opencodeDbPath } from "../knowledge/service"
 import { openSessionReader } from "../knowledge/session-reader"
 import { getStallWatchdog } from "../stall-watchdog"
@@ -23,7 +25,8 @@ export function createPluginResumeService(ctx: PluginContext, config: Partial<Re
     toast: async (message) => {
       await ctx.client.tui.showToast({ body: { title: "Work saved", message, variant: "warning", duration: 15_000 } }).catch(() => undefined)
     },
-    activeSessions: () => [getMainSessionID(), ...(getStallWatchdog()?.busySessions() ?? [])].filter((id): id is string => typeof id === "string"),
+    // Only sessions that were working: an idle conversation is already safe in OpenCode's database.
+    activeSessions: () => getStallWatchdog()?.busySessions() ?? [],
     memory: {
       processLimitBytes: (config?.memory_limit_mb ?? 1228) * 1024 * 1024,
       systemUsedRatio: (config?.system_memory_percent ?? 85) / 100,
@@ -32,6 +35,9 @@ export function createPluginResumeService(ctx: PluginContext, config: Partial<Re
     log,
   })
   service.start()
+  // Ordered shutdown: the plugin's cleanup waits for every registered manager before exiting.
+  registerManagerForCleanup({ shutdown: () => service.saveOnShutdown() })
+  log("[resume] service started", { directory: ctx.directory, mainThread: isMainThread, pid: process.pid, sigtermListeners: process.listenerCount("SIGTERM") })
   active = service
   return service
 }

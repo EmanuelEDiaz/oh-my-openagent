@@ -22,6 +22,9 @@ export type ResumeServiceDeps = {
   readonly log?: (message: string, data?: Record<string, unknown>) => void
 }
 
+const SHUTDOWN_SAVE_MS = 4000
+const TARGET_TIMEOUT_MS = 1000
+
 export function createResumeService(deps: ResumeServiceDeps) {
   let reader: Promise<SessionReader | null> | undefined
   const getReader = () => (reader ??= deps.openReader().catch(() => null))
@@ -34,14 +37,17 @@ export function createResumeService(deps: ResumeServiceDeps) {
       reason,
       attempts,
       snapshot: () => (opened ? buildCompactionSnapshot(opened, sessionID, deps.projectDir) : undefined),
-      target: () => deps.target(sessionID),
+      // During shutdown the server may not answer: never let the card wait on it.
+      target: () => Promise.race([deps.target(sessionID), new Promise<{ agent?: string; model?: string }>((resolve) => setTimeout(() => resolve({}), TARGET_TIMEOUT_MS))]),
     })
   }
 
   /** Save cards for every active session; never throws. */
   async function pauseActive(reason: string): Promise<number> {
     let saved = 0
-    for (const sessionID of new Set(deps.activeSessions())) {
+    const sessions = [...new Set(deps.activeSessions())]
+    deps.log?.("[resume] saving active sessions", { reason, sessions })
+    for (const sessionID of sessions) {
       try {
         await pause(sessionID, reason)
         saved++
@@ -89,7 +95,16 @@ export function createResumeService(deps: ResumeServiceDeps) {
       if (!memoryWatch || memoryTimer) return
       memoryTimer = setInterval(() => void checkMemory(), deps.memory!.intervalMs)
       memoryTimer.unref?.()
-      registerSigterm(service)
+    },
+
+    /**
+     * Process shutdown (SIGTERM from the OOM guard or a close, SIGINT, exit): runs inside the plugin's ordered cleanup,
+     * which waits for it before exiting. Only sessions that were working get a card.
+     */
+    async saveOnShutdown(): Promise<void> {
+      const saving = pauseActive("OpenCode was closed while working (SIGTERM, Ctrl+C or exit)")
+      const finished = await Promise.race([saving.then(() => true), new Promise<false>((resolve) => setTimeout(() => resolve(false), SHUTDOWN_SAVE_MS))])
+      deps.log?.("[resume] shutdown save", { finished })
     },
 
     checkMemory,
@@ -97,33 +112,9 @@ export function createResumeService(deps: ResumeServiceDeps) {
     dispose(): void {
       if (memoryTimer) clearInterval(memoryTimer)
       memoryTimer = undefined
-      unregisterSigterm(service)
     },
   }
   return service
 }
 
 export type ResumeService = ReturnType<typeof createResumeService>
-
-// One SIGTERM handler per process for every plugin instance (the plugin loads once per project directory).
-const services = new Set<{ pauseActive(reason: string): Promise<number> }>()
-let handlerInstalled = false
-const SIGTERM_SAVE_MS = 1500
-
-async function onSigterm(): Promise<void> {
-  const saving = Promise.all([...services].map((service) => service.pauseActive("OpenCode received SIGTERM (closed by the system or the user)")))
-  await Promise.race([saving, new Promise((resolve) => setTimeout(resolve, SIGTERM_SAVE_MS))])
-  // Keep OpenCode's own shutdown if it has one; otherwise end the process as SIGTERM would have.
-  if (process.listenerCount("SIGTERM") <= 1) process.exit(143)
-}
-
-function registerSigterm(service: { pauseActive(reason: string): Promise<number> }): void {
-  services.add(service)
-  if (handlerInstalled) return
-  handlerInstalled = true
-  process.on("SIGTERM", () => void onSigterm())
-}
-
-function unregisterSigterm(service: { pauseActive(reason: string): Promise<number> }): void {
-  services.delete(service)
-}

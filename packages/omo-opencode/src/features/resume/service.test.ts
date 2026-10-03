@@ -48,4 +48,11 @@ describe("resume service (fork 0.8c)", () => {
     const { created } = service()
     expect(created.resume("run_nope")).toContain("ERROR")
   })
+
+  test("on shutdown only working sessions get a card", async () => {
+    const { created } = service({ active: ["busy1"] })
+    await created.saveOnShutdown()
+    expect(listPaused(dir).map((card) => card.sessionID)).toEqual(["busy1"])
+    expect(listPaused(dir)[0]?.reason).toContain("closed while working")
+  })
 })

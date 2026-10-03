@@ -21,6 +21,8 @@ import type {
   ChatMessageInput,
   FirstMessageVariantGate,
 } from "./chat-message/types"
+import { isResumeIntent, resumeReminder } from "../features/resume/intent"
+import { listPaused } from "../features/resume/store"
 
 export type { ChatMessageHandlerOutput, ChatMessageInput } from "./chat-message/types"
 
@@ -114,6 +116,13 @@ export function createChatMessageHandler(args: {
         hooks,
         sessionID: input.sessionID,
       })
+    }
+
+    // "reanuda" / "sigue con lo de antes" works without a command when there is paused work (fork roadmap 0.8c).
+    if (pluginConfig.resume?.enabled !== false && typeof ctx.directory === "string") {
+      const textPart = output.parts.find((part) => part.type === "text" && !part.synthetic && typeof part.text === "string") as { text: string } | undefined
+      const reminder = textPart && isResumeIntent(textPart.text) ? resumeReminder(textPart.text, listPaused(ctx.directory)) : undefined
+      if (textPart && reminder) textPart.text = `${textPart.text}\n\n---\n\n${reminder}`
     }
 
     const isFirstMessage = firstMessageVariantGate.shouldOverride(input.sessionID)
