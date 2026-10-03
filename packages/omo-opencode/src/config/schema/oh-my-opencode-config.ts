@@ -23,6 +23,8 @@ import { MonitorConfigSchema } from "./monitor"
 import { StallConfigSchema } from "./stall"
 import { ProcessesConfigSchema } from "./processes"
 import { ResumeConfigSchema } from "./resume"
+import { TestIntegrityConfigSchema } from "./test-integrity"
+import { EditDiagnosticsConfigSchema } from "./edit-diagnostics"
 import { RuntimeFallbackConfigSchema } from "./runtime-fallback"
 import { TeamModeConfigSchema } from "./team-mode"
 import { SkillsConfigSchema } from "./skills"
@@ -101,6 +103,10 @@ export const OhMyOpenCodeConfigSchema = z.object({
   processes: ProcessesConfigSchema.optional(),
   /** Lossless resume: cards, SIGTERM save, memory watch, /omo-resume (fork roadmap 0.8c) */
   resume: ResumeConfigSchema.optional(),
+  /** Read-only tests while fixing, refused cheating edits, new tests judged by fail-before/pass-after (fork roadmap 0.9a) */
+  test_integrity: TestIntegrityConfigSchema.optional(),
+  /** Only the errors an edit introduced, with alternatives; syntax-breaking edits undone (fork roadmap 0.9a) */
+  edit_diagnostics: EditDiagnosticsConfigSchema.optional(),
   team_mode: TeamModeConfigSchema.optional(),
   keyword_detector: KeywordDetectorConfigSchema.optional(),
   babysitting: BabysittingConfigSchema.optional(),

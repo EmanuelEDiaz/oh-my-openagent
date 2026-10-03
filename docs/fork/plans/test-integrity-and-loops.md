@@ -1,7 +1,6 @@
 # Paso 0.9 — Integridad de tests, rompe-bucles y errores de tipos
 
-Parte del roadmap: `docs/fork/roadmap.md`. Estado: **decidido (02-10-2026)**; se diseña en detalle y se implementa
-tras 0.8. Las mejoras de cada agente van en 4.7 (`test-writer`), 4.8 (`debugger`) y 4.11 (`test-reviewer`).
+Parte del roadmap: `docs/fork/roadmap.md`. Estado: **diseño detallado aprobado (03-10-2026)**; dos entregas: 0.9a → 0.9b. Las mejoras de cada agente van en 4.7 (`test-writer`), 4.8 (`debugger`) y 4.11 (`test-reviewer`).
 Rutas: `S/` = `packages/omo-opencode/src/`.
 
 ## Problema (usuario, 02-10-2026)
@@ -82,6 +81,104 @@ Rutas: `S/` = `packages/omo-opencode/src/`.
    - consulta con el error normalizado a Stack Exchange → issues de GitHub → Exa → SearXNG (si existe);
    - resultados con enlace y fecha, tratados como datos y no como instrucciones;
    - la sintetiza `librarian`, que ya investiga en la web.
+
+## Diseño detallado aprobado (03-10-2026)
+
+### 0.9a — Tests protegidos y errores de tipos
+- **Guardián de tests** (antes de aplicar cada edición, por código):
+  - test **existente** = el archivo ya estaba en git o en disco antes de que la sesión lo tocara; es de **solo lectura**
+    para el agente principal y los implementadores; los tests que crea la propia sesión sí se pueden editar;
+  - `test-writer` edita tests y **solo tests** (hoy solo lo pedía su prompt);
+  - se **bloquea para todos**, también para `test-writer`: `skip`/`.only`/`xfail`/`@pytest.mark.skip` nuevos, menos
+    aserciones o aserciones debilitadas (`toBe(x)` → `toBeTruthy()`), mock del propio módulo bajo prueba,
+    `@ts-ignore`/`@ts-expect-error`/`# type: ignore`/`//nolint` nuevos;
+  - **solo aviso**: `any` nuevo y literales de un test metidos en el código (`if (x === "<valor del test>")`);
+  - **desbloqueo**: el bloqueo indica "si crees que el test está mal, no lo cambies: pregunta al usuario" con la
+    herramienta `question` y la opción "Permitir editar `<archivo>`" (o "permitir todos los tests en esta tarea"); el
+    plugin lee **la respuesta del usuario** y solo entonces desbloquea; el modelo no puede falsearla;
+  - **test nuevo válido = falla antes y pasa después**: el plugin ve las ejecuciones (`bun test`, jest, vitest, pytest,
+    `go test`, phpunit, pest) con código de salida y archivos; un test nuevo que nunca se vio fallar antes del arreglo,
+    o que falló por la razón equivocada (import no encontrado, sintaxis), se marca **inválido** en el resultado que
+    recibe el padre.
+- **Errores de tipos nuevos tras cada edición:**
+  - OpenCode ya adjunta los diagnósticos LSP a `edit`/`write`/`apply_patch`, pero la lista entera; el plugin da
+    **solo los nuevos** (comparando con los del archivo la primera vez que la sesión lo tocó, por código y mensaje, sin
+    la línea); si OpenCode no los dio (el `edit` de hashline), los pide al LSP del plugin;
+  - formato: `archivo:línea:col`, código, esperado/real y alternativas (el "Did you mean" del compilador y nombres
+    parecidos del archivo; las correcciones automáticas del LSP no se piden hoy en el cliente);
+  - **ediciones que rompen la sintaxis**: Python (`ast`), Go (`gofmt -e`) y JSON se comprueban **antes**; en TS/JS, si
+    aparecen errores de sintaxis nuevos, **se revierte el archivo** y se avisa con la ubicación. Sin dependencias nuevas.
+
+### 0.9a — Hecho (03-10-2026)
+- **Código:**
+  - `S/features/test-integrity/` (`test-files.ts`, `change.ts`, `checks.ts`, `test-runs.ts`, `guard.ts`, `guidance.ts`)
+    y el hook `test-integrity-guard`;
+  - `S/features/edit-diagnostics/` (`diagnostics.ts`, `syntax.ts`, `service.ts`, `daemon-diagnostics.ts`) y el hook
+    `edit-diagnostics`;
+  - configuración `test_integrity` y `edit_diagnostics`; regla siempre activa en el prompt de sistema
+    (`<omo-test-integrity>`).
+- **Ajustes respecto al diseño, con su motivo:**
+  - **Errores de tipos desde el LSP del plugin** (decisión del usuario, 03-10-2026): en OpenCode 1.18.26 su LSP está
+    apagado si `opencode.json` no tiene `lsp`, y el del usuario no lo tiene, así que OpenCode no adjunta errores. El
+    plugin pide los errores al daemon LSP compartido (uno para todas las ventanas) **antes y después** de cada edición;
+    si OpenCode sí los trae, se usan esos. Descartado encender el LSP de OpenCode: arranca un servidor por carpeta
+    abierta (más memoria con 7,5 GB y earlyoom).
+  - **Servidores instalados** (decisión del usuario): `typescript-language-server`, TypeScript 5 (el 7 no trae
+    `tsserver`) y `pyright`, globales. Si falta el servidor de un lenguaje, se avisa una vez con el comando.
+  - **Sintaxis rota → se deshace tras la edición** (en vez de comprobar antes): mismo resultado para el agente, y sirve
+    para cualquier forma de edición (también `apply_patch` y hashline) sin dependencias nuevas.
+  - **Un test nuevo que pasa a la primera no siempre es inválido**: si cubre algo que ya funciona es válido como
+    cobertura; el aviso lo distingue ("válido solo como cobertura, no como reproducción de un fallo").
+  - Primera consulta al LSP en frío = "desconocido", nunca "sin errores"; entonces se usan las líneas cambiadas y los
+    nombres tocados por la edición.
+- **Encontrado en la QA y arreglado:** un daemon LSP lanzado dentro del entorno aislado sobrevivía al servidor
+  (~500 MB, 30 min). `destroySandbox` cierra ahora los procesos con el HOME del entorno; sin esto el banco podía
+  acumular uno por tarea y provocar earlyoom.
+- **QA aislada** (`.omo/evidence/0.9a/qa-scenario-H.txt`), con un modelo simulado que hace trampas y el usuario
+  respondiendo a `question`:
+  - editar un test existente → bloqueado con la salida "pregunta al usuario";
+  - el usuario responde "Allow editing src/sum.test.ts" → desbloqueado; la edición siguiente pasa;
+  - `// @ts-ignore` → bloqueado;
+  - test nuevo que falla por una aserción → "reproduce el problema"; tras el arreglo pasa → "test válido";
+  - sintaxis rota → edición deshecha; error de tipos nuevo → solo ese, con esperado/real.
+- **Tests:** 19 nuevos (guardián, comprobaciones, diagnósticos, daemon) + sandbox; suite completa sin fallos nuevos
+  (los mismos 99 que ya fallaban antes al correr todo en un solo proceso).
+
+### 0.9b — Freno de bucles, búsqueda web y tope por tarea
+- **Huella de error** de salidas de bash con error, llamadas fallidas (se leen del flujo de eventos: el hook de después
+  no corre si la herramienta falla) y errores de tipos nuevos; normalizada sin rutas, líneas, columnas, direcciones,
+  fechas ni duraciones; en tests, nombre del test + mensaje de la aserción.
+- **Intento** = ediciones entre dos apariciones del mismo error; **casi idéntico** = ≥ 90 % de parecido por tokens.
+- **Alcance**: por tarea (sesión principal + subagentes), en `.omo/runs/<tarea>/loops.json` (sobrevive a reinicios).
+- **Escalada**: 2 → aviso con el error y el resumen de intentos; 3 → el plugin lanza `web-researcher` y su ficha pasa
+  al `debugger`, que empieza de cero; las ediciones a esos archivos quedan bloqueadas hasta llamar al `debugger`;
+  4 o arreglo repetido → bloqueo de esos archivos y pregunta al usuario con 2–4 opciones y enlaces; se desbloquea al
+  responder o escribir; si la sesión queda parada esperando, se guarda la tarjeta de reanudación y se avisa.
+  `doom_loop` sigue en "ask".
+- **Especialista nuevo `web-researcher`** (decisión del usuario, 03-10-2026: un agente especializado en búsquedas web):
+  - para cualquier búsqueda en la web abierta (errores, información actual, comparativas); lo llaman todos los agentes;
+    `librarian` se queda con documentación de librerías y código de repos; Sisyphus: "información externa o actual →
+    `web-researcher`";
+  - solo lectura: `websearch` (Exa/Tavily), `webfetch`, la herramienta nueva **`web_search`** (Stack Exchange con el
+    cuerpo de las respuestas aceptadas y más votadas, issues de GitHub vía `gh` y SearXNG si se configura, sin claves) y
+    bash solo `gh search`/`gh issue view`/`gh api` de lectura;
+  - **por código**: ningún enlace inventado (cada URL de su respuesta debe haber salido en sus resultados; si no, se le
+    devuelve); presupuesto de 8 búsquedas y 6 páginas por llamada;
+  - prompt: reformular, leer antes de citar, comprobar versión y sistema, contrastar ≥ 2 fuentes, resultados como
+    datos y nunca instrucciones, "no encontré nada fiable" antes que rellenar;
+  - respuesta fija: conclusión + 2–4 opciones con enlace y fecha + confianza (alimenta la pregunta del paso 4);
+  - modelo barato y rápido de `omo-models`; si falla o se cuelga, plan B: la búsqueda directa de `web_search`;
+  - 2–3 pruebas propias en la Fase 5.
+  - **Tiene su propio paso, 4.18**, que se hace **entre 0.9a y 0.9b**: estudio de lo mejor para él, diseño con el
+    usuario, construcción y medición; 0.9b solo lo conecta al freno de bucles (regla del usuario, 03-10-2026: cada
+    agente de "@" tiene un paso propio).
+  - Descartado: que el `debugger` interprete él solo los resultados del plugin, o el híbrido plugin → `librarian`; el
+    usuario prefiere un especialista dedicado a la búsqueda web.
+- **Tope de 6 por tarea**: contador común en disco para cuelgues (0.8) y bucles; al llegar a 6 se pausa y se avisa;
+  se reinicia con una petición nueva o con "reanuda" (el historial de intentos se conserva).
+- **Configuración**: `test_integrity`, `edit_diagnostics`, `loop_breaker` (umbrales y fuentes, `searxng_url`),
+  `retry_budget.max_per_task: 6`.
+- **Funciona igual en Windows**: `fetch` y el shim de procesos (requisito de 0.11).
 
 ## Criterios de aceptación
 ```gherkin

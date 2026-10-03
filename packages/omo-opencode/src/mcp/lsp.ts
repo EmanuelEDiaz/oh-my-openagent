@@ -133,6 +133,27 @@ function resolveLspCommand(options: LspMcpConfigOptions = {}): AncestorCliCandid
   return createBootstrapCandidate(findBootstrapRoot(candidates, pathExists), pathExists, resolveExecutable)
 }
 
+/** Where the LSP daemon client lives, for in-process callers (fork roadmap 0.9a: hashline edit diagnostics). */
+export function resolveLspDaemonClientPath(options: LspMcpConfigOptions = {}): string | undefined {
+  const resolved = resolveLspCommand(options)
+  if (!resolved.exists) return undefined
+  if (hasCliSuffix(resolved.path, DIST_CLI_REL)) return resolve(dirname(resolved.path), "client.js")
+  if (hasCliSuffix(resolved.path, SOURCE_CLI_REL)) return resolve(dirname(resolved.path), "client.ts")
+  return undefined
+}
+
+export function createLspDaemonContext(cwdInput: string) {
+  const cwd = resolve(cwdInput)
+  const configDir = getOpenCodeConfigDir({ binary: "opencode" })
+  return {
+    cwd,
+    projectConfigPaths: PROJECT_LSP_CONFIGS.map((configPath) => resolve(cwd, configPath)),
+    userConfigPath: resolve(configDir, "lsp.json"),
+    installDecisionsPath: resolve(configDir, "lsp-install-decisions.json"),
+    capabilities: { installDecisionTool: false },
+  }
+}
+
 export function createLspMcpConfig(options: LspMcpConfigOptions = {}): LocalMcpConfig {
   const resolvedCommand = resolveLspCommand(options)
   const cwd = resolve(options.cwd ?? process.cwd())

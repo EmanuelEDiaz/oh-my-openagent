@@ -3,6 +3,7 @@ import { reconcileSisyphusRuntimePrompt } from "../agents/sisyphus-runtime-promp
 import { GROUNDING_TAG } from "../features/knowledge/grounding"
 import { PROCESS_GUIDANCE_TAG } from "../features/managed-process/guidance"
 import { PAUSED_WORK_TAG } from "../features/resume/intent"
+import { TEST_INTEGRITY_TAG } from "../features/test-integrity/guidance"
 
 const ULTRAWORK_MODE_TAG = "<ultrawork-mode>"
 
@@ -31,6 +32,7 @@ export function createSystemTransformHandler(
   groundingGuidance?: string,
   processGuidance?: string,
   pausedWorkGuidance?: () => string | undefined,
+  testIntegrityGuidance?: string,
 ): (
   input: { sessionID?: string; model: { id: string; providerID: string; [key: string]: unknown } },
   output: { system: string[] },
@@ -48,6 +50,10 @@ export function createSystemTransformHandler(
 
     if (processGuidance && !output.system.some((part) => part.includes(PROCESS_GUIDANCE_TAG))) {
       output.system.push(processGuidance)
+    }
+
+    if (testIntegrityGuidance && !output.system.some((part) => part.includes(TEST_INTEGRITY_TAG))) {
+      output.system.push(testIntegrityGuidance)
     }
 
     const paused = pausedWorkGuidance?.()

@@ -67,6 +67,7 @@ export type ChatMessageHooks = {
   noSisyphusGpt?: ChatMessageHook | null
   noHephaestusNonGpt?: ChatMessageHook | null
   hephaestusAgentsMdInjector?: ChatMessageHook | null
+  testIntegrityGuard?: ChatMessageHook | null
   ulwExecute?: ChatMessageHook | null
   goal?: GoalHook | null
   todoContinuationEnforcer?: TodoContinuationEnforcerHook | null

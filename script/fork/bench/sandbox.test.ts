@@ -1,9 +1,9 @@
 import { afterAll, describe, expect, test } from "bun:test"
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { assertSafeSandboxRoot, createSandbox, destroySandbox, prepareWorkdir } from "./sandbox"
+import { assertSafeSandboxRoot, createSandbox, destroySandbox, prepareWorkdir, sandboxProcesses } from "./sandbox"
 
 const scratch = mkdtempSync(join(tmpdir(), "bench-sandbox-"))
 afterAll(() => rmSync(scratch, { recursive: true, force: true }))
@@ -41,5 +41,18 @@ describe("createSandbox / prepareWorkdir / destroySandbox", () => {
 
     destroySandbox(sandbox)
     expect(existsSync(join(scratch, "sb"))).toBe(false)
+  })
+
+  test("finds processes left running with the sandbox's HOME (e.g. the LSP daemon) so destroySandbox can stop them", () => {
+    const proc = mkdtempSync(join(tmpdir(), "fake-proc-"))
+    const write = (pid: string, env: string[]) => {
+      mkdirSync(join(proc, pid))
+      writeFileSync(join(proc, pid, "environ"), env.join("\0"))
+    }
+    write("101", ["PATH=/bin", "HOME=/tmp/sb/home"])
+    write("102", ["HOME=/home/user"])
+    write("self", ["HOME=/tmp/sb/home"])
+    expect(sandboxProcesses("/tmp/sb", proc)).toEqual([101])
+    rmSync(proc, { recursive: true, force: true })
   })
 })
