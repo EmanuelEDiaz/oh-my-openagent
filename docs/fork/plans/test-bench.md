@@ -119,7 +119,7 @@ Repite cada tarea N veces y da `pass@1` y `pass^3`. No debe tocar nunca la confi
 
 ## Ampliaciones (02-10-2026, durante 4.1)
 - **Repos fijados por commit o etiqueta** (`fixtures.ts`): repos locales sin su árbol de trabajo, y públicos
-  (click 8.2.2, chi v5.3.2), extraídos una vez a `.omo/bench-cache/`. Incluye la copia de `codegenerator`.
+  (click 8.2.2, chi v5.3.2), extraídos una vez a `~/.cache/omo-bench/fixtures/` (fuera del repo: dentro, las herramientas que recorren el proyecto escaneaban una copia entera del repo; rompió la auditoría de mocks). Incluye la copia de `codegenerator`.
 - **Correctores nuevos:**
   - `citesLine`: cita el archivo en el rango correcto;
   - `saysAbsent`: responde "no existe" en vez de inventar.

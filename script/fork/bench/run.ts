@@ -13,7 +13,7 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFil
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { resolveFixture } from "./fixtures"
+import { defaultFixtureCache, resolveFixture } from "./fixtures"
 import { renderReport } from "./report"
 import { pendingRuns } from "./resume"
 import { runTask } from "./runner"
@@ -25,7 +25,7 @@ import type { RunResult, Task } from "./types"
 const REPO = join(import.meta.dir, "../../..")
 const SUITES: Record<string, readonly Task[]> = { explore: EXPLORE_TASKS }
 const INFRA_RETRIES = 2
-const FIXTURE_CACHE = join(REPO, ".omo/bench-cache")
+const FIXTURE_CACHE = defaultFixtureCache()
 
 function flag(name: string): boolean {
   return process.argv.includes(`--${name}`)

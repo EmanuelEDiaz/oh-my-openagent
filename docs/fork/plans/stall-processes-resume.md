@@ -1,6 +1,6 @@
 # Paso 0.8 — Diseño detallado: cuelgues, procesos en segundo plano y reanudación
 
-Parte del roadmap: `docs/fork/roadmap.md`. Estado: **aprobado (02-10-2026)**; **0.8a, 0.8b y 0.8c hechos** (quedan pendientes menores al final).
+Parte del roadmap: `docs/fork/roadmap.md`. Estado: **aprobado (02-10-2026)**; **0.8a, 0.8b y 0.8c hechos, sin pendientes**.
 Base: decisiones en `plans/robustness-fixes.md` (0.8) y `plans/bounded-retry-resume.md`. Rutas: `S/` =
 `packages/omo-opencode/src/`. Todo funciona en Windows y Linux (0.11).
 
@@ -169,11 +169,19 @@ Base: decisiones en `plans/robustness-fixes.md` (0.8) y `plans/bounded-retry-res
   - `opencode.db` y `auth.json` reales sin cambios.
 - **Tests:** suites de omo-opencode, utils, model-core y boulder-state en verde (lo que falla en la ejecución
   conjunta pasa uno a uno); tipado limpio.
-- **Pendientes menores (la tarjeta ya cubre lo esencial):**
-  - conservar las sesiones de subagentes de un trabajo pausado (hoy se borran a los 10 min);
-  - que `/handoff` guarde su resumen;
-  - guardar en disco los contadores de Atlas y de la continuación de tareas y avisar al usuario;
-  - medir las fugas de memoria con y sin el plugin.
+- **Completado después (03-10-2026, sin dejar pendientes):**
+  - las sesiones de subagentes de un plan activo o pausado ya no se borran a los 10 min
+    (`S/features/resume/retention.ts`); se limpian de nuevo cuando el trabajo termina o se abandona;
+  - `/handoff` guarda su resumen con `handoff_save` como trabajo reanudable: en la sesión nueva basta con decir
+    "reanuda";
+  - cuando Atlas o la continuación de tareas se rinden por falta de avance, se avisa al usuario y se guarda la tarjeta
+    (`S/features/resume/work-stopped.ts`), en vez de solo escribirlo en el log;
+  - **medición de memoria** (80 mensajes con un proveedor simulado, `.omo/evidence/0.8c/memleak-results.txt`):
+    - **sin fugas por mensaje atribuibles al plugin** (≈1,3 MB por mensaje con plugin frente a ≈1,9 MB sin él);
+    - el plugin ocupa unos **65–75 MB fijos por instancia** (una por carpeta abierta);
+    - reducir ese tamaño sería una optimización nueva, no un pendiente: se pregunta al usuario.
+  - **Encontrado al cerrar:** la caché de repos del banco dentro del proyecto (`.omo/bench-cache`, una copia entera del
+    repo) rompía la auditoría de mocks del original. Movida a `~/.cache/omo-bench/fixtures`.
 
 ## QA aislada (sin depender de que un modelo gratuito se cuelgue)
 - **Proveedor simulado:** un servidor local compatible con OpenAI dentro del sandbox que emite unos tokens y **se

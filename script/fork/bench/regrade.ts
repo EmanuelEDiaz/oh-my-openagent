@@ -12,7 +12,7 @@ import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } 
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { resolveFixture } from "./fixtures"
+import { defaultFixtureCache, resolveFixture } from "./fixtures"
 import { gradersFor } from "./graders"
 import { renderReport } from "./report"
 import { summarize } from "./score"
@@ -52,7 +52,7 @@ async function main(): Promise<void> {
   for (const result of results) {
     const task = TASKS.find((candidate) => candidate.id === result.taskId)
     if (!task) throw new Error(`unknown task ${result.taskId}`)
-    regraded.push(await regradeResult(result, task, await resolveFixture(task.fixture, join(REPO, ".omo/bench-cache"))))
+    regraded.push(await regradeResult(result, task, await resolveFixture(task.fixture, defaultFixtureCache())))
   }
   const out = file.replace(/\.jsonl$/, ".regraded.jsonl")
   writeFileSync(out, `${regraded.map((result) => JSON.stringify(result)).join("\n")}\n`)
