@@ -109,6 +109,41 @@ Rutas: `S/` = `packages/omo-opencode/src/`.
   - **ediciones que rompen la sintaxis**: Python (`ast`), Go (`gofmt -e`) y JSON se comprueban **antes**; en TS/JS, si
     aparecen errores de sintaxis nuevos, **se revierte el archivo** y se avisa con la ubicación. Sin dependencias nuevas.
 
+### 0.9a — Hecho (03-10-2026)
+- **Código:**
+  - `S/features/test-integrity/` (`test-files.ts`, `change.ts`, `checks.ts`, `test-runs.ts`, `guard.ts`, `guidance.ts`)
+    y el hook `test-integrity-guard`;
+  - `S/features/edit-diagnostics/` (`diagnostics.ts`, `syntax.ts`, `service.ts`, `daemon-diagnostics.ts`) y el hook
+    `edit-diagnostics`;
+  - configuración `test_integrity` y `edit_diagnostics`; regla siempre activa en el prompt de sistema
+    (`<omo-test-integrity>`).
+- **Ajustes respecto al diseño, con su motivo:**
+  - **Errores de tipos desde el LSP del plugin** (decisión del usuario, 03-10-2026): en OpenCode 1.18.26 su LSP está
+    apagado si `opencode.json` no tiene `lsp`, y el del usuario no lo tiene, así que OpenCode no adjunta errores. El
+    plugin pide los errores al daemon LSP compartido (uno para todas las ventanas) **antes y después** de cada edición;
+    si OpenCode sí los trae, se usan esos. Descartado encender el LSP de OpenCode: arranca un servidor por carpeta
+    abierta (más memoria con 7,5 GB y earlyoom).
+  - **Servidores instalados** (decisión del usuario): `typescript-language-server`, TypeScript 5 (el 7 no trae
+    `tsserver`) y `pyright`, globales. Si falta el servidor de un lenguaje, se avisa una vez con el comando.
+  - **Sintaxis rota → se deshace tras la edición** (en vez de comprobar antes): mismo resultado para el agente, y sirve
+    para cualquier forma de edición (también `apply_patch` y hashline) sin dependencias nuevas.
+  - **Un test nuevo que pasa a la primera no siempre es inválido**: si cubre algo que ya funciona es válido como
+    cobertura; el aviso lo distingue ("válido solo como cobertura, no como reproducción de un fallo").
+  - Primera consulta al LSP en frío = "desconocido", nunca "sin errores"; entonces se usan las líneas cambiadas y los
+    nombres tocados por la edición.
+- **Encontrado en la QA y arreglado:** un daemon LSP lanzado dentro del entorno aislado sobrevivía al servidor
+  (~500 MB, 30 min). `destroySandbox` cierra ahora los procesos con el HOME del entorno; sin esto el banco podía
+  acumular uno por tarea y provocar earlyoom.
+- **QA aislada** (`.omo/evidence/0.9a/qa-scenario-H.txt`), con un modelo simulado que hace trampas y el usuario
+  respondiendo a `question`:
+  - editar un test existente → bloqueado con la salida "pregunta al usuario";
+  - el usuario responde "Allow editing src/sum.test.ts" → desbloqueado; la edición siguiente pasa;
+  - `// @ts-ignore` → bloqueado;
+  - test nuevo que falla por una aserción → "reproduce el problema"; tras el arreglo pasa → "test válido";
+  - sintaxis rota → edición deshecha; error de tipos nuevo → solo ese, con esperado/real.
+- **Tests:** 19 nuevos (guardián, comprobaciones, diagnósticos, daemon) + sandbox; suite completa sin fallos nuevos
+  (los mismos 99 que ya fallaban antes al correr todo en un solo proceso).
+
 ### 0.9b — Freno de bucles, búsqueda web y tope por tarea
 - **Huella de error** de salidas de bash con error, llamadas fallidas (se leen del flujo de eventos: el hook de después
   no corre si la herramienta falla) y errores de tipos nuevos; normalizada sin rutas, líneas, columnas, direcciones,

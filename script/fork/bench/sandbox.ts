@@ -4,7 +4,7 @@
  * config, data or opencode.db.
  */
 import { spawn, type ChildProcess } from "node:child_process"
-import { cpSync, existsSync, mkdirSync, realpathSync, rmSync, writeFileSync } from "node:fs"
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs"
 import { createServer } from "node:net"
 import { homedir } from "node:os"
 import { join, resolve, sep } from "node:path"
@@ -159,6 +159,33 @@ export function saveServerLogs(sandbox: Sandbox, to: string): void {
   if (existsSync(logs)) cpSync(logs, to, { recursive: true })
 }
 
+/**
+ * Processes still running with the sandbox's HOME: background helpers the sandboxed OpenCode started and that outlive
+ * it, such as the plugin's shared LSP daemon (idle for 30 min, ~500 MB with tsserver). Linux only (/proc); the bench is
+ * a Linux/WSL dev tool.
+ */
+export function sandboxProcesses(root: string, procDir = "/proc"): number[] {
+  if (!existsSync(procDir)) return []
+  const home = `HOME=${join(root, "home")}`
+  const found: number[] = []
+  for (const entry of readdirSync(procDir)) {
+    if (!/^\d+$/.test(entry) || Number(entry) === process.pid) continue
+    try {
+      if (readFileSync(join(procDir, entry, "environ"), "utf8").split("\0").includes(home)) found.push(Number(entry))
+    } catch {
+      // gone, or not ours to read
+    }
+  }
+  return found
+}
+
 export function destroySandbox(sandbox: Sandbox): void {
+  for (const pid of sandboxProcesses(sandbox.root)) {
+    try {
+      process.kill(pid, "SIGTERM")
+    } catch {
+      // already gone
+    }
+  }
   rmSync(sandbox.root, { recursive: true, force: true })
 }

@@ -23,6 +23,8 @@ import {
   createPlanFormatValidatorHook,
 } from "../../hooks"
 import { createManagedProcessGuardHook } from "../../hooks/managed-process-guard/hook"
+import { createTestIntegrityGuardHook } from "../../hooks/test-integrity-guard"
+import { createEditDiagnosticsHook } from "../../hooks/edit-diagnostics"
 import {
   getOpenCodeVersion,
   isOpenCodeVersionAtLeast,
@@ -50,6 +52,8 @@ export type ToolGuardHooks = {
   writeExistingFileGuard: ReturnType<typeof createWriteExistingFileGuardHook> | null
   bashFileReadGuard: ReturnType<typeof createBashFileReadGuardHook> | null
   managedProcessGuard: ReturnType<typeof createManagedProcessGuardHook> | null
+  testIntegrityGuard: ReturnType<typeof createTestIntegrityGuardHook> | null
+  editDiagnostics: ReturnType<typeof createEditDiagnosticsHook> | null
   hashlineReadEnhancer: ReturnType<typeof createHashlineReadEnhancerHook> | null
   jsonErrorRecovery: ReturnType<typeof createJsonErrorRecoveryHook> | null
   readImageResizer: ReturnType<typeof createReadImageResizerHook> | null
@@ -148,6 +152,16 @@ export function createToolGuardHooks(args: {
     ? safeHook("managed-process-guard", () => createManagedProcessGuardHook({ enforceLongRunning: pluginConfig.processes?.enforce !== false }))
     : null
 
+  // Existing tests are read-only while fixing and cheating edits are refused (fork roadmap 0.9a).
+  const testIntegrityGuard = isHookEnabled("test-integrity-guard") && pluginConfig.test_integrity?.enabled !== false
+    ? safeHook("test-integrity-guard", () => createTestIntegrityGuardHook(ctx))
+    : null
+
+  const editDiagnostics = isHookEnabled("edit-diagnostics") && pluginConfig.edit_diagnostics?.enabled !== false
+    ? safeHook("edit-diagnostics", () =>
+        createEditDiagnosticsHook(ctx, pluginConfig.edit_diagnostics, {}))
+    : null
+
   const bashFileReadGuard = isHookEnabled("bash-file-read-guard")
     ? safeHook("bash-file-read-guard", () => createBashFileReadGuardHook())
     : null
@@ -203,6 +217,8 @@ export function createToolGuardHooks(args: {
     writeExistingFileGuard,
     bashFileReadGuard,
     managedProcessGuard,
+    testIntegrityGuard,
+    editDiagnostics,
     hashlineReadEnhancer,
     jsonErrorRecovery,
     readImageResizer,
