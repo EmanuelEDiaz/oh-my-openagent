@@ -139,7 +139,8 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 | Paso | Agente(s) | Incluye | Estado |
 |---|---|---|---|
 | 4.1 | `explore` | lectura de código eficiente (antes 2.8): 3 herramientas `code_map`, `code_symbols` (esquema + lectura de un símbolo), `code_callers`; motor ast-grep ya descargado + LSP (decidido 01-10-2026); Graphify opcional como pistas; procedimiento fijo en el prompt; `bash` de solo lectura; banco de 24 tareas (7 reservadas) en el fork, `ts-service` y 2 repos públicos | en curso — `plans/explore.md` |
-| 4.2 | `librarian` + `api-lookup` | investigación web (antes 2.3): búsqueda gratuita, docs oficiales primero, citas literales verificadas, versión instalada | pendiente |
+| 4.2a | `librarian` | documentación de librerías y código de repos abiertos (antes 2.3): docs oficiales primero, citas literales verificadas, versión instalada; la web abierta pasa a `@web-researcher` | pendiente |
+| 4.2b | `api-lookup` | documentación de APIs: versión exacta, firmas y ejemplos verificados | pendiente |
 | 4.3 | `memory` | calidad del recuerdo de decisiones y chats; ocultación de secretos en el índice | pendiente |
 | 4.4 | `verifier` | contrato `<report>` comprobado en ejecución (resto de 2.6), estado `FLAKY`, comparación con la base | pendiente |
 | 4.5 | `rules-checker` + guardián de reglas | antes 2.7 + **creación interactiva de reglas** + absorción de la biblioteca (antes 2.9) y reglas por stack | pendiente — `plans/rules-guardian.md` |
@@ -148,13 +149,20 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 | 4.8 | `debugger` | reproducción, `git bisect run`, bucle hipótesis/experimento | pendiente |
 | 4.9 | `git-committer` → **especialista de control de versiones** | commits + ramas + merge, push/rebase solo con aprobación; reglas generales + política por proyecto; **identidad del proyecto preguntada y confirmada en cada sesión, nunca la global** (ordenador compartido); comprobado por código | pendiente — `plans/version-control.md` |
 | 4.10 | `dependency-check` | registro + OSV + deps.dev, señales de "slopsquatting" | pendiente |
-| 4.11 | `test-reviewer`, `lang-reviewer`, `architect-reviewer` | precisión/recall con diffs con fallos sembrados | pendiente |
+| 4.11a | `test-reviewer` | precisión/recall con diffs con fallos sembrados en tests | pendiente |
+| 4.11b | `lang-reviewer` | precisión/recall con diffs con fallos sembrados de cada lenguaje | pendiente |
+| 4.11c | `architect-reviewer` | precisión/recall con diffs con fallos sembrados de arquitectura | pendiente |
 | 4.12 | `docs-writer` | afirmaciones que apuntan al código, Diátaxis, CHANGELOG | pendiente |
 | 4.13 | `ui-tester` | instantáneas de accesibilidad, consola, capturas solo si hacen falta; **navegador seguro** (Playwright MCP `--isolated`, `ui-tester` con cualquier proveedor, capa de seguridad de `plans/computer-use.md`); **UI fiel al código**: capturar la app real, mapa de ids ruta→componente→`archivo:línea`→nodo del diseño, comparación por código (sirve sin visión); skill "diseño desde la UI real" para Pencil, Figma o HTML | pendiente — `plans/ui-fidelity.md` |
-| 4.14 | Implementadores (categorías) | skills obligatorias por categoría (antes 2.5); los procesos gestionados (antes 2.10) pasan a 0.8 | pendiente — `plans/process-lifecycle.md` |
-| 4.15 | `multimodal-looker`, `metis`, `momus`, `oracle` | — | pendiente |
-| 4.16 | Orquestadores: Prometheus, Atlas, Sisyphus | enrutamiento obligatorio por código y presupuesto de lectura (antes 2.4); calidad de plan, ejecución y delegación; **planes visuales**: Mermaid/SVG como código con `archivo:línea`, validados por código, skill `visual-plan` y herramienta `plan_render` (HTML) | pendiente — `plans/visual-plans.md` |
+| 4.14a–h | Implementadores, un paso por categoría: `visual-engineering`, `ultrabrain`, `deep`, `quick`, `artistry`, `writing`, `unspecified-high`, `unspecified-low` | skills obligatorias de cada categoría (antes 2.5); los procesos gestionados (antes 2.10) pasan a 0.8 | pendiente — `plans/process-lifecycle.md` |
+| 4.15a | `multimodal-looker` | — | pendiente |
+| 4.15b | `metis` | — | pendiente |
+| 4.15c | `momus` | — | pendiente |
+| 4.15d | `oracle` | — | pendiente |
+| 4.16 | Orquestadores (agentes de tab): Prometheus, Atlas, Sisyphus, Hephaestus | enrutamiento obligatorio por código y presupuesto de lectura (antes 2.4); calidad de plan, ejecución y delegación; **planes visuales**: Mermaid/SVG como código con `archivo:línea`, validados por código, skill `visual-plan` y herramienta `plan_render` (HTML) | pendiente — `plans/visual-plans.md` |
 | 4.17 | **Control del escritorio con IA** (decidido 02-10-2026): llevar a OpenCode el motor propio `senpi-desktop` (Rust; Windows UIA, Linux X11/Wayland/AT-SPI) con una herramienta `computer` basada en árbol de texto y referencias (sirve para modelos sin visión); aislamiento por defecto (Xephyr en Linux, usuario aparte o Windows Sandbox en Windows); capa de control y seguridad (parada y pausa, listas permitidas, aprobación de acciones irreversibles, texto de pantalla como datos, auditoría); ≤ 6 herramientas, comprobación tras cada acción, 15–25 pasos y reanudación; respaldos OCR (tesseract.js) y visión puntual con modelo gratuito. | pendiente — `plans/computer-use.md` |
+| 4.18 | **`web-researcher`** (nuevo, decidido 03-10-2026) | búsquedas en la web abierta: estudio de lo mejor para él, diseño con el usuario, herramienta `web_search` (Stack Exchange, issues de GitHub, SearXNG), enlaces comprobados por código, presupuesto por llamada, medición en el banco. **Se hace entre 0.9a y 0.9b**, porque el freno de bucles lo usa | pendiente — `plans/test-integrity-and-loops.md` |
+| 4.19 | **Uso obligatorio por agente de tab** (decidido 03-10-2026; último paso de la Fase 4) | tabla de qué agentes de "@" debe usar cada agente de tab y en qué momento (por ejemplo: Prometheus usa `@explore` antes de planear y `@momus` antes de dar el plan por bueno; Atlas usa `@verifier` antes de marcar una tarea y `@git-committer` para los commits; Sisyphus usa `@web-researcher` para información externa o actual), obligada por código como `process_start` y basada en lo medido en cada paso | pendiente |
 
 **Equivalencias con la numeración anterior:** 2.3→4.2 · 2.4→4.16 · 2.5→4.14 · 2.6→3.0 + 4.4 · 2.7→4.5 · 2.8→4.1 ·
 2.9→4.5 · 2.10→4.14 · 2.11→4.6 · 3.1→5.1.
@@ -174,6 +182,7 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 - ~~Reglas de lenguaje/framework cargadas bajo demanda~~ — absorbido en 4.5 (antes 2.9), 29-09-2026.
 
 ## Registro de decisiones del roadmap
+- 03-10-2026 — Arquitectura de agentes (usuario): solo los agentes de tab (Sisyphus, Hephaestus, Atlas, Prometheus) orquestan; los de "@" son atómicos y nunca delegan (ya era así en el código). Descartado permitir "@ → @" (coste y fallos encadenados con modelos gratis). Cada agente de "@" tiene su propio paso en la Fase 4: se separan 4.2, 4.11, 4.14 y 4.15, y se añade 4.18 `web-researcher`, que se hace entre 0.9a y 0.9b. Nuevo 4.19, último de la Fase 4: uso obligatorio de agentes de "@" por cada agente de tab, por código.
 - 03-10-2026 — 0.9: diseño detallado aprobado; dos entregas (0.9a tests y tipos, 0.9b bucles, búsqueda y tope). Nuevo especialista `web-researcher` para búsquedas web (el usuario prefiere un agente dedicado al híbrido plugin → librarian). Desbloqueo de tests solo con la respuesta del usuario a `question`.
 - 03-10-2026 — Regla del usuario: ningún paso se cierra con pendientes. Completados los 4 que quedaban en 0.8c. La caché de repos del banco sale del proyecto (rompía la auditoría de mocks).
 - 03-10-2026 — 0.8c hecho. El guardado ante SIGTERM se integra en la limpieza ordenada del plugin (un manejador aparte no llegaba a ejecutarse).

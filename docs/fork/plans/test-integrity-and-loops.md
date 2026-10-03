@@ -134,6 +134,9 @@ Rutas: `S/` = `packages/omo-opencode/src/`.
   - respuesta fija: conclusión + 2–4 opciones con enlace y fecha + confianza (alimenta la pregunta del paso 4);
   - modelo barato y rápido de `omo-models`; si falla o se cuelga, plan B: la búsqueda directa de `web_search`;
   - 2–3 pruebas propias en la Fase 5.
+  - **Tiene su propio paso, 4.18**, que se hace **entre 0.9a y 0.9b**: estudio de lo mejor para él, diseño con el
+    usuario, construcción y medición; 0.9b solo lo conecta al freno de bucles (regla del usuario, 03-10-2026: cada
+    agente de "@" tiene un paso propio).
   - Descartado: que el `debugger` interprete él solo los resultados del plugin, o el híbrido plugin → `librarian`; el
     usuario prefiere un especialista dedicado a la búsqueda web.
 - **Tope de 6 por tarea**: contador común en disco para cuelgues (0.8) y bucles; al llegar a 6 se pausa y se avisa;
