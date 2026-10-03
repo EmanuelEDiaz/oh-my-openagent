@@ -125,6 +125,33 @@ export function selectActiveWork(directory: string, workId: string): BoulderStat
   return writeBoulderState(directory, nextState) ? nextState : null
 }
 
+/** Pause a work so it can be resumed without losses (fork roadmap 0.8c). */
+export function pauseBoulderWork(
+  directory: string,
+  workId: string,
+  input: { reason: string; resumeId?: string },
+): BoulderState | null {
+  const state = readBoulderState(directory)
+  if (!state) return null
+  const works = getBoulderWorks(state)
+  const work = works.find((candidate) => candidate.work_id === workId)
+  if (!work) return null
+  const nextWork = {
+    ...work,
+    status: "paused" as const,
+    pause_reason: input.reason,
+    ...(input.resumeId ? { resume_id: input.resumeId } : {}),
+    updated_at: nowIsoString(),
+  }
+  const nextState: BoulderState = {
+    ...state,
+    schema_version: 2,
+    works: { ...Object.fromEntries(works.map((candidate) => [candidate.work_id, candidate])), [workId]: nextWork },
+  }
+  if (state.active_work_id === workId) projectWorkToMirror(nextState, nextWork)
+  return writeBoulderState(directory, nextState) ? nextState : null
+}
+
 export function addBoulderWork(
   directory: string,
   input: { planPath: string; sessionId: string; agent?: string; worktreePath?: string; startedAt?: string },

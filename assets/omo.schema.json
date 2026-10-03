@@ -2379,6 +2379,7 @@
               "refactor",
               "ulw-execute",
               "stop-continuation",
+              "omo-resume",
               "remove-ai-slops",
               "hyperplan"
             ]
@@ -12011,6 +12012,40 @@
           ],
           "additionalProperties": false
         },
+        "resume": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "memory_limit_mb": {
+              "default": 1228,
+              "type": "integer",
+              "minimum": 256,
+              "maximum": 9007199254740991
+            },
+            "system_memory_percent": {
+              "default": 85,
+              "type": "integer",
+              "minimum": 50,
+              "maximum": 99
+            },
+            "memory_check_interval_ms": {
+              "default": 30000,
+              "type": "integer",
+              "minimum": 5000,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "enabled",
+            "memory_limit_mb",
+            "system_memory_percent",
+            "memory_check_interval_ms"
+          ],
+          "additionalProperties": false
+        },
         "team_mode": {
           "type": "object",
           "properties": {
@@ -20468,6 +20503,7 @@
                     "refactor",
                     "ulw-execute",
                     "stop-continuation",
+                    "omo-resume",
                     "remove-ai-slops",
                     "hyperplan"
                   ]
@@ -30097,6 +30133,40 @@
                   "enabled",
                   "enforce",
                   "timeout_ms"
+                ],
+                "additionalProperties": false
+              },
+              "resume": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "memory_limit_mb": {
+                    "default": 1228,
+                    "type": "integer",
+                    "minimum": 256,
+                    "maximum": 9007199254740991
+                  },
+                  "system_memory_percent": {
+                    "default": 85,
+                    "type": "integer",
+                    "minimum": 50,
+                    "maximum": 99
+                  },
+                  "memory_check_interval_ms": {
+                    "default": 30000,
+                    "type": "integer",
+                    "minimum": 5000,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "enabled",
+                  "memory_limit_mb",
+                  "system_memory_percent",
+                  "memory_check_interval_ms"
                 ],
                 "additionalProperties": false
               },

@@ -31,6 +31,10 @@ export interface BoulderWorkState {
   updated_at?: string
   /** When a stale-work reconcile demoted this work to `paused`; cleared when a session resumes it. */
   stale_since?: string
+  /** Why the work was paused for a lossless resume (fork roadmap 0.8c); cleared when a session resumes it. */
+  pause_reason?: string
+  /** `.omo/runs/<resume_id>` holds the resume card of a paused work. */
+  resume_id?: string
   session_ids: string[]
   session_origins?: Record<string, BoulderSessionOrigin>
   agent?: string

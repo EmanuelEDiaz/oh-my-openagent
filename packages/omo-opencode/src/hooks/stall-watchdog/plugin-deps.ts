@@ -2,6 +2,7 @@
 import type { OhMyOpenCodeConfig } from "../../config"
 import { abortWithTimeout } from "../../features/background-agent/abort-with-timeout"
 import { getActiveProcessManager } from "../../features/managed-process"
+import { getActiveResumeService } from "../../features/resume/plugin"
 import { subagentSessions, syncSubagentSessions } from "../../features/claude-code-session-state"
 import { createInternalAgentContinuationTextPart } from "../../shared"
 import { log } from "../../shared/logger"
@@ -26,6 +27,9 @@ export function createPluginStallWatchdogHook(ctx: PluginContext, pluginConfig: 
         .catch(() => undefined)
     },
     resolveTarget: (sessionID) => resolveSessionTarget(ctx.client as never, sessionID),
+    pause: async (sessionID, reason, attempts) => {
+      await getActiveResumeService()?.pause(sessionID, reason, attempts)
+    },
     fallbackModels: (sessionID, agent) => getFallbackModelsForSession(sessionID, agent, pluginConfig),
     continueSession: async (sessionID, input) => {
       const model = input.model ? parseModel(input.model) : undefined

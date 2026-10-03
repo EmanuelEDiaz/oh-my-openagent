@@ -1,4 +1,5 @@
-import { clearBoulderState } from "../features/boulder-state"
+import { getWorkForSession, pauseBoulderWork } from "../features/boulder-state"
+import { resumeIdFor } from "../features/resume/pause"
 import { log } from "../shared"
 
 type StopContinuationHooks = {
@@ -26,6 +27,8 @@ export function stopContinuation(args: {
   hooks.stopContinuationGuard?.stop?.(sessionID)
   hooks.todoContinuationEnforcer?.cancelAllCountdowns()
   hooks.goal?.clearGoal(sessionID)
-  clearBoulderState(directory)
-  log("[stop-continuation] All continuation mechanisms stopped", { sessionID })
+  // Pause, never delete: the plan and its progress stay resumable with /omo-resume or /ulw-execute (fork roadmap 0.8c).
+  const work = getWorkForSession(directory, sessionID)
+  if (work) pauseBoulderWork(directory, work.work_id, { reason: "stopped by the user (/stop-continuation)", resumeId: resumeIdFor(sessionID) })
+  log("[stop-continuation] All continuation mechanisms stopped", { sessionID, pausedWork: work?.work_id })
 }

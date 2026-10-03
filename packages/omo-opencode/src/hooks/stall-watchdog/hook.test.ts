@@ -7,7 +7,7 @@ const MAIN = "ses_main"
 
 function setup(overrides: Partial<StallWatchdogHookDeps> = {}) {
   let now = 0
-  const calls = { aborted: [] as string[], toasts: [] as string[], continued: [] as Array<{ model?: string; text: string }> }
+  const calls = { aborted: [] as string[], toasts: [] as string[], continued: [] as Array<{ model?: string; text: string }>, paused: [] as string[] }
   const deps: StallWatchdogHookDeps = {
     now: () => now,
     isSubagentSession: (id) => id.startsWith("ses_child"),
@@ -16,6 +16,7 @@ function setup(overrides: Partial<StallWatchdogHookDeps> = {}) {
     resolveTarget: async () => ({ agent: "sisyphus", model: "opencode/model-a" }),
     fallbackModels: () => ["opencode/model-b", "opencode/model-c"],
     continueSession: async (_id, input) => { calls.continued.push(input) },
+    pause: async (id, reason) => { calls.paused.push(`${id}: ${reason}`) },
     ...overrides,
   }
   const hook = createStallWatchdogHook({ inactivityMs: 1000, checkIntervalMs: 60_000, maxStallsPerTask: 2 }, deps)
@@ -64,6 +65,8 @@ describe("stall watchdog hook (fork 0.8a)", () => {
     expect(calls.continued).toHaveLength(2)
     expect(calls.continued[1]?.model).toBe("opencode/model-c")
     expect(calls.toasts.at(-1)).toContain("Stopped")
+    expect(calls.toasts.at(-1)).toContain("/omo-resume")
+    expect(calls.paused).toEqual(["ses_main: the model stalled 3 times"])
     hook.dispose()
   })
 

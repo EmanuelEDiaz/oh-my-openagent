@@ -114,6 +114,11 @@ export function createStallWatchdog(options: StallWatchdogOptions) {
       return stalls
     },
 
+    /** Sessions currently producing work (busy), for saving resume cards before the process dies. */
+    busySessions(): string[] {
+      return [...sessions].filter(([, current]) => current.busy).map(([sessionID]) => sessionID)
+    },
+
     isStalled(sessionID: string): boolean {
       return sessions.get(sessionID)?.reported === true
     },

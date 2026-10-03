@@ -25,6 +25,8 @@ export type StallWatchdogHookDeps = {
   readonly resolveTarget: (sessionID: string) => Promise<{ agent?: string; model?: string }>
   readonly fallbackModels: (sessionID: string, agent: string | undefined) => readonly string[]
   readonly continueSession: (sessionID: string, input: { agent?: string; model?: string; text: string }) => Promise<void>
+  /** Save a resume card and pause the work when the stall budget is spent (0.8c). */
+  readonly pause?: (sessionID: string, reason: string, attempts: Array<{ model?: string; outcome: string }>) => Promise<void>
 }
 
 const STREAM_TIMEOUT = /SSE read timed out|ProviderResponseStreamError/i
@@ -55,7 +57,10 @@ export function createStallWatchdogHook(options: StallWatchdogHookOptions, deps:
       await deps.abort(sessionID).catch((error) => log(`[${HOOK_NAME}] abort failed`, { sessionID, error: String(error) }))
     }
     if (stalls > watchdog.maxStallsPerTask) {
-      await deps.toast(`Stopped: the model stalled ${stalls} times (no output for ${minutes(silentMs)}). Send a message to continue or switch models with /omo-models.`)
+      const target = await deps.resolveTarget(sessionID).catch(() => ({} as { agent?: string; model?: string }))
+      await deps.pause?.(sessionID, `the model stalled ${stalls} times`, [{ ...(target.model ? { model: target.model } : {}), outcome: `stalled ${stalls} times (no output)` }])
+        .catch((error) => log(`[${HOOK_NAME}] pause failed`, { sessionID, error: String(error) }))
+      await deps.toast(`Stopped: the model stalled ${stalls} times. The work is saved; resume it with /omo-resume (optionally after switching models with /omo-models).`)
       return
     }
     const target = await deps.resolveTarget(sessionID).catch(() => ({} as { agent?: string; model?: string }))
