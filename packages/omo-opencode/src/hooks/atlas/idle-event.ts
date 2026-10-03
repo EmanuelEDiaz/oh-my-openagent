@@ -22,6 +22,7 @@ import {
   updateNoToolProgressIterations,
 } from "./tool-progress"
 import type { AtlasHookOptions, SessionState } from "./types"
+import { reportWorkStoppedWithClient } from "../../features/resume/work-stopped"
 
 export async function handleAtlasSessionIdle(input: {
   ctx: PluginInput
@@ -104,6 +105,8 @@ export async function handleAtlasSessionIdle(input: {
       noProgressIterations,
       reason: sessionState.stalledContinuationReason,
     })
+    // Tell the user and save the work instead of stopping silently (fork roadmap 0.8c).
+    void reportWorkStoppedWithClient(ctx.client as never, sessionID, `plan "${boulderState.plan_name}" made no progress after ${noProgressIterations} continuations`)
     return
   }
 

@@ -124,6 +124,7 @@ import type {
   ResumeInput,
 } from "./types"
 import { getStallWatchdog, stallErrorMessage } from "../stall-watchdog"
+import { isSessionRetained } from "../resume/retention"
 
 type OpencodeClient = PluginInput["client"]
 
@@ -2385,7 +2386,8 @@ The task was re-queued on a fallback model after a retryable failure.
         clearDelegatedChildSessionBootstrap(task.sessionId)
         SessionCategoryRegistry.remove(task.sessionId)
         const deleteSession = this.client.session.delete?.bind(this.client.session)
-        if (typeof deleteSession === "function") {
+        // Sessions of a plan that is still active or paused stay for a lossless resume (fork roadmap 0.8c).
+        if (typeof deleteSession === "function" && !isSessionRetained(task.sessionId)) {
           await deleteSession({ path: { id: task.sessionId } }).catch((error: unknown) => {
             log("[background-agent] Failed to delete completed subagent session:", { sessionID: task.sessionId, error: String(error) })
           })

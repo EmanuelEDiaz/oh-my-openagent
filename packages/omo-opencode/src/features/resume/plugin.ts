@@ -10,6 +10,7 @@ import { log } from "../../shared/logger"
 import { resolveSessionTarget } from "../../shared/session-target"
 import type { PluginContext } from "../../plugin/types"
 import { createResumeService, type ResumeService } from "./service"
+import { registerRetentionDirectory } from "./retention"
 
 let active: ResumeService | undefined
 
@@ -35,6 +36,7 @@ export function createPluginResumeService(ctx: PluginContext, config: Partial<Re
     log,
   })
   service.start()
+  registerRetentionDirectory(ctx.directory)
   // Ordered shutdown: the plugin's cleanup waits for every registered manager before exiting.
   registerManagerForCleanup({ shutdown: () => service.saveOnShutdown() })
   log("[resume] service started", { directory: ctx.directory, mainThread: isMainThread, pid: process.pid, sigtermListeners: process.listenerCount("SIGTERM") })

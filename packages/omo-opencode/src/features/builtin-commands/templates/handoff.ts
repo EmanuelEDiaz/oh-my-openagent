@@ -161,9 +161,12 @@ Rules for the summary:
 
 ---
 
-# PHASE 4: PROVIDE INSTRUCTIONS
+# PHASE 4: SAVE AND PROVIDE INSTRUCTIONS
 
-After generating the summary, instruct the user:
+First save the summary so nothing has to be copied by hand: call handoff_save({ summary: "<the full HANDOFF CONTEXT>" }).
+It stores it as resumable work together with the uncommitted changes. If the tool is unavailable, skip this step.
+
+Then instruct the user:
 
 \`\`\`
 ---
@@ -171,8 +174,8 @@ After generating the summary, instruct the user:
 TO CONTINUE IN A NEW SESSION:
 
 1. Press 'n' in OpenCode TUI to open a new session, or run 'opencode' in a new terminal
-2. Paste the HANDOFF CONTEXT above as your first message
-3. Add your request: "Continue from the handoff context above. [Your next task]"
+2. Say "reanuda" (or run /omo-resume): the saved handoff and the uncommitted work are loaded automatically
+3. If the handoff could not be saved, paste the HANDOFF CONTEXT above as your first message instead
 
 The new session will have all context needed to continue seamlessly.
 \`\`\`

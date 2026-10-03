@@ -21,3 +21,19 @@ export function createResumeTools(service: ResumeService): Record<string, ToolDe
     }),
   }
 }
+
+export function createHandoffTools(service: ResumeService): Record<string, ToolDefinition> {
+  return {
+    handoff_save: tool({
+      description: [
+        "Save a /handoff summary as resumable work: the next session continues with resume_task (or by saying \"reanuda\"),",
+        "with the summary, the user's verbatim requests and the uncommitted work saved alongside.",
+      ].join(" "),
+      args: { summary: tool.schema.string().describe("The full HANDOFF CONTEXT text") },
+      async execute(args, toolContext) {
+        const card = await service.pause((toolContext as unknown as { sessionID: string }).sessionID, "handoff created by the user", [], args.summary)
+        return `Handoff saved as ${card.id}${card.wip ? ` with the uncommitted work in ${card.wip.ref}` : ""}. In the new session the user can just say "reanuda" (or run /omo-resume).`
+      },
+    }),
+  }
+}

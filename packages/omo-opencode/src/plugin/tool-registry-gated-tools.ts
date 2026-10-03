@@ -6,7 +6,7 @@ import type { ToolRegistryFactories } from "./tool-registry-factories"
 
 import { isTaskSystemEnabled } from "../shared"
 import { createProcessTools } from "../tools/process/tools"
-import { createResumeTools } from "../tools/resume/tools"
+import { createHandoffTools, createResumeTools } from "../tools/resume/tools"
 
 export function createTaskToolsRecord(args: {
   readonly taskSystemEnabled: boolean
@@ -58,5 +58,7 @@ export function createProcessToolsRecord(args: {
 export function createResumeToolsRecord(args: {
   readonly managers: Pick<Managers, "resumeService">
 }): Record<string, ToolDefinition> {
-  return args.managers.resumeService ? createResumeTools(args.managers.resumeService) : {}
+  return args.managers.resumeService
+    ? { ...createResumeTools(args.managers.resumeService), ...createHandoffTools(args.managers.resumeService) }
+    : {}
 }

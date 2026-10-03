@@ -29,7 +29,7 @@ export function createResumeService(deps: ResumeServiceDeps) {
   let reader: Promise<SessionReader | null> | undefined
   const getReader = () => (reader ??= deps.openReader().catch(() => null))
 
-  async function pause(sessionID: string, reason: string, attempts: ResumeCard["attempts"] = []): Promise<ResumeCard> {
+  async function pause(sessionID: string, reason: string, attempts: ResumeCard["attempts"] = [], notes?: string): Promise<ResumeCard> {
     const opened = await getReader()
     return pauseWork({
       projectDir: deps.projectDir,
@@ -38,6 +38,7 @@ export function createResumeService(deps: ResumeServiceDeps) {
       attempts,
       snapshot: () => (opened ? buildCompactionSnapshot(opened, sessionID, deps.projectDir) : undefined),
       // During shutdown the server may not answer: never let the card wait on it.
+      ...(notes ? { notes } : {}),
       target: () => Promise.race([deps.target(sessionID), new Promise<{ agent?: string; model?: string }>((resolve) => setTimeout(() => resolve({}), TARGET_TIMEOUT_MS))]),
     })
   }
