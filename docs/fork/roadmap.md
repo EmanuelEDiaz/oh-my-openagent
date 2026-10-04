@@ -82,6 +82,9 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
 11. **Pruebas reales:** QA en OpenCode aislado (nunca la base de datos real del usuario), se limpian sesiones y procesos
     de prueba; la evaluación final, con prompts sobre una copia de `codegenerator`, nunca con código escrito a mano.
 12. **Nombres:** el plugin y los agentes se renombrarán (paso 5.0) para que se reconozca qué hace cada uno.
+13. **Peores casos:** las pruebas usan tareas difíciles siempre que se pueda (datos posteriores al entrenamiento corregidos
+    en vivo, errores muy específicos, especificaciones imposibles, "no encontrado", errores que despistan); se reporta
+    aparte el resultado en las difíciles.
 
 ## Orden de trabajo (actualizado 03-10-2026)
 1. **4.18 `@web-researcher`** — implementado y con QA; **su medición espera a que Zen funcione en el banco** (04-10-2026: Zen rechaza el plan gratuito desde el entorno aislado con "free tier can only be used from within OpenCode"; `deepseek-v4-flash-free` no disponible, `north-mini-code-free` y `laguna-s-2.1-free` retirados). El usuario eligió esperar a Zen en vez de medir con OpenRouter/Groq.
