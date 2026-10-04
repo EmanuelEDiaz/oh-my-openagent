@@ -17,7 +17,7 @@ import { defaultFixtureCache, resolveFixture } from "./fixtures"
 import { renderReport } from "./report"
 import { pendingRuns } from "./resume"
 import { runTask } from "./runner"
-import { createSandbox, destroySandbox, isHealthy, saveServerLogs, startServer, warmUp, type Sandbox, type Server } from "./sandbox"
+import { createSandbox, destroySandbox, isHealthy, overrideAgentModels, saveServerLogs, startServer, warmUp, type Sandbox, type Server } from "./sandbox"
 import { isConfigError, summarize } from "./score"
 import { EXPLORE_TASKS } from "./tasks/explore"
 import { LIBRARIAN_WEB_TASKS, WEB_RESEARCHER_TASKS } from "./tasks/web-research"
@@ -30,6 +30,17 @@ const FIXTURE_CACHE = defaultFixtureCache()
 
 function flag(name: string): boolean {
   return process.argv.includes(`--${name}`)
+}
+
+/** Every `--model agent=provider/model` pair (repeatable). */
+function modelOverrides(): Record<string, string> {
+  const overrides: Record<string, string> = {}
+  process.argv.forEach((arg, index) => {
+    if (arg !== "--model") return
+    const [agent, model] = (process.argv[index + 1] ?? "").split("=")
+    if (agent && model) overrides[agent] = model
+  })
+  return overrides
 }
 
 function option(name: string, fallback?: string): string | undefined {
@@ -108,6 +119,7 @@ async function main(): Promise<void> {
   if (resumeFile !== undefined) console.log(`resuming ${resumeFile}: ${previousResults.length} saved result(s), ${pending.length} run(s) to go`)
   try {
     sandbox = createSandbox(join(tmpdir(), `omo-bench-${process.pid}-${Date.now()}`), plugin)
+    overrideAgentModels(sandbox, modelOverrides())
     console.log(`sandbox ${sandbox.root}; starting OpenCode (the first start can take minutes)…`)
     const start = async (box: Sandbox): Promise<Server> => {
       const started = await startServer(box)

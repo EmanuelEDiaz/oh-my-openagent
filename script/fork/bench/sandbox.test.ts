@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { assertSafeSandboxRoot, createSandbox, destroySandbox, prepareWorkdir, sandboxProcesses } from "./sandbox"
+import { assertSafeSandboxRoot, createSandbox, destroySandbox, overrideAgentModels, prepareWorkdir, sandboxProcesses } from "./sandbox"
 
 const scratch = mkdtempSync(join(tmpdir(), "bench-sandbox-"))
 afterAll(() => rmSync(scratch, { recursive: true, force: true }))
@@ -54,5 +54,15 @@ describe("createSandbox / prepareWorkdir / destroySandbox", () => {
     write("self", ["HOME=/tmp/sb/home"])
     expect(sandboxProcesses("/tmp/sb", proc)).toEqual([101])
     rmSync(proc, { recursive: true, force: true })
+  })
+
+  test("pins agent models in the sandbox copy of omo.jsonc only, dropping their fallback chains", () => {
+    const root = mkdtempSync(join(tmpdir(), "omo-bench-models-"))
+    mkdirSync(join(root, "home/.omo"), { recursive: true })
+    writeFileSync(join(root, "home/.omo/omo.jsonc"), '{\n  // comment\n  "[opencode]": { "agents": { "librarian": { "model": "a/b", "fallback_models": [{ "model": "c/d" }] } } }\n}')
+    overrideAgentModels({ root, env: {} }, { "web-researcher": "x/free", librarian: "x/free" })
+    const written = JSON.parse(readFileSync(join(root, "home/.omo/omo.jsonc"), "utf8"))
+    expect(written["[opencode]"].agents).toEqual({ librarian: { model: "x/free" }, "web-researcher": { model: "x/free" } })
+    rmSync(root, { recursive: true, force: true })
   })
 })

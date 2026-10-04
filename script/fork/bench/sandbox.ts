@@ -10,6 +10,7 @@ import { homedir } from "node:os"
 import { join, resolve, sep } from "node:path"
 
 import { createOpencodeClient } from "@opencode-ai/sdk/v2"
+import { parseJsonc } from "../../../packages/utils/src/jsonc-parser"
 
 export type Sandbox = { readonly root: string; readonly env: Readonly<Record<string, string>> }
 
@@ -188,4 +189,21 @@ export function destroySandbox(sandbox: Sandbox): void {
     }
   }
   rmSync(sandbox.root, { recursive: true, force: true })
+}
+
+/**
+ * Pins agents to models inside the sandbox's copy of omo.jsonc only (e.g. the same free model for two agents being
+ * compared). The user's real configuration is never touched.
+ */
+export function overrideAgentModels(sandbox: Sandbox, overrides: Readonly<Record<string, string>>): void {
+  if (Object.keys(overrides).length === 0) return
+  const path = join(sandbox.root, "home/.omo/omo.jsonc")
+  const config = (existsSync(path) ? parseJsonc<Record<string, unknown>>(readFileSync(path, "utf8")) : {}) ?? {}
+  const scope = ((config["[opencode]"] as Record<string, unknown> | undefined) ?? (config["[opencode]"] = {})) as Record<string, unknown>
+  const agents = ((scope["agents"] as Record<string, Record<string, unknown>> | undefined) ?? (scope["agents"] = {})) as Record<string, Record<string, unknown>>
+  for (const [agent, model] of Object.entries(overrides)) {
+    const { models: _models, fallback_models: _fallbacks, ...rest } = agents[agent] ?? {}
+    agents[agent] = { ...rest, model }
+  }
+  writeFileSync(path, JSON.stringify(config, null, 2))
 }
