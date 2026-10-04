@@ -180,6 +180,23 @@ Rutas: `S/` = `packages/omo-opencode/src/`.
   `retry_budget.max_per_task: 6`.
 - **Funciona igual en Windows**: `fetch` y el shim de procesos (requisito de 0.11).
 
+### 0.9b — Implementación (04-10-2026; pendiente: QA aislada y medición)
+- **Código:** `S/features/loop-breaker/` (`fingerprint.ts`, `breaker.ts`, `plugin.ts`), hook `loop-breaker`, configuración
+  `loop_breaker` (umbrales 2/3/4) y `retry_budget.max_per_task` (6); `S/shared/session-root.ts` compartido con el
+  guardián de tests.
+- **Fuentes de errores:** salida de bash con código distinto de 0, llamadas fallidas leídas del flujo de eventos (sin
+  contar los bloqueos del propio plugin, que si no alimentarían el bucle) y errores de tipos nuevos de 0.9a.
+- **Nivel 3:** se adjunta una primera búsqueda hecha por el plugin con `web_search` (plan B si el agente no delega) y
+  se exige `task(web-researcher)` y luego `task(debugger)`; las ediciones a esos archivos quedan bloqueadas hasta que
+  el `debugger` informa. Ajuste respecto al diseño: el plugin no lanza el subagente por su cuenta (choca con la espera
+  del agente padre); lo exige y bloquea por código.
+- **Nivel 4:** bloqueo hasta la respuesta del usuario a `question` o un mensaje suyo; si la sesión se para bloqueada sin
+  preguntar, se guarda la tarjeta y se avisa una vez.
+- **Tope común:** cada escalada y cada recuperación de un cuelgue (0.8) gastan del mismo contador en
+  `.omo/runs/<run>/loops.json`; al agotarse, pausa y aviso. Una petición nueva o "reanuda" reinician el contador; el
+  historial de intentos se conserva.
+- **Un ejecutar que pasa** (el mismo comando que fallaba) da el error por resuelto.
+
 ## Criterios de aceptación
 ```gherkin
 Feature: integridad de tests y bucles
