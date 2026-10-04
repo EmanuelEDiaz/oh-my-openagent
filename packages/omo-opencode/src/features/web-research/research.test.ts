@@ -8,7 +8,7 @@ import { authority, fuse, relevance } from "./fusion"
 
 import { chunk, htmlToText, rankChunks, stripChrome } from "./read"
 import { createWebResearch, DEFAULT_SOURCES, type Sources } from "./research"
-import { decodeEntities, errorQuery, keywordQuery, parseExaText, type SearchHit } from "./sources"
+import { decodeEntities, errorQuery, keywordQuery, parseExaText, repoIn, type SearchHit } from "./sources"
 
 const cacheRoot = mkdtempSync(join(tmpdir(), "web-research-cache-"))
 afterAll(() => rmSync(cacheRoot, { recursive: true, force: true }))
@@ -178,5 +178,36 @@ describe("page reading and parsing", () => {
       { url: "https://a.dev/x", title: "A", date: "2026-01-02", snippet: "hello world", source: "exa" },
       { url: "https://b.dev", title: "B", snippet: "second", source: "exa" },
     ])
+  })
+})
+
+describe("hard-case improvements (4.18, worst-case suite)", () => {
+  test("an answer resting only on search snippets is sent back once to read a page or use the registry", async () => {
+    const research = createWebResearch(config, fakeSources(), freshCache())
+    const found = await research.search("s", "who painted the Mona Lisa")
+    const url = /\[r1\] .*? — (\S+)/.exec(found)?.[1] ?? ""
+    const first = await research.answer("s", { answer: "x", confidence: "high", claims: [{ text: "t", url, quote: "snippet" }] })
+    expect(first).toContain("no claim rests on a page you read")
+    await research.read("s", "r1")
+    const second = await research.answer("s", { answer: "x", confidence: "high", claims: [{ text: "t", url, quote: "Page" }] })
+    expect(second).toContain("ACCEPTED")
+  })
+
+  test("Node.js and GitHub releases are exact registry sources and count as grounded", async () => {
+    const research = createWebResearch(config, fakeSources({
+      registry: async (ecosystem, name) => ({ ecosystem, name, latest: "24.21.0", publishedAt: "2026-09-30", url: "https://nodejs.org/dist/index.json", advisories: [], notes: 'newest LTS: v24.21.0 "Krypton" (2026-09-30)' }),
+    }), freshCache())
+    const out = await research.registry("s", "node", "node")
+    expect(out).toContain('newest LTS: v24.21.0 "Krypton"')
+    expect(out).not.toContain("advisories")
+    const answer = await research.answer("s", { answer: "24.21.0", confidence: "high", claims: [{ text: "lts", url: "https://nodejs.org/dist/index.json", quote: "latest 24.21.0" }] })
+    expect(answer).toContain("ACCEPTED")
+    expect(answer).toContain("1/1 claims verified")
+  })
+
+  test("finds the repository a question names", () => {
+    expect(repoIn("issues in github.com/anomalyco/opencode about Zen")).toBe("anomalyco/opencode")
+    expect(repoIn("bug in oven-sh/bun mock.module")).toBe("oven-sh/bun")
+    expect(repoIn("what is src/a.ts doing")).toBeUndefined()
   })
 })

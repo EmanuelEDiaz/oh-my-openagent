@@ -172,6 +172,8 @@ describe("answerHasLive", () => {
     const miss = await answerHasLive("v", async () => ["1.4.2"]).grade(context({ answer: "Latest is 1.3.0" }))
     const down = await answerHasLive("v", async () => { throw new Error("offline") }).grade(context({ answer: "x" }))
     expect([hit.pass, miss.pass, down.pass]).toEqual([true, false, false])
+    const written = await answerHasLive("d", async () => ["2026-09-30"]).grade(context({ answer: "published on 30 September 2026 at 22:39" }))
+    expect(written.pass).toBe(true)
   })
 })
 

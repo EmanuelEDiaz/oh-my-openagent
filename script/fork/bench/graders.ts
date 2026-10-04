@@ -497,6 +497,17 @@ export function editStats(): Grader {
   }
 }
 
+const MONTHS = ["january", "february", "march", "april", "may", "june", "july", "august", "september", "october", "november", "december"]
+
+export function dateForms(value: string): string[] {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value)
+  if (!match) return [value]
+  const [, y, m, d] = match as unknown as [string, string, string, string]
+  const month = MONTHS[Number(m) - 1] ?? ""
+  const day = String(Number(d))
+  return [value, `${day} ${month} ${y}`, `${month} ${day}, ${y}`, `${month} ${day} ${y}`, `${day} ${month.slice(0, 3)} ${y}`, `${month.slice(0, 3)} ${day}, ${y}`, `${month.slice(0, 3)} ${day} ${y}`, `${d}/${m}/${y}`, `${y}/${m}/${d}`]
+}
+
 /**
  * The answer contains a value fetched live at grading time (any of the accepted strings): facts newer than any model's
  * training data, so the answer must come from the agent's research.
@@ -508,7 +519,10 @@ export function answerHasLive(label: string, fetchValues: () => Promise<readonly
     grade: async ({ transcript }) => {
       const values = await fetchValues().catch(() => [] as string[])
       if (values.length === 0) return result(name, false, "live source unreachable")
-      const hit = values.find((value) => transcript.answer.toLowerCase().includes(value.toLowerCase()))
+      // A date (YYYY-MM-DD) also counts in its usual written forms ("30 September 2026", "Sep 30, 2026", "30/09/2026").
+      const forms = values.flatMap((value) => dateForms(value))
+      const answer = transcript.answer.toLowerCase().replace(/\s+/g, " ")
+      const hit = forms.find((value) => answer.includes(value.toLowerCase()))
       return result(name, hit !== undefined, `live: ${values.join(" | ")}`)
     },
   }

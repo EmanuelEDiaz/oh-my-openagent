@@ -97,9 +97,22 @@ async function run(command: string[]): Promise<string> {
   }
 }
 
+/**
+ * GitHub's search API through gh (authenticated: 30 searches/min). `gh search issues --repo` returns nothing for renamed
+ * repositories (e.g. sst/opencode → anomalyco/opencode); the raw API with a `repo:` qualifier works.
+ */
 async function ghIssues(query: string, limit: number, repo?: string): Promise<Array<{ title: string; url: string; updatedAt?: string; body?: string; state?: string; repository?: { nameWithOwner?: string } }>> {
-  const out = await run(["gh", "search", "issues", query, ...(repo ? ["--repo", repo] : []), "--limit", String(limit), "--sort", repo ? "created" : "comments", "--json", "title,url,updatedAt,body,state,repository"])
-  return JSON.parse(out)
+  const q = `${query}${repo ? ` repo:${repo}` : ""} is:issue`
+  const out = await run(["gh", "api", "-X", "GET", "search/issues", "-f", `q=${q}`, "-f", `per_page=${limit}`, ...(repo ? ["-f", "sort=created"] : [])])
+  const data = JSON.parse(out) as { items?: Array<{ title: string; html_url: string; updated_at?: string; body?: string | null; state?: string; repository_url?: string }> }
+  return (data.items ?? []).map((item) => ({
+    title: item.title,
+    url: item.html_url,
+    ...(item.updated_at ? { updatedAt: item.updated_at } : {}),
+    ...(item.body ? { body: item.body } : {}),
+    ...(item.state ? { state: item.state } : {}),
+    repository: { nameWithOwner: item.repository_url?.replace("https://api.github.com/repos/", "") ?? "" },
+  }))
 }
 
 /** `owner/repo` named in a query (e.g. "github.com/anomalyco/opencode" or "anomalyco/opencode"). */
@@ -116,7 +129,13 @@ export async function githubIssues(query: string, limit = 5): Promise<SearchHit[
   const repo = repoIn(query)
   const rest = repo ? query.replace(new RegExp(`(?:github\\.com/)?${repo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`), " ") : query
   const quoted = /"([^"]{12,})"/.exec(rest)?.[1]
-  const attempts = [...(quoted ? [`"${quoted}"`] : []), ...[6, 4, 3].map((size) => keywordQuery(rest, size)).filter(Boolean)]
+  // The exact phrase plus the most specific other terms (a version, an error code) narrows to the right issue.
+  const extra = quoted ? keywordQuery(rest.replace(`"${quoted}"`, " "), 2) : ""
+  const attempts = [
+    ...(quoted && extra ? [`"${quoted}" ${extra}`] : []),
+    ...(quoted ? [`"${quoted}"`] : []),
+    ...[6, 4, 3].map((size) => keywordQuery(rest, size)).filter(Boolean),
+  ]
   for (const terms of attempts) {
     items = await ghIssues(terms, limit, repo).catch(() => [])
     if (items.length > 0) break
