@@ -84,7 +84,7 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
 12. **Nombres:** el plugin y los agentes se renombrarán (paso 5.0) para que se reconozca qué hace cada uno.
 
 ## Orden de trabajo (actualizado 03-10-2026)
-1. **4.18 `@web-researcher`** — en curso: implementado y con QA; falta su medición en el banco.
+1. **4.18 `@web-researcher`** — implementado y con QA; **su medición espera a que Zen funcione en el banco** (04-10-2026: Zen rechaza el plan gratuito desde el entorno aislado con "free tier can only be used from within OpenCode"; `deepseek-v4-flash-free` no disponible, `north-mini-code-free` y `laguna-s-2.1-free` retirados). El usuario eligió esperar a Zen en vez de medir con OpenRouter/Groq.
 2. **Medición de 0.9a** (regla 4): guardián de tests y errores de tipos, con y sin, en modelos gratuitos.
 3. **0.9b** — freno de bucles, búsqueda (usa `@web-researcher`) y tope de 6 por tarea.
 4. **0.10** (ver tareas en segundo plano, hablar con subagentes, mensajes a mitad de tarea) y **0.11** (Windows nativo).
@@ -217,6 +217,7 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 - ~~Reglas de lenguaje/framework cargadas bajo demanda~~ — absorbido en 4.5 (antes 2.9), 29-09-2026.
 
 ## Registro de decisiones del roadmap
+- 04-10-2026 — Zen cambió: el plan gratuito falla desde el entorno aislado del banco y varios modelos de la configuración del usuario ya no existen. El usuario prefiere esperar a resolver Zen para medir 4.18 (descartado medir ya con OpenRouter/Groq). Mientras, se avanza 0.9b.
 - 03-10-2026 — El usuario renombrará el plugin y los agentes (paso 5.0, antes de la evaluación final y la documentación). Se añaden al roadmap las "Reglas transversales del usuario" y el "Orden de trabajo" para tener todo lo pedido en un solo sitio.
 - 03-10-2026 — Reglas del usuario: (1) si falta un agente especializado para una tarea, se le dice y se investiga si conviene añadirlo (nunca se crea sin su aprobación); (2) para cualquier tarea el orquestador trabaja siempre con un especialista (4.19; lo mínimo, con un implementador especializado; se mide el coste); (3) integración del sistema entero: la QA de cada paso prueba la convivencia con lo anterior y 5.2 hace una matriz de integración.
 - 03-10-2026 — Regla general del usuario: **medir la eficacia de todo lo que se hace en el fork** (cada paso define cómo se mide en el banco y se reporta el resultado).
