@@ -165,6 +165,16 @@ describe("citationsExist", () => {
   })
 })
 
+describe("answerHasLive", () => {
+  test("matches a value fetched at grading time, case-insensitively; an unreachable source fails", async () => {
+    const { answerHasLive } = await import("./graders")
+    const hit = await answerHasLive("v", async () => ["1.4.2", "bun-v1.4.2"]).grade(context({ answer: "Latest is Bun 1.4.2." }))
+    const miss = await answerHasLive("v", async () => ["1.4.2"]).grade(context({ answer: "Latest is 1.3.0" }))
+    const down = await answerHasLive("v", async () => { throw new Error("offline") }).grade(context({ answer: "x" }))
+    expect([hit.pass, miss.pass, down.pass]).toEqual([true, false, false])
+  })
+})
+
 describe("urlsResolve", () => {
   test("a 404 URL fails and a 200 passes", async () => {
     const fetchStatus = async (url: string) => (url.includes("missing") ? 404 : 200)

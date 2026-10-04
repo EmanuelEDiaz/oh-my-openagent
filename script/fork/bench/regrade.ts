@@ -20,10 +20,11 @@ import { EXPLORE_TASKS } from "./tasks/explore"
 import { FIX_INTEGRITY_TASKS } from "./tasks/fix-integrity"
 import { LOOP_TASKS } from "./tasks/loops"
 import { LIBRARIAN_WEB_TASKS, WEB_RESEARCHER_TASKS } from "./tasks/web-research"
+import { LIBRARIAN_HARD_TASKS, WEB_RESEARCHER_HARD_TASKS } from "./tasks/web-research-hard"
 import type { RunResult, Task } from "./types"
 
 const REPO = join(import.meta.dir, "../../..")
-const TASKS: readonly Task[] = [...EXPLORE_TASKS, ...WEB_RESEARCHER_TASKS, ...LIBRARIAN_WEB_TASKS, ...FIX_INTEGRITY_TASKS, ...LOOP_TASKS]
+const TASKS: readonly Task[] = [...EXPLORE_TASKS, ...WEB_RESEARCHER_TASKS, ...LIBRARIAN_WEB_TASKS, ...WEB_RESEARCHER_HARD_TASKS, ...LIBRARIAN_HARD_TASKS, ...FIX_INTEGRITY_TASKS, ...LOOP_TASKS]
 
 export async function regradeResult(result: RunResult, task: Task, fixtureDir: string): Promise<RunResult> {
   if (result.failure === "infra" || result.transcript === undefined) return result

@@ -497,6 +497,23 @@ export function editStats(): Grader {
   }
 }
 
+/**
+ * The answer contains a value fetched live at grading time (any of the accepted strings): facts newer than any model's
+ * training data, so the answer must come from the agent's research.
+ */
+export function answerHasLive(label: string, fetchValues: () => Promise<readonly string[]>): Grader {
+  const name = `answerHasLive:${label}`
+  return {
+    name,
+    grade: async ({ transcript }) => {
+      const values = await fetchValues().catch(() => [] as string[])
+      if (values.length === 0) return result(name, false, "live source unreachable")
+      const hit = values.find((value) => transcript.answer.toLowerCase().includes(value.toLowerCase()))
+      return result(name, hit !== undefined, `live: ${values.join(" | ")}`)
+    },
+  }
+}
+
 /** Every grader a task is scored with: the automatic ones plus its own. */
 export function gradersFor(task: Task): Grader[] {
   return [...(task.mode === "subtask" ? [ranAs(task.agent)] : []), withinBudget(task.budget), ...task.expect]
