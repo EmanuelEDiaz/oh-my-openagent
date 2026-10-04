@@ -65,4 +65,14 @@ describe("createSandbox / prepareWorkdir / destroySandbox", () => {
     expect(written["[opencode]"].agents).toEqual({ librarian: { model: "x/free" }, "web-researcher": { model: "x/free" } })
     rmSync(root, { recursive: true, force: true })
   })
+
+  test("the sandbox defaults every unpinned agent to a free model", () => {
+    const root = mkdtempSync(join(tmpdir(), "omo-bench-free-"))
+    rmSync(root, { recursive: true, force: true })
+    const sandbox = createSandbox(root, join(import.meta.dir, "sandbox.ts"))
+    const config = JSON.parse(readFileSync(join(root, "config/opencode/opencode.json"), "utf8"))
+    expect(config.model).toBe("opencode/big-pickle")
+    expect(config.small_model).toBe("opencode/big-pickle")
+    destroySandbox(sandbox)
+  })
 })

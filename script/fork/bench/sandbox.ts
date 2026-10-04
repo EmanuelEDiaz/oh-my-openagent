@@ -46,6 +46,9 @@ function copyIfExists(from: string, to: string): void {
   if (existsSync(from)) cpSync(from, to, { recursive: true })
 }
 
+/** Default model for anything not pinned in the sandbox (override with OMO_BENCH_DEFAULT_MODEL). */
+export const FREE_DEFAULT_MODEL = process.env.OMO_BENCH_DEFAULT_MODEL ?? "opencode/big-pickle"
+
 export function createSandbox(root: string, pluginEntry: string): Sandbox {
   assertSafeSandboxRoot(root)
   const dirs = ["home/.omo", "config/opencode", "data/opencode", "state", "cache/opencode", "work"]
@@ -60,7 +63,8 @@ export function createSandbox(root: string, pluginEntry: string): Sandbox {
   writeFileSync(
     join(root, "config/opencode/opencode.json"),
     // No file snapshots: the bench never undoes, and OpenCode would copy every task's repo into its data dir.
-    JSON.stringify({ $schema: "https://opencode.ai/config.json", plugin: [`file://${realpathSync(pluginEntry)}`], snapshot: false }, null, 2),
+    // Free defaults: an agent without a pinned model must never fall back to a paid one on the user's key.
+    JSON.stringify({ $schema: "https://opencode.ai/config.json", plugin: [`file://${realpathSync(pluginEntry)}`], snapshot: false, model: FREE_DEFAULT_MODEL, small_model: FREE_DEFAULT_MODEL }, null, 2),
   )
   return {
     root,
