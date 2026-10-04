@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { assertSafeSandboxRoot, createSandbox, destroySandbox, overrideAgentModels, prepareWorkdir, sandboxProcesses } from "./sandbox"
+import { assertSafeSandboxRoot, createSandbox, destroySandbox, overrideAgentModels, overridePluginConfig, prepareWorkdir, sandboxProcesses } from "./sandbox"
 
 const scratch = mkdtempSync(join(tmpdir(), "bench-sandbox-"))
 afterAll(() => rmSync(scratch, { recursive: true, force: true }))
@@ -74,5 +74,17 @@ describe("createSandbox / prepareWorkdir / destroySandbox", () => {
     expect(config.model).toBe("opencode/big-pickle")
     expect(config.small_model).toBe("opencode/big-pickle")
     destroySandbox(sandbox)
+  })
+
+  test("A/B settings: every agent and category on one model, extra hooks disabled, in the sandbox only", () => {
+    const root = mkdtempSync(join(tmpdir(), "omo-bench-ab-"))
+    mkdirSync(join(root, "home/.omo"), { recursive: true })
+    writeFileSync(join(root, "home/.omo/omo.jsonc"), '{ "[opencode]": { "agents": { "explore": { "model": "a/b", "fallback_models": [] } }, "categories": { "quick": { "model": "c/d" } }, "disabled_hooks": ["x"] } }')
+    overridePluginConfig({ root, env: {} }, { allModels: "opencode/big-pickle", disabledHooks: ["test-integrity-guard", "x"] })
+    const scope = JSON.parse(readFileSync(join(root, "home/.omo/omo.jsonc"), "utf8"))["[opencode]"]
+    expect(scope.agents.explore).toEqual({ model: "opencode/big-pickle" })
+    expect(scope.categories.quick).toEqual({ model: "opencode/big-pickle" })
+    expect(scope.disabled_hooks).toEqual(["x", "test-integrity-guard"])
+    rmSync(root, { recursive: true, force: true })
   })
 })

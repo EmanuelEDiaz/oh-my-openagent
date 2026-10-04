@@ -211,3 +211,28 @@ export function overrideAgentModels(sandbox: Sandbox, overrides: Readonly<Record
   }
   writeFileSync(path, JSON.stringify(config, null, 2))
 }
+
+/**
+ * Sandbox-only plugin settings for an A/B run: every agent and category on one model, and hooks to switch off
+ * (e.g. measuring a guard with and without it). The user's real configuration is never touched.
+ */
+export function overridePluginConfig(sandbox: Sandbox, options: { readonly allModels?: string; readonly disabledHooks?: readonly string[] }): void {
+  if (!options.allModels && !options.disabledHooks?.length) return
+  const path = join(sandbox.root, "home/.omo/omo.jsonc")
+  const config = (existsSync(path) ? parseJsonc<Record<string, unknown>>(readFileSync(path, "utf8")) : {}) ?? {}
+  const scope = ((config["[opencode]"] as Record<string, unknown> | undefined) ?? (config["[opencode]"] = {})) as Record<string, unknown>
+  if (options.allModels) {
+    for (const section of ["agents", "categories"]) {
+      const entries = (scope[section] as Record<string, Record<string, unknown>> | undefined) ?? {}
+      for (const [name, entry] of Object.entries(entries)) {
+        const { models: _models, fallback_models: _fallbacks, ...rest } = entry ?? {}
+        entries[name] = { ...rest, model: options.allModels }
+      }
+      scope[section] = entries
+    }
+  }
+  if (options.disabledHooks?.length) {
+    scope["disabled_hooks"] = [...new Set([...((scope["disabled_hooks"] as string[] | undefined) ?? []), ...options.disabledHooks])]
+  }
+  writeFileSync(path, JSON.stringify(config, null, 2))
+}

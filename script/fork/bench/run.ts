@@ -18,7 +18,7 @@ import { defaultFixtureCache, resolveFixture } from "./fixtures"
 import { renderReport } from "./report"
 import { pendingRuns } from "./resume"
 import { runTask } from "./runner"
-import { createSandbox, destroySandbox, isHealthy, overrideAgentModels, saveServerLogs, startServer, warmUp, type Sandbox, type Server } from "./sandbox"
+import { createSandbox, destroySandbox, isHealthy, overrideAgentModels, overridePluginConfig, saveServerLogs, startServer, warmUp, type Sandbox, type Server } from "./sandbox"
 import { isConfigError, summarize } from "./score"
 import { EXPLORE_TASKS } from "./tasks/explore"
 import { FIX_INTEGRITY_TASKS } from "./tasks/fix-integrity"
@@ -136,6 +136,10 @@ async function main(): Promise<void> {
   if (resumeFile !== undefined) console.log(`resuming ${resumeFile}: ${previousResults.length} saved result(s), ${pending.length} run(s) to go`)
   try {
     sandbox = createSandbox(join(tmpdir(), `omo-bench-${process.pid}-${Date.now()}`), plugin)
+    overridePluginConfig(sandbox, {
+      ...(option("model-all") ? { allModels: option("model-all") as string } : {}),
+      ...(option("disable-hooks") ? { disabledHooks: (option("disable-hooks") as string).split(",").map((hook) => hook.trim()).filter(Boolean) } : {}),
+    })
     overrideAgentModels(sandbox, modelOverrides())
     if (proxy) routeZenThrough(sandbox, proxy.url)
     console.log(`sandbox ${sandbox.root}; starting OpenCode (the first start can take minutes)…`)
