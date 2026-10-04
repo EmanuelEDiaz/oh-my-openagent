@@ -27,6 +27,8 @@ export type StallWatchdogHookDeps = {
   readonly continueSession: (sessionID: string, input: { agent?: string; model?: string; text: string }) => Promise<void>
   /** Save a resume card and pause the work when the stall budget is spent (0.8c). */
   readonly pause?: (sessionID: string, reason: string, attempts: Array<{ model?: string; outcome: string }>) => Promise<void>
+  /** The task's retry budget shared with the loop breaker (0.9b); exhausted → pause like the stall cap. */
+  readonly chargeBudget?: (sessionID: string) => { used: number; max: number; exhausted: boolean } | undefined
 }
 
 const STREAM_TIMEOUT = /SSE read timed out|ProviderResponseStreamError/i
@@ -56,11 +58,13 @@ export function createStallWatchdogHook(options: StallWatchdogHookOptions, deps:
     if (!alreadyStopped) {
       await deps.abort(sessionID).catch((error) => log(`[${HOOK_NAME}] abort failed`, { sessionID, error: String(error) }))
     }
-    if (stalls > watchdog.maxStallsPerTask) {
+    const budget = deps.chargeBudget?.(sessionID)
+    if (stalls > watchdog.maxStallsPerTask || budget?.exhausted) {
       const target = await deps.resolveTarget(sessionID).catch(() => ({} as { agent?: string; model?: string }))
-      await deps.pause?.(sessionID, `the model stalled ${stalls} times`, [{ ...(target.model ? { model: target.model } : {}), outcome: `stalled ${stalls} times (no output)` }])
+      const why = budget?.exhausted && stalls <= watchdog.maxStallsPerTask ? `the task's retry budget is spent (${budget.used}/${budget.max})` : `the model stalled ${stalls} times`
+      await deps.pause?.(sessionID, why, [{ ...(target.model ? { model: target.model } : {}), outcome: `stalled ${stalls} times (no output)` }])
         .catch((error) => log(`[${HOOK_NAME}] pause failed`, { sessionID, error: String(error) }))
-      await deps.toast(`Stopped: the model stalled ${stalls} times. The work is saved; resume it with /omo-resume (optionally after switching models with /omo-models).`)
+      await deps.toast(`Stopped: ${why}. The work is saved; resume it with /omo-resume (optionally after switching models with /omo-models).`)
       return
     }
     const target = await deps.resolveTarget(sessionID).catch(() => ({} as { agent?: string; model?: string }))

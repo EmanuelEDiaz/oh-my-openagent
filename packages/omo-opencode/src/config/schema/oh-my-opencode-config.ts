@@ -26,6 +26,7 @@ import { ResumeConfigSchema } from "./resume"
 import { TestIntegrityConfigSchema } from "./test-integrity"
 import { EditDiagnosticsConfigSchema } from "./edit-diagnostics"
 import { WebResearchConfigSchema } from "./web-research"
+import { LoopBreakerConfigSchema, RetryBudgetConfigSchema } from "./loop-breaker"
 import { RuntimeFallbackConfigSchema } from "./runtime-fallback"
 import { TeamModeConfigSchema } from "./team-mode"
 import { SkillsConfigSchema } from "./skills"
@@ -110,6 +111,10 @@ export const OhMyOpenCodeConfigSchema = z.object({
   edit_diagnostics: EditDiagnosticsConfigSchema.optional(),
   /** web-researcher: keyless open-web search with verified citations; optional free keys (fork roadmap 4.18) */
   web_research: WebResearchConfigSchema.optional(),
+  /** Same error after repeated fixes: nudge, fresh debugger + research, then ask the user (fork roadmap 0.9b) */
+  loop_breaker: LoopBreakerConfigSchema.optional(),
+  /** One retry budget per task for stalls and loops; spent → paused and the user is told (fork roadmap 0.9b) */
+  retry_budget: RetryBudgetConfigSchema.optional(),
   team_mode: TeamModeConfigSchema.optional(),
   keyword_detector: KeywordDetectorConfigSchema.optional(),
   babysitting: BabysittingConfigSchema.optional(),

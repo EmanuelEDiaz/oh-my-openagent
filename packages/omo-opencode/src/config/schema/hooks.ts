@@ -24,6 +24,7 @@ export const HookNameSchema = z.enum([
   "test-integrity-guard",
   "edit-diagnostics",
   "web-research-verdict",
+  "loop-breaker",
   "background-notification",
   "auto-update-checker",
   "ast-grep-sg-provision",

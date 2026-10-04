@@ -26,6 +26,7 @@ import { createManagedProcessGuardHook } from "../../hooks/managed-process-guard
 import { createTestIntegrityGuardHook } from "../../hooks/test-integrity-guard"
 import { createEditDiagnosticsHook } from "../../hooks/edit-diagnostics"
 import { createWebResearchVerdictHook } from "../../hooks/web-research-verdict"
+import { createLoopBreakerHook } from "../../hooks/loop-breaker"
 import {
   getOpenCodeVersion,
   isOpenCodeVersionAtLeast,
@@ -56,6 +57,7 @@ export type ToolGuardHooks = {
   testIntegrityGuard: ReturnType<typeof createTestIntegrityGuardHook> | null
   editDiagnostics: ReturnType<typeof createEditDiagnosticsHook> | null
   webResearchVerdict: ReturnType<typeof createWebResearchVerdictHook> | null
+  loopBreaker: ReturnType<typeof createLoopBreakerHook> | null
   hashlineReadEnhancer: ReturnType<typeof createHashlineReadEnhancerHook> | null
   jsonErrorRecovery: ReturnType<typeof createJsonErrorRecoveryHook> | null
   readImageResizer: ReturnType<typeof createReadImageResizerHook> | null
@@ -159,9 +161,16 @@ export function createToolGuardHooks(args: {
     ? safeHook("test-integrity-guard", () => createTestIntegrityGuardHook(ctx))
     : null
 
+  // Repeated failures escalate instead of looping; new type errors count as sightings (fork roadmap 0.9b).
+  const loopBreaker = isHookEnabled("loop-breaker") && pluginConfig.loop_breaker?.enabled !== false
+    ? safeHook("loop-breaker", () => createLoopBreakerHook(ctx, pluginConfig.loop_breaker, pluginConfig.retry_budget?.max_per_task ?? 6))
+    : null
+
   const editDiagnostics = isHookEnabled("edit-diagnostics") && pluginConfig.edit_diagnostics?.enabled !== false
     ? safeHook("edit-diagnostics", () =>
-        createEditDiagnosticsHook(ctx, pluginConfig.edit_diagnostics, {}))
+        createEditDiagnosticsHook(ctx, pluginConfig.edit_diagnostics, {
+          ...(loopBreaker ? { onNewErrors: (sessionID, errors) => { void loopBreaker.recordTypeErrors(sessionID, errors) } } : {}),
+        }))
     : null
 
   const webResearchVerdict = isHookEnabled("web-research-verdict") && pluginConfig.web_research?.enabled !== false
@@ -226,6 +235,7 @@ export function createToolGuardHooks(args: {
     testIntegrityGuard,
     editDiagnostics,
     webResearchVerdict,
+    loopBreaker,
     hashlineReadEnhancer,
     jsonErrorRecovery,
     readImageResizer,
