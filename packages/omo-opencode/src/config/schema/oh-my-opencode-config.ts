@@ -115,6 +115,8 @@ export const OhMyOpenCodeConfigSchema = z.object({
   loop_breaker: LoopBreakerConfigSchema.optional(),
   /** One retry budget per task for stalls and loops; spent → paused and the user is told (fork roadmap 0.9b) */
   retry_budget: RetryBudgetConfigSchema.optional(),
+  /** Keep bash/read listed (every use denied) for agents that hide them when their model is a free Zen model, whose free tier rejects requests without them (default: true) */
+  zen_free_gate: z.boolean().optional(),
   team_mode: TeamModeConfigSchema.optional(),
   keyword_detector: KeywordDetectorConfigSchema.optional(),
   babysitting: BabysittingConfigSchema.optional(),

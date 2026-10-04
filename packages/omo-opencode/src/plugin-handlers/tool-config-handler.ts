@@ -2,6 +2,8 @@ import type { OhMyOpenCodeConfig } from "../config";
 import { getAgentDisplayName, getAgentListDisplayName } from "../shared/agent-display-names";
 import { isTaskSystemEnabled } from "../shared";
 import { WEB_RESEARCH_TOOLS } from "../tools/web-research/tools";
+import { applyZenFreeGate } from "../features/zen-free-gate";
+import { getAgentConfigKey } from "../shared/agent-display-names";
 
 type AgentWithPermission = { permission?: Record<string, unknown> };
 
@@ -175,4 +177,11 @@ export function applyToolConfig(params: {
     ...(params.config.permission as Record<string, unknown>),
     task: "deny",
   };
+
+  // Zen's free tier needs bash and read listed; agents that hide them get them listed but denied (see zen-free-gate).
+  if (params.pluginConfig.zen_free_gate !== false) {
+    for (const [name, agent] of Object.entries(params.agentResult)) {
+      if (agent && typeof agent === "object") applyZenFreeGate(getAgentConfigKey(name), agent as { permission?: Record<string, unknown>; prompt?: string; model?: string });
+    }
+  }
 }

@@ -1,4 +1,5 @@
 import { SPECIALISTS } from "../agents/specialists/catalog"
+import { isZenGated } from "../features/zen-free-gate"
 import { getAgentConfigKey, stripInvisibleAgentCharacters } from "./agent-display-names"
 
 /**
@@ -86,8 +87,9 @@ function specialistRestrictions(agentName: string): Record<string, boolean> {
   const key = getAgentConfigKey(agentName)
   const spec = SPECIALISTS.find((candidate) => candidate.name === key || candidate.name === agentName.toLowerCase())
   if (!spec) return {}
+  // A Zen-gated agent keeps bash/read listed (denied by its permission): a per-prompt "*": false would hide them again.
   return {
-    ...(spec.onlyTools ? { "*": false } : {}),
+    ...(spec.onlyTools && !isZenGated(spec.name) ? { "*": false } : {}),
     task: false,
     call_omo_agent: false,
     ...Object.fromEntries((spec.onlyTools ?? []).map((tool) => [tool, true])),
