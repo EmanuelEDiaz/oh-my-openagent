@@ -17,10 +17,11 @@ import { gradersFor } from "./graders"
 import { renderReport } from "./report"
 import { summarize } from "./score"
 import { EXPLORE_TASKS } from "./tasks/explore"
+import { LIBRARIAN_WEB_TASKS, WEB_RESEARCHER_TASKS } from "./tasks/web-research"
 import type { RunResult, Task } from "./types"
 
 const REPO = join(import.meta.dir, "../../..")
-const TASKS: readonly Task[] = [...EXPLORE_TASKS]
+const TASKS: readonly Task[] = [...EXPLORE_TASKS, ...WEB_RESEARCHER_TASKS, ...LIBRARIAN_WEB_TASKS]
 
 export async function regradeResult(result: RunResult, task: Task, fixtureDir: string): Promise<RunResult> {
   if (result.failure === "infra" || result.transcript === undefined) return result

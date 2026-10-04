@@ -20,7 +20,7 @@ describe("specialists catalog", () => {
     // then
     expect(SPECIALISTS.map((spec) => spec.name).sort()).toEqual([
       "api-lookup", "architect-reviewer", "debugger", "dependency-check", "docs-writer", "git-committer", "lang-reviewer",
-      "memory", "security-reviewer", "test-reviewer", "test-writer", "ui-tester", "verifier",
+      "memory", "security-reviewer", "test-reviewer", "test-writer", "ui-tester", "verifier", "web-researcher",
     ])
   })
 
@@ -112,5 +112,12 @@ describe("specialists catalog", () => {
     } finally {
       fetchSpy.mockRestore()
     }
+  })
+
+  test("web-researcher only gets its four web tools: no files, no shell, no delegation (fork 4.18)", () => {
+    const permission = permissionOf("web-researcher")
+    expect(permission["*"]).toBe("deny")
+    for (const name of ["web_search", "web_read", "registry_lookup", "web_answer"]) expect(permission[name]).toBe("allow")
+    for (const name of ["read", "bash", "edit", "task"]) expect(permission[name]).not.toBe("allow")
   })
 })

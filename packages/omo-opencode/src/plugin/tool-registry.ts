@@ -17,6 +17,7 @@ import {
   createProcessToolsRecord,
   createResumeToolsRecord,
   createTaskToolsRecord,
+  createWebResearchToolsRecord,
   getTaskSystemEnabled,
 } from "./tool-registry-gated-tools"
 import { createTeamModeToolsRecord } from "./tool-registry-team-tools"
@@ -65,6 +66,7 @@ export function createToolRegistry(args: {
     ...createMonitorToolsRecord({ pluginConfig, ctx, managers, factories }),
     ...createProcessToolsRecord({ managers }),
     ...createResumeToolsRecord({ managers }),
+    ...createWebResearchToolsRecord({ pluginConfig }),
     ...createTaskToolsRecord({ taskSystemEnabled, pluginConfig, ctx, factories }),
     ...createHashlineToolsRecord({ pluginConfig, ctx, factories }),
   }

@@ -25,6 +25,7 @@ import { ProcessesConfigSchema } from "./processes"
 import { ResumeConfigSchema } from "./resume"
 import { TestIntegrityConfigSchema } from "./test-integrity"
 import { EditDiagnosticsConfigSchema } from "./edit-diagnostics"
+import { WebResearchConfigSchema } from "./web-research"
 import { RuntimeFallbackConfigSchema } from "./runtime-fallback"
 import { TeamModeConfigSchema } from "./team-mode"
 import { SkillsConfigSchema } from "./skills"
@@ -107,6 +108,8 @@ export const OhMyOpenCodeConfigSchema = z.object({
   test_integrity: TestIntegrityConfigSchema.optional(),
   /** Only the errors an edit introduced, with alternatives; syntax-breaking edits undone (fork roadmap 0.9a) */
   edit_diagnostics: EditDiagnosticsConfigSchema.optional(),
+  /** web-researcher: keyless open-web search with verified citations; optional free keys (fork roadmap 4.18) */
+  web_research: WebResearchConfigSchema.optional(),
   team_mode: TeamModeConfigSchema.optional(),
   keyword_detector: KeywordDetectorConfigSchema.optional(),
   babysitting: BabysittingConfigSchema.optional(),

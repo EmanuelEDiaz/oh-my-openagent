@@ -1,6 +1,7 @@
 import type { OhMyOpenCodeConfig } from "../config";
 import { getAgentDisplayName, getAgentListDisplayName } from "../shared/agent-display-names";
 import { isTaskSystemEnabled } from "../shared";
+import { WEB_RESEARCH_TOOLS } from "../tools/web-research/tools";
 
 type AgentWithPermission = { permission?: Record<string, unknown> };
 
@@ -56,6 +57,12 @@ export function applyToolConfig(params: {
     : {}
 
   const existingPermission = params.config.permission as Record<string, unknown> | undefined;
+  // OpenCode turns config.tools into permissions before plugins run, so tools a plugin disables must be denied in
+  // permission directly. web-researcher's tools are denied for everyone but that agent (fork roadmap 4.18).
+  params.config.permission = {
+    ...Object.fromEntries(WEB_RESEARCH_TOOLS.map((name) => [name, "deny"])),
+    ...(existingPermission ?? {}),
+  };
   const skillDeniedByHost = existingPermission?.skill === "deny";
 
   params.config.tools = {
@@ -66,6 +73,8 @@ export function applyToolConfig(params: {
     LspCodeActionResolve: false,
     "task_*": false,
     teammate: false,
+    // Only web-researcher searches the web this way (fork roadmap 4.18); orchestrators delegate to it.
+    ...Object.fromEntries(WEB_RESEARCH_TOOLS.map((name) => [name, false])),
     ...(taskSystemEnabled
       ? { todowrite: false, todoread: false }
       : {}),
@@ -90,6 +99,10 @@ export function applyToolConfig(params: {
   const librarian = agentByKey(params.agentResult, "librarian", params.pluginConfig);
   if (librarian) {
     librarian.permission = { ...librarian.permission, "grep_app_*": "allow" };
+  }
+  const webResearcher = agentByKey(params.agentResult, "web-researcher", params.pluginConfig);
+  if (webResearcher) {
+    webResearcher.permission = { ...webResearcher.permission, ...Object.fromEntries(WEB_RESEARCH_TOOLS.map((name) => [name, "allow"])) };
   }
   const looker = agentByKey(params.agentResult, "multimodal-looker", params.pluginConfig);
   if (looker) {

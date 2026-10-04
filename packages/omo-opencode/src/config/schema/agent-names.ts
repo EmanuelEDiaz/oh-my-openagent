@@ -25,6 +25,7 @@ export const BuiltinAgentNameSchema = z.enum([
   "architect-reviewer",
   "docs-writer",
   "git-committer",
+  "web-researcher",
 ])
 
 export const BuiltinSkillNameSchema = z.enum([
@@ -70,6 +71,7 @@ export const OverridableAgentNameSchema = z.enum([
   "architect-reviewer",
   "docs-writer",
   "git-committer",
+  "web-researcher",
 ])
 
 export const AgentNameSchema = BuiltinAgentNameSchema

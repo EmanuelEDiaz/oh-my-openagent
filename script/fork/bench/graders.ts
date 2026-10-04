@@ -297,6 +297,55 @@ export function withinBudget(budget: Budget): Grader {
   }
 }
 
+/**
+ * Every URL in the answer appeared in one of the agent's own tool results (fork roadmap 4.18): a URL typed from memory
+ * is an invented citation even when it happens to exist.
+ */
+export function citedUrlsFromTools(options: { readonly min?: number } = {}): Grader {
+  const name = "citedUrlsFromTools"
+  const canon = (url: string) => url.replace(/^https?:\/\/(www\.)?/, "").replace(/[#?].*$/, "").replace(/\/$/, "").toLowerCase()
+  return {
+    name,
+    grade: ({ transcript }) => {
+      const cited = urlsIn(transcript.answer)
+      const seen = new Set(transcript.tools.flatMap((call) => urlsIn(call.output ?? "")).map(canon))
+      const invented = cited.filter((url) => !seen.has(canon(url)))
+      if (cited.length < (options.min ?? 1)) return result(name, false, `${cited.length} URL(s) cited, ${options.min ?? 1} required`)
+      return result(name, invented.length === 0, invented.length === 0 ? `${cited.length} URL(s), all from tool results` : `not from tool results: ${invented.join(", ")}`)
+    },
+  }
+}
+
+const NOT_FOUND = /\b(not[_ ]found|no reliable|could(?: not|n't) find|did(?: not|n't) find|no (?:reliable |official )?(?:source|information|evidence|record|release)|does(?: not|n't) exist|has(?: not|n't) been (?:released|announced)|not (?:been )?(?:released|announced)|no such)\b/i
+
+/** For a question without an answer: the agent must say so instead of inventing one. */
+export function saysNotFound(): Grader {
+  const name = "saysNotFound"
+  return { name, grade: ({ transcript }) => result(name, NOT_FOUND.test(transcript.answer)) }
+}
+
+/** The answer states the version a registry reports at grading time, so the answer key never goes stale. */
+export function answerHasLiveVersion(ecosystem: "npm" | "PyPI", pkg: string, lookup: (ecosystem: "npm" | "PyPI", pkg: string) => Promise<string | undefined> = liveVersion): Grader {
+  const name = `answerHasLiveVersion:${ecosystem}/${pkg}`
+  return {
+    name,
+    grade: async ({ transcript }) => {
+      const version = await lookup(ecosystem, pkg).catch(() => undefined)
+      if (!version) return result(name, false, "registry unreachable")
+      return result(name, new RegExp(`(?<![\\d.])${escapeRegExp(version)}(?![\\d])`).test(transcript.answer), `registry says ${version}`)
+    },
+  }
+}
+
+async function liveVersion(ecosystem: "npm" | "PyPI", pkg: string): Promise<string | undefined> {
+  if (ecosystem === "npm") {
+    const data = await (await fetch(`https://registry.npmjs.org/${pkg}/latest`, { signal: AbortSignal.timeout(10_000) })).json() as { version?: string }
+    return data.version
+  }
+  const data = await (await fetch(`https://pypi.org/pypi/${pkg}/json`, { signal: AbortSignal.timeout(10_000) })).json() as { info?: { version?: string } }
+  return data.info?.version
+}
+
 /** Every grader a task is scored with: the automatic ones plus its own. */
 export function gradersFor(task: Task): Grader[] {
   return [...(task.mode === "subtask" ? [ranAs(task.agent)] : []), withinBudget(task.budget), ...task.expect]

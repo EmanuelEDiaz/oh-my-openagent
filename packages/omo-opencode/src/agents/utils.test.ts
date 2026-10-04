@@ -547,10 +547,10 @@ describe("createBuiltinAgents with model overrides", () => {
       new Set(["anthropic/claude-opus-5-5", "openai/gpt-5.6-sol"])
     )
 
-    const disabledAgents = ["ReSeArChEr"]
+    const disabledAgents = ["CuStOmScOuT"]
     const customAgentSummaries = [
       {
-        name: "researcher",
+        name: "customscout",
         description: "Should never show",
       },
     ]
@@ -569,9 +569,9 @@ describe("createBuiltinAgents with model overrides", () => {
       )
 
       // #then
-      expect(agents.sisyphus.prompt).not.toContain("researcher")
-      expect(agents.hephaestus.prompt).not.toContain("researcher")
-      expect(agents.atlas.prompt).not.toContain("researcher")
+      expect(agents.sisyphus.prompt).not.toContain("customscout")
+      expect(agents.hephaestus.prompt).not.toContain("customscout")
+      expect(agents.atlas.prompt).not.toContain("customscout")
     } finally {
       fetchSpy.mockRestore()
     }

@@ -7,6 +7,8 @@ import type { ToolRegistryFactories } from "./tool-registry-factories"
 import { isTaskSystemEnabled } from "../shared"
 import { createProcessTools } from "../tools/process/tools"
 import { createHandoffTools, createResumeTools } from "../tools/resume/tools"
+import { createPluginWebResearch } from "../features/web-research/plugin"
+import { createWebResearchTools } from "../tools/web-research/tools"
 
 export function createTaskToolsRecord(args: {
   readonly taskSystemEnabled: boolean
@@ -61,4 +63,12 @@ export function createResumeToolsRecord(args: {
   return args.managers.resumeService
     ? { ...createResumeTools(args.managers.resumeService), ...createHandoffTools(args.managers.resumeService) }
     : {}
+}
+
+/** web-researcher's tools (fork roadmap 4.18); the tool config allows them for that agent only. */
+export function createWebResearchToolsRecord(args: {
+  readonly pluginConfig: OhMyOpenCodeConfig
+}): Record<string, ToolDefinition> {
+  if (args.pluginConfig.web_research?.enabled === false) return {}
+  return createWebResearchTools(createPluginWebResearch(args.pluginConfig.web_research))
 }

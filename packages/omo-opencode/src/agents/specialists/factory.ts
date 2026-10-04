@@ -22,6 +22,8 @@ export type SpecialistSpec = {
   /** "deny" or a pattern map; patterns follow OpenCode's bash permission syntax. */
   readonly bash: "deny" | Readonly<Record<string, "allow" | "deny" | "ask">>
   readonly skills?: readonly string[]
+  /** When set, every other tool is denied (web-researcher: no file, shell or repository access at all). */
+  readonly onlyTools?: readonly string[]
   readonly metadata: AgentPromptMetadata
   readonly prompt: string
 }
@@ -46,9 +48,11 @@ export function createSpecialistAgent(spec: SpecialistSpec): AgentFactory {
     model,
     temperature: 0.1,
     permission: {
+      ...(spec.onlyTools ? { "*": "deny" } : {}),
       ...Object.fromEntries(DELEGATION_TOOLS.map((tool) => [tool, "deny"])),
       ...Object.fromEntries(FILE_WRITING_TOOLS.map((tool) => [tool, spec.writesFiles ? "allow" : "deny"])),
       bash: spec.bash,
+      ...Object.fromEntries((spec.onlyTools ?? []).map((tool) => [tool, "allow"])),
     } as AgentConfig["permission"],
     ...(spec.skills && spec.skills.length > 0 ? { skills: [...spec.skills] } : {}),
     prompt: `${spec.prompt.trim()}\n\n${OUTPUT_CONTRACT}`,

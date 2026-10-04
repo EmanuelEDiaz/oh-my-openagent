@@ -25,6 +25,7 @@ import {
 import { createManagedProcessGuardHook } from "../../hooks/managed-process-guard/hook"
 import { createTestIntegrityGuardHook } from "../../hooks/test-integrity-guard"
 import { createEditDiagnosticsHook } from "../../hooks/edit-diagnostics"
+import { createWebResearchVerdictHook } from "../../hooks/web-research-verdict"
 import {
   getOpenCodeVersion,
   isOpenCodeVersionAtLeast,
@@ -54,6 +55,7 @@ export type ToolGuardHooks = {
   managedProcessGuard: ReturnType<typeof createManagedProcessGuardHook> | null
   testIntegrityGuard: ReturnType<typeof createTestIntegrityGuardHook> | null
   editDiagnostics: ReturnType<typeof createEditDiagnosticsHook> | null
+  webResearchVerdict: ReturnType<typeof createWebResearchVerdictHook> | null
   hashlineReadEnhancer: ReturnType<typeof createHashlineReadEnhancerHook> | null
   jsonErrorRecovery: ReturnType<typeof createJsonErrorRecoveryHook> | null
   readImageResizer: ReturnType<typeof createReadImageResizerHook> | null
@@ -162,6 +164,10 @@ export function createToolGuardHooks(args: {
         createEditDiagnosticsHook(ctx, pluginConfig.edit_diagnostics, {}))
     : null
 
+  const webResearchVerdict = isHookEnabled("web-research-verdict") && pluginConfig.web_research?.enabled !== false
+    ? safeHook("web-research-verdict", () => createWebResearchVerdictHook())
+    : null
+
   const bashFileReadGuard = isHookEnabled("bash-file-read-guard")
     ? safeHook("bash-file-read-guard", () => createBashFileReadGuardHook())
     : null
@@ -219,6 +225,7 @@ export function createToolGuardHooks(args: {
     managedProcessGuard,
     testIntegrityGuard,
     editDiagnostics,
+    webResearchVerdict,
     hashlineReadEnhancer,
     jsonErrorRecovery,
     readImageResizer,
