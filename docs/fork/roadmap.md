@@ -93,6 +93,7 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
 6. **4.20** encargo de delegación y skills (medir primero) → **4.19** uso obligatorio por agente de tab.
 7. **5.0** renombrado → **5.1** evaluación conjunta → **5.2** integración del sistema entero.
 8. **Fase 6:** documentación y skill del plugin, ya con los nombres nuevos.
+9. **Fase 7:** laboratorio visual de agentes (última fase).
 
 ---
 
@@ -218,10 +219,16 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 | 6.1 | **Documentación completa** del fork: arquitectura, agentes, herramientas, hooks, configuración, guía de usuario y de contribución, coherente con el código final. | pendiente |
 | 6.2 | **Skill del plugin** creada con `skill-creator` (instalado en `~/.agents/skills/` y `~/.claude/skills/`): estructura del proyecto, cada parte modular, cómo modificar o añadir agentes, hooks, herramientas y reglas; probada con las evaluaciones de `skill-creator`. | pendiente |
 
+## Fase 7 — Laboratorio visual de agentes (última fase)
+| Paso | Qué | Estado |
+|---|---|---|
+| 7.1 | **Laboratorio visual** (petición del usuario, 04-10-2026): modo visual del panel "Jobs" de 0.10 en la barra lateral; cada agente un personaje en su puesto y el orquestador el jefe; clic → bocadillo con qué hace (herramienta, tarea, modelo, tiempo, tokens); solo eventos de OpenCode, dibujado con medios bloques, casi nulo plegado, 2–4 fps solo con agentes trabajando; assets CC0 MurphysDad Robot Lab (+ Sci-Fi Facility). Maqueta HTML para validar el aspecto antes de construir | pendiente — `plans/agent-lab.md` |
+
 ## Aparcado (decidido no hacer por ahora)
 - ~~Reglas de lenguaje/framework cargadas bajo demanda~~ — absorbido en 4.5 (antes 2.9), 29-09-2026.
 
 ## Registro de decisiones del roadmap
+- 04-10-2026 — Laboratorio visual de agentes como última fase (Fase 7), modo visual del panel Jobs de 0.10; maqueta HTML primero. Encontrado en la investigación: el panel lateral actual sondea un archivo cada segundo y revalida la configuración en cada sondeo; el usuario pide arreglarlo ya (pasa a funcionar por eventos).
 - 04-10-2026 — Causa del fallo de Zen encontrada y comprobada reenviando peticiones capturadas: el plan gratuito exige que la lista de herramientas incluya `bash` y `read` (regla no documentada; issues anomalyco/opencode #51241, #50627, #51315 sin respuesta de mantenedores). Afectaba a los agentes que las ocultan (`@web-researcher`, `@api-lookup`, `@memory`, `@dependency-check`, `@ui-tester`, Prometheus). Decisión del usuario (opción A): con un modelo gratis de Zen, esas dos herramientas quedan visibles pero con todo uso denegado por permiso (+~1.770 tokens solo en esos agentes); `zen_free_gate: false` lo desactiva. Descartados usar otros proveedores para esos agentes y esperar a OpenCode.
 - 04-10-2026 — Prioridad del usuario: reducir el contexto por petición (78.801 tokens para un "hola") sin perder eficacia; paso 0.13 justo después de 0.9b, con medición antes y después en el banco.
 - 04-10-2026 — MCP bajo demanda (idea del usuario, "pruébalo primero"): medido en el entorno aislado: +446 MB por ventana y ~9.800 tokens por petición con los MCP actuales. Queda medir el acierto al elegir herramienta con modelos reales; si se confirma, se hace como 0.12 antes de la Fase 4.
