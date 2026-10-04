@@ -97,6 +97,7 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
 ---
 
 ## Notas de QA (para no repetir errores)
+- **Nunca un modelo de pago por omisión (04-10-2026):** una sonda que reescribía `omo.jsonc` dejó la sesión padre sin modelo y OpenCode usó `claude-opus-5-5` de Zen con la clave del usuario. El entorno aislado fija ahora `model` y `small_model` a un modelo gratis (`OMO_BENCH_DEFAULT_MODEL`).
 - Un sandbox de OpenCode recién creado instala `@opencode-ai/plugin` desde npm en su carpeta de configuración y puede
   quedarse colgado (ignora SIGTERM). Copiar antes `node_modules/`, `package.json` y `package-lock.json` desde
   `~/.config/opencode` y lanzar con `timeout -s KILL`.
