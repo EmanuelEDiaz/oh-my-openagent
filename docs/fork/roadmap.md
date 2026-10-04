@@ -97,6 +97,7 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
 ---
 
 ## Notas de QA (para no repetir errores)
+- **Zen gratis exige `bash` y `read` en la petición (04-10-2026):** sin ellas, 403 "free tier can only be used from within OpenCode". Para investigar un rechazo, capturar la petición real con el proxy de contexto y reenviarla **con el `fetch` de Bun** (desde Python o curl Zen rechaza incluso peticiones válidas). Las capturas llevan la clave del usuario: borrarlas al terminar.
 - **Nunca un modelo de pago por omisión (04-10-2026):** una sonda que reescribía `omo.jsonc` dejó la sesión padre sin modelo y OpenCode usó `claude-opus-5-5` de Zen con la clave del usuario. El entorno aislado fija ahora `model` y `small_model` a un modelo gratis (`OMO_BENCH_DEFAULT_MODEL`).
 - Un sandbox de OpenCode recién creado instala `@opencode-ai/plugin` desde npm en su carpeta de configuración y puede
   quedarse colgado (ignora SIGTERM). Copiar antes `node_modules/`, `package.json` y `package-lock.json` desde
@@ -221,6 +222,7 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 - ~~Reglas de lenguaje/framework cargadas bajo demanda~~ — absorbido en 4.5 (antes 2.9), 29-09-2026.
 
 ## Registro de decisiones del roadmap
+- 04-10-2026 — Causa del fallo de Zen encontrada y comprobada reenviando peticiones capturadas: el plan gratuito exige que la lista de herramientas incluya `bash` y `read` (regla no documentada; issues anomalyco/opencode #51241, #50627, #51315 sin respuesta de mantenedores). Afectaba a los agentes que las ocultan (`@web-researcher`, `@api-lookup`, `@memory`, `@dependency-check`, `@ui-tester`, Prometheus). Decisión del usuario (opción A): con un modelo gratis de Zen, esas dos herramientas quedan visibles pero con todo uso denegado por permiso (+~1.770 tokens solo en esos agentes); `zen_free_gate: false` lo desactiva. Descartados usar otros proveedores para esos agentes y esperar a OpenCode.
 - 04-10-2026 — Prioridad del usuario: reducir el contexto por petición (78.801 tokens para un "hola") sin perder eficacia; paso 0.13 justo después de 0.9b, con medición antes y después en el banco.
 - 04-10-2026 — MCP bajo demanda (idea del usuario, "pruébalo primero"): medido en el entorno aislado: +446 MB por ventana y ~9.800 tokens por petición con los MCP actuales. Queda medir el acierto al elegir herramienta con modelos reales; si se confirma, se hace como 0.12 antes de la Fase 4.
 - 04-10-2026 — Zen cambió: el plan gratuito falla desde el entorno aislado del banco y varios modelos de la configuración del usuario ya no existen. El usuario prefiere esperar a resolver Zen para medir 4.18 (descartado medir ya con OpenRouter/Groq). Mientras, se avanza 0.9b.
