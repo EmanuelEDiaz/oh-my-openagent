@@ -5,8 +5,9 @@ Rutas: `S/` = `packages/omo-opencode/src/`.
 
 ## Petición del usuario (03-10-2026)
 - Un sistema de adversarios en OpenCode: agentes que atacan el trabajo de otros.
-- **Regla del usuario:** el orquestador sabe que existen y puede sugerirlos, pero **solo los lanza si el usuario lo
-  pide** (comando o petición explícita). Se obliga por código.
+- **Regla del usuario (precisada, 03-10-2026):** el agente orquestador **recomienda** un adversario cuando ve que
+  ayudaría, **explicando por qué** (y qué cuesta); **la decisión es siempre del usuario**. Se obliga por código.
+- **Medir la eficacia** del sistema, como todo lo que se hace en el fork.
 
 ## Evidencia (`[V]` = fuente primaria, `[S]` = resumen secundario)
 - **El debate libre no compensa:** casi toda la ganancia del debate viene de votar (Choi et al., NeurIPS 2025,
@@ -23,7 +24,7 @@ Rutas: `S/` = `packages/omo-opencode/src/`.
 - **Pre-mortem:** imaginar que el plan ya fracasó mejora la identificación de causas en ~30 % `[S]`.
 
 ## Principio
-El adversario **produce evidencia y nunca decide**. Solo un agente de tab lo llama, y solo si el usuario lo pidió.
+El adversario **produce evidencia y nunca decide**. Solo un agente de tab lo llama, y solo con el sí del usuario.
 Decide el código (ejecución, tests); lo que quede dudoso, el usuario.
 
 ## Roles (agentes de "@", atómicos, cada uno con su paso)
@@ -40,9 +41,11 @@ Decide el código (ejecución, tests); lo que quede dudoso, el usuario.
   comando y su salida; si no, se rechaza.
 
 ## Por código (todos)
-- **Solo a petición del usuario:** el plugin rechaza un encargo a un adversario si el último mensaje real del usuario
-  no lo pidió (comando, p. ej. `/adversary breaker`, o petición explícita). El orquestador conoce los adversarios y puede
-  sugerirlos ("¿quieres que lance @breaker?").
+- **Recomienda el agente, decide el usuario:** el orquestador conoce los adversarios y, cuando aplica (arreglo de un
+  fallo delicado, cambio sin tests, plan grande), los recomienda con la herramienta `question`: qué adversario, **por
+  qué** en este caso, qué coste aproximado, y opciones "Sí, lánzalo" / "No". El plugin rechaza un encargo a un
+  adversario salvo que el usuario haya respondido que sí a esa recomendación o lo haya pedido él (comando, p. ej.
+  `/adversary breaker`, o petición explícita).
 - Formato fijo de hallazgo `{afirmación, archivo, comando, esperado, observado}`; sin archivo o comando, descartado.
 - Topes: ataque ↔ arreglo, 2 ciclos; ataque al plan, 1 ronda. Al tope con fallos abiertos → pregunta al usuario con la
   evidencia (encaja con el freno de bucles de 0.9b). Nunca se para por "acuerdo".
@@ -54,6 +57,8 @@ Decide el código (ejecución, tests); lo que quede dudoso, el usuario.
 - Ideas de entrenamiento (juegos prover–verifier, críticos entrenados): necesitan ajuste fino.
 
 ## Medición (banco 3.0)
-Con y sin cada adversario sobre las mismas tareas: fallos reales detectados, ataques válidos, falsos positivos,
+- **Recomendaciones:** cuántas hace el agente, cuántas acepta el usuario y cuántas de las aceptadas encontraron un
+  fallo real (precisión de la recomendación); también fallos que se escaparon sin recomendación.
+- **Eficacia:** con y sin cada adversario sobre las mismas tareas: fallos reales detectados, ataques válidos, falsos positivos,
 tareas resueltas con tests ocultos, regresiones y coste. Se queda si mejora más por token que la alternativa barata:
 2–3 soluciones elegidas con tests.
