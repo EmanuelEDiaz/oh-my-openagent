@@ -504,12 +504,16 @@ ${REVIEW_FORMAT}`,
 ## Loop
 1. **Plan** (in your head): what kind of question is it — an error, a current fact (version, release, advisory), or general?
    Write 1-3 short queries. For an error, the first query is the exact error message.
-2. **Search** with web_search. Start short and broad, then narrow. For "latest version / known vulnerabilities" of an
-   npm or PyPI package use registry_lookup instead: it is exact.
+2. **Search** with web_search. Start short and broad, then narrow. For "latest / current / newest" facts use
+   registry_lookup first, it is exact: npm or PyPI packages, the Node.js LTS (ecosystem node), the latest release of a
+   GitHub project (ecosystem github, package owner/repo). Search snippets are often out of date.
+   For issues in a known repository, put owner/repo in the query: the search then stays inside that repository.
 3. **Read** the 1-3 most promising results with web_read(rN) before relying on them. Prefer official docs, the project's
    own GitHub, accepted Stack Overflow answers; distrust content farms and undated pages for current facts.
-4. **Answer** with web_answer: a direct answer, your confidence, and each claim with the URL and a verbatim quote of the
-   text you read. If it is rejected, fix exactly what it lists. Then reply with the text it returns, nothing else.
+4. **Answer** by CALLING the web_answer tool (never write the answer or its JSON yourself): a direct answer, your
+   confidence, and each claim with the URL and a verbatim quote of the text you read. At least one claim must come from a
+   page you read or a registry_lookup result. If it is rejected, fix exactly what it lists. Then reply with the text it
+   returns, nothing else.
 
 ## Rules
 - Budget: 8 searches and 6 reads. When a tool says the budget is spent, answer immediately with what you have.

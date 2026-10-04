@@ -10,6 +10,7 @@ import {
   keywordQuery,
   mdn,
   QuotaError,
+  type Ecosystem,
   exa,
   githubIssues,
   hackerNews,
@@ -294,19 +295,19 @@ export function createWebResearch(config: ResearchConfig, sources: Sources = DEF
       }
     },
 
-    async registry(sessionID: string, ecosystem: "npm" | "PyPI", name: string): Promise<string> {
+    async registry(sessionID: string, ecosystem: Ecosystem, name: string): Promise<string> {
       const state = session(sessionID)
       if (state.answered) return "You already submitted your answer with web_answer. Stop."
       if (state.searches >= config.maxSearches) return forcedAnswer(state, "Search")
       state.searches++
       const info = await sources.registry(ecosystem, name)
-      const summary = `${info.name} (${info.ecosystem}): latest ${info.latest ?? "unknown"}${info.publishedAt ? `, published ${info.publishedAt}` : ""}.`
+      const summary = `${info.name} (${info.ecosystem}): latest ${info.latest ?? "unknown"}${info.publishedAt ? `, published ${info.publishedAt}` : ""}.${info.notes ? ` ${info.notes}.` : ""}`
       const hits: SearchHit[] = [
         { url: info.url, title: `${info.name} on ${info.ecosystem}`, ...(info.publishedAt ? { date: info.publishedAt } : {}), snippet: summary, source: "registry" },
         ...info.advisories.map((advisory) => ({ url: advisory.url, title: advisory.id, ...(advisory.modified ? { date: advisory.modified } : {}), snippet: advisory.summary, source: "osv" })),
       ]
       const { all } = record(state, hits)
-      const advisories = info.advisories.length > 0 ? `${info.advisories.length} known advisories for ${info.latest ?? "this package"} (OSV).` : `No known advisories for ${info.latest ?? "this package"} in OSV.`
+      const advisories = info.ecosystem === "node" || info.ecosystem === "github" ? "" : info.advisories.length > 0 ? `${info.advisories.length} known advisories for ${info.latest ?? "this package"} (OSV).` : `No known advisories for ${info.latest ?? "this package"} in OSV.`
       return `${untrusted(`registry: ${ecosystem}/${name}`, renderResults(all))}\n\n${summary} ${advisories}\n${budgetLine(state)}`
     },
 
@@ -338,6 +339,15 @@ export function createWebResearch(config: ResearchConfig, sources: Sources = DEF
           ok = false
         }
         verified.push(ok)
+      }
+      // At least one claim must rest on something read (a page via web_read, or an exact registry answer), not only on
+      // a search snippet: snippets are often stale for "latest/current" facts.
+      const grounded = input.claims.some((claim) => {
+        const known = knownUrl(state, claim.url)
+        return !!known && (state.readUrls.has(known.url) || ["registry", "osv"].includes(known.source))
+      })
+      if (input.confidence !== "not_found" && input.claims.length > 0 && !grounded) {
+        problems.push("no claim rests on a page you read: read the best result with web_read (or use registry_lookup for versions and releases) and quote it")
       }
       if (problems.length > 0 && !state.repairUsed) {
         state.repairUsed = true

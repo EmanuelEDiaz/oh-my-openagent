@@ -29,10 +29,10 @@ export function createWebResearchTools(research: WebResearch): Record<string, To
       },
     }),
     registry_lookup: tool({
-      description: "Latest version, release date and known security advisories (OSV) of an npm or PyPI package — exact, no guessing.",
+      description: "Exact current facts, no guessing: latest version, release date and OSV advisories of an npm or PyPI package; the newest Node.js LTS and release (ecosystem node); the latest release of a GitHub repository (ecosystem github, package = owner/repo).",
       args: {
-        ecosystem: tool.schema.enum(["npm", "PyPI"]),
-        package: tool.schema.string(),
+        ecosystem: tool.schema.enum(["npm", "PyPI", "node", "github"]),
+        package: tool.schema.string().describe("Package name, owner/repo for github, anything for node"),
       },
       async execute(args, context) {
         return research.registry(sessionOf(context), args.ecosystem, args.package)

@@ -97,18 +97,28 @@ async function run(command: string[]): Promise<string> {
   }
 }
 
-async function ghIssues(query: string, limit: number): Promise<Array<{ title: string; url: string; updatedAt?: string; body?: string; state?: string; repository?: { nameWithOwner?: string } }>> {
-  const out = await run(["gh", "search", "issues", query, "--limit", String(limit), "--sort", "comments", "--json", "title,url,updatedAt,body,state,repository"])
+async function ghIssues(query: string, limit: number, repo?: string): Promise<Array<{ title: string; url: string; updatedAt?: string; body?: string; state?: string; repository?: { nameWithOwner?: string } }>> {
+  const out = await run(["gh", "search", "issues", query, ...(repo ? ["--repo", repo] : []), "--limit", String(limit), "--sort", repo ? "created" : "comments", "--json", "title,url,updatedAt,body,state,repository"])
   return JSON.parse(out)
+}
+
+/** `owner/repo` named in a query (e.g. "github.com/anomalyco/opencode" or "anomalyco/opencode"). */
+export function repoIn(query: string): string | undefined {
+  const match = /(?:github\.com\/)?\b([A-Za-z0-9][\w.-]*\/[A-Za-z0-9][\w.-]*)\b/.exec(query)
+  const candidate = match?.[1]
+  return candidate && !/\.(?:js|ts|py|go|json|md)$/.test(candidate) && !candidate.includes("..") ? candidate.replace(/\.git$/, "") : undefined
 }
 
 /** GitHub ANDs every term: try the key terms, then fewer, until something matches. */
 export async function githubIssues(query: string, limit = 5): Promise<SearchHit[]> {
   let items: Awaited<ReturnType<typeof ghIssues>> = []
-  for (const size of [6, 4, 3]) {
-    const terms = keywordQuery(query, size)
-    if (!terms) break
-    items = await ghIssues(terms, limit)
+  // Inside the repository the question names: the exact error text first, then key terms.
+  const repo = repoIn(query)
+  const rest = repo ? query.replace(new RegExp(`(?:github\\.com/)?${repo.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}`), " ") : query
+  const quoted = /"([^"]{12,})"/.exec(rest)?.[1]
+  const attempts = [...(quoted ? [`"${quoted}"`] : []), ...[6, 4, 3].map((size) => keywordQuery(rest, size)).filter(Boolean)]
+  for (const terms of attempts) {
+    items = await ghIssues(terms, limit, repo).catch(() => [])
     if (items.length > 0) break
   }
   return items.map((item) => ({
@@ -189,16 +199,40 @@ export async function mdn(query: string, limit = 5): Promise<SearchHit[]> {
   return (data.documents ?? []).map((doc) => ({ url: `https://developer.mozilla.org${doc.mdn_url}`, title: doc.title, snippet: plain(doc.summary ?? ""), source: "mdn" }))
 }
 
+export type Ecosystem = "npm" | "PyPI" | "node" | "github"
+
 export type RegistryInfo = {
-  readonly ecosystem: "npm" | "PyPI"
+  readonly ecosystem: Ecosystem
   readonly name: string
   readonly latest?: string
   readonly publishedAt?: string
   readonly url: string
   readonly advisories: ReadonlyArray<{ id: string; summary: string; url: string; modified?: string }>
+  /** Extra exact facts (e.g. the Node.js codename, the newest non-LTS release). */
+  readonly notes?: string
 }
 
-export async function registryLookup(ecosystem: "npm" | "PyPI", name: string): Promise<RegistryInfo> {
+export async function registryLookup(ecosystem: Ecosystem, name: string): Promise<RegistryInfo> {
+  if (ecosystem === "node") {
+    // The official release index: newest first, LTS lines named.
+    const list = await getJson("https://nodejs.org/dist/index.json") as Array<{ version: string; date: string; lts: string | false }>
+    const lts = list.find((entry) => entry.lts)
+    const current = list[0]
+    return {
+      ecosystem, name: "node", url: "https://nodejs.org/dist/index.json", advisories: [],
+      ...(lts ? { latest: lts.version.replace(/^v/, ""), publishedAt: lts.date } : {}),
+      notes: `newest LTS: ${lts ? `${lts.version} "${lts.lts}" (${lts.date})` : "none"}; newest release overall: ${current ? `${current.version} (${current.date})` : "unknown"}`,
+    }
+  }
+  if (ecosystem === "github") {
+    const release = JSON.parse(await run(["gh", "api", `repos/${name}/releases/latest`]).catch(async () => JSON.stringify(await getJson(`https://api.github.com/repos/${name}/releases/latest`)))) as { tag_name?: string; published_at?: string; html_url?: string; name?: string }
+    return {
+      ecosystem, name, advisories: [], url: release.html_url ?? `https://github.com/${name}/releases`,
+      ...(release.tag_name ? { latest: release.tag_name } : {}),
+      ...(release.published_at ? { publishedAt: release.published_at.slice(0, 10) } : {}),
+      ...(release.name ? { notes: `release name: ${release.name}` } : {}),
+    }
+  }
   let latest: string | undefined
   let publishedAt: string | undefined
   let url: string
