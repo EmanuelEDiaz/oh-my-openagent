@@ -180,7 +180,7 @@ Rutas: `S/` = `packages/omo-opencode/src/`.
   `retry_budget.max_per_task: 6`.
 - **Funciona igual en Windows**: `fetch` y el shim de procesos (requisito de 0.11).
 
-### 0.9b — Implementación (04-10-2026; pendiente: QA aislada y medición)
+### 0.9b — Implementación (04-10-2026; QA aislada pasada; pendiente: medición de eficacia)
 - **Código:** `S/features/loop-breaker/` (`fingerprint.ts`, `breaker.ts`, `plugin.ts`), hook `loop-breaker`, configuración
   `loop_breaker` (umbrales 2/3/4) y `retry_budget.max_per_task` (6); `S/shared/session-root.ts` compartido con el
   guardián de tests.
@@ -196,6 +196,7 @@ Rutas: `S/` = `packages/omo-opencode/src/`.
   `.omo/runs/<run>/loops.json`; al agotarse, pausa y aviso. Una petición nueva o "reanuda" reinician el contador; el
   historial de intentos se conserva.
 - **Un ejecutar que pasa** (el mismo comando que fallaba) da el error por resuelto.
+- **QA aislada (04-10-2026, `.omo/evidence/0.9b/`):** modelo simulado atascado en el mismo test: aviso a los 2 arreglos, bloqueo a los 3 (edición rechazada) hasta llamar al `debugger`, nivel 4 por arreglo casi idéntico (edición rechazada) hasta que el usuario responde `question`; luego arreglo correcto y test en verde. Convivió con el guardián de tests y los errores de tipos de 0.9a activos.
 
 ## Criterios de aceptación
 ```gherkin
