@@ -41,5 +41,9 @@ señales de OpenCode, casi nulo cuando está plegado.**
   cada zip y añadir crédito.
 - **Alternativa si algo falla:** lista de texto con emojis, con el mismo clic para el detalle.
 
+## Maquetas
+- HTML interactiva: https://claude.ai/artifact/WcChKoF5BysxboKW8KzcLw (04-10-2026).
+- **Pencil (pedido por el usuario):** rehacer la maqueta en Pencil cuando su MCP conecte, antes de construir la fase.
+
 ## Medición
 CPU y memoria con el panel plegado, abierto en reposo y abierto con 3–12 agentes trabajando; respuesta al clic.

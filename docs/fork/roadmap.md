@@ -222,7 +222,7 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 ## Fase 7 — Laboratorio visual de agentes (última fase)
 | Paso | Qué | Estado |
 |---|---|---|
-| 7.1 | **Laboratorio visual** (petición del usuario, 04-10-2026): modo visual del panel "Jobs" de 0.10 en la barra lateral; cada agente un personaje en su puesto y el orquestador el jefe; clic → bocadillo con qué hace (herramienta, tarea, modelo, tiempo, tokens); solo eventos de OpenCode, dibujado con medios bloques, casi nulo plegado, 2–4 fps solo con agentes trabajando; assets CC0 MurphysDad Robot Lab (+ Sci-Fi Facility). Maqueta HTML para validar el aspecto antes de construir | pendiente — `plans/agent-lab.md` |
+| 7.1 | **Laboratorio visual** (petición del usuario, 04-10-2026): modo visual del panel "Jobs" de 0.10 en la barra lateral; cada agente un personaje en su puesto y el orquestador el jefe; clic → bocadillo con qué hace (herramienta, tarea, modelo, tiempo, tokens); solo eventos de OpenCode, dibujado con medios bloques, casi nulo plegado, 2–4 fps solo con agentes trabajando; assets CC0 MurphysDad Robot Lab (+ Sci-Fi Facility). Maqueta HTML hecha (https://claude.ai/artifact/WcChKoF5BysxboKW8KzcLw); **el usuario quiere verla también en Pencil** (cuando el MCP de Pencil conecte: hoy falla porque la ruta de la AppImage cambia en cada arranque) antes de construir | pendiente — `plans/agent-lab.md` |
 
 ## Aparcado (decidido no hacer por ahora)
 - ~~Reglas de lenguaje/framework cargadas bajo demanda~~ — absorbido en 4.5 (antes 2.9), 29-09-2026.
