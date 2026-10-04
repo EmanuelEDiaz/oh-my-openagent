@@ -25,4 +25,11 @@ describe("context recorder (fork 0.13)", () => {
     expect(analyseRequest(JSON.stringify({ instructions: "abcd".repeat(50), input: "hi" })).systemTokens).toBe(50)
     expect(systemSections("<a>\nx\n<b>\nyyyy")[0]?.title).toBe("<b>")
   })
+
+  test("subagent requests are reported apart from the orchestrator's", async () => {
+    const { summarizeContext } = await import("./context-proxy")
+    const base = { totalTokens: 10, systemTokens: 1, toolsTokens: 1, toolCount: 1, historyTokens: 1, sections: [], heaviestTools: [] }
+    const rows = summarizeContext([{ ...base, at: 5, subagent: true }, { ...base, at: 6, totalTokens: 30 }], [{ taskId: "t", repeat: 0, start: 0, end: 10 }])
+    expect(rows.map((row) => row.taskId).sort()).toEqual(["t (orchestrator)", "t (subagent)"])
+  })
 })

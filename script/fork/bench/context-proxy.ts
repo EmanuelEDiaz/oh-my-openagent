@@ -8,6 +8,8 @@ import { appendFileSync } from "node:fs"
 export type ContextRecord = {
   readonly at: number
   readonly session?: string
+  /** True for a subagent's request (OpenCode sends its parent session id). */
+  readonly subagent?: boolean
   readonly model?: string
   readonly totalTokens: number
   readonly systemTokens: number
@@ -51,7 +53,7 @@ export function systemSections(system: string, keep = 12): Array<{ title: string
     .slice(0, keep)
 }
 
-export function analyseRequest(raw: string, session?: string): ContextRecord {
+export function analyseRequest(raw: string, session?: string, subagent?: boolean): ContextRecord {
   const body = JSON.parse(raw) as ChatBody
   const messages = [...(body.messages ?? []), ...(Array.isArray(body.input) ? body.input.map((item) => ({ role: item.role ?? "user", content: item.content })) : [])]
   const system = [
@@ -64,6 +66,7 @@ export function analyseRequest(raw: string, session?: string): ContextRecord {
   return {
     at: Date.now(),
     ...(session ? { session } : {}),
+    ...(subagent ? { subagent: true } : {}),
     ...(body.model ? { model: body.model } : {}),
     totalTokens: approxTokens(raw),
     systemTokens: approxTokens(system),
@@ -90,7 +93,7 @@ export function startContextProxy(upstream: string, logFile: string): { readonly
       const body = request.method === "GET" || request.method === "HEAD" ? undefined : await request.text()
       if (body && /\/(?:chat\/completions|messages|responses)$/.test(url.pathname)) {
         try {
-          appendFileSync(logFile, `${JSON.stringify(analyseRequest(body, request.headers.get("x-opencode-session") ?? undefined))}\n`)
+          appendFileSync(logFile, `${JSON.stringify(analyseRequest(body, request.headers.get("x-opencode-session") ?? undefined, request.headers.has("x-parent-session-id") || request.headers.has("x-opencode-parent-session-id")))}\n`)
         } catch {
           // recording must never break the run
         }
@@ -123,7 +126,12 @@ export function summarizeContext(records: readonly ContextRecord[], windows: rea
   const byTask = new Map<string, ContextRecord[]>()
   for (const window of windows) {
     const inside = records.filter((record) => record.at >= window.start && record.at <= window.end)
-    byTask.set(window.taskId, [...(byTask.get(window.taskId) ?? []), ...inside])
+    // A task delegated to a subagent: its requests and the orchestrator's are reported apart.
+    const hasSub = inside.some((record) => record.subagent)
+    for (const record of inside) {
+      const key = hasSub ? `${window.taskId} (${record.subagent ? "subagent" : "orchestrator"})` : window.taskId
+      byTask.set(key, [...(byTask.get(key) ?? []), record])
+    }
   }
   const mean = (values: number[]) => (values.length === 0 ? 0 : Math.round(values.reduce((a, b) => a + b, 0) / values.length))
   return [...byTask.entries()].map(([taskId, list]) => {
