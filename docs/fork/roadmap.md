@@ -64,6 +64,35 @@ Una sola estructura que se quede con **lo mejor** de oh-my-openagent y de tu bib
 rama propia → test RED → implementación → tests → QA real en OpenCode aislado → evidencia local →
 merge --no-ff a mis-mejoras → actualizar este roadmap`.
 
+## Reglas transversales del usuario (se aplican a todos los pasos)
+1. **Sin pendientes:** ningún paso se cierra con cosas a medias; se terminan o se pregunta.
+2. **Cada elección del usuario va al plan y al roadmap**; lo descartado queda con su motivo.
+3. **Criticar las ideas antes de integrarlas:** qué está bien, dónde falla y por qué, versión mejorada; o "medir
+   primero".
+4. **Medir la eficacia de todo** (no basta con que funcione): cada paso tiene su medición en el banco y se reporta.
+5. **Integración del sistema entero:** la QA de cada paso prueba cómo convive con lo ya hecho; 5.2 hace la matriz
+   completa.
+6. **Arquitectura:** solo los agentes de tab orquestan; los de "@" son atómicos y nunca delegan; cada "@" tiene su
+   paso; **para cualquier tarea el orquestador trabaja con un especialista**.
+7. **Agentes que faltan:** si una tarea no tiene especialista adecuado, se le dice al usuario, se investiga si conviene
+   y nunca se crea sin su aprobación.
+8. **Adversarios:** el agente los recomienda explicando por qué; **decide siempre el usuario**.
+9. **Windows y Linux:** el plugin funciona en los dos; las herramientas de desarrollo pueden pedir Linux/WSL.
+10. **Herramientas obligatorias** (como `process_start`): el agente sabe que no son opcionales.
+11. **Pruebas reales:** QA en OpenCode aislado (nunca la base de datos real del usuario), se limpian sesiones y procesos
+    de prueba; la evaluación final, con prompts sobre una copia de `codegenerator`, nunca con código escrito a mano.
+12. **Nombres:** el plugin y los agentes se renombrarán (paso 5.0) para que se reconozca qué hace cada uno.
+
+## Orden de trabajo (actualizado 03-10-2026)
+1. **4.18 `@web-researcher`** — en curso: implementado y con QA; falta su medición en el banco.
+2. **Medición de 0.9a** (regla 4): guardián de tests y errores de tipos, con y sin, en modelos gratuitos.
+3. **0.9b** — freno de bucles, búsqueda (usa `@web-researcher`) y tope de 6 por tarea.
+4. **0.10** (ver tareas en segundo plano, hablar con subagentes, mensajes a mitad de tarea) y **0.11** (Windows nativo).
+5. **4.1** herramientas de `explore`, y el resto de la Fase 4 uno a uno (4.2a … 4.17), con los adversarios 4.21–4.23.
+6. **4.20** encargo de delegación y skills (medir primero) → **4.19** uso obligatorio por agente de tab.
+7. **5.0** renombrado → **5.1** evaluación conjunta → **5.2** integración del sistema entero.
+8. **Fase 6:** documentación y skill del plugin, ya con los nombres nuevos.
+
 ---
 
 ## Notas de QA (para no repetir errores)
@@ -174,6 +203,7 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 ## Fase 5 — Todos juntos
 | Paso | Qué | Estado |
 |---|---|---|
+| 5.0 | **Renombrado** (decidido por el usuario, 03-10-2026: el plugin es suyo) | nombre nuevo del plugin y de los agentes de tab y de "@", elegidos con el usuario para que se reconozca qué tarea hace cada uno; se propone una lista y él decide; los nombres antiguos siguen funcionando en la configuración (migración automática); se actualizan prompts, tests, documentación y el banco. Se hace antes de la evaluación final y de la documentación para que ambas usen los nombres definitivos | pendiente |
 | 5.1 | **Evaluación conjunta**: 15–30 tareas completas (repos pequeños con tests que fallan, investigación, docs, commits): éxito comprobado por tests ocultos, pass^3, **enrutamiento correcto** (¿delegó en el especialista esperado?), tokens totales, datos perdidos tras compactar; ablación que cambia cada especialista mejorado por su versión base para ver qué aportó cada cambio. | pendiente |
 | 5.2 | **Integración del sistema entero** (pedido del usuario, 03-10-2026) | matriz de integración: cada parte probada junto con las demás (guardián de tests + freno de bucles + reanudación + adversarios + `@web-researcher` + cuelgues y procesos), con modelos gratuitos y escenarios de fallo combinados; además, la QA de cada paso incluye cómo convive con lo ya hecho | pendiente |
 
@@ -187,6 +217,7 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 - ~~Reglas de lenguaje/framework cargadas bajo demanda~~ — absorbido en 4.5 (antes 2.9), 29-09-2026.
 
 ## Registro de decisiones del roadmap
+- 03-10-2026 — El usuario renombrará el plugin y los agentes (paso 5.0, antes de la evaluación final y la documentación). Se añaden al roadmap las "Reglas transversales del usuario" y el "Orden de trabajo" para tener todo lo pedido en un solo sitio.
 - 03-10-2026 — Reglas del usuario: (1) si falta un agente especializado para una tarea, se le dice y se investiga si conviene añadirlo (nunca se crea sin su aprobación); (2) para cualquier tarea el orquestador trabaja siempre con un especialista (4.19; lo mínimo, con un implementador especializado; se mide el coste); (3) integración del sistema entero: la QA de cada paso prueba la convivencia con lo anterior y 5.2 hace una matriz de integración.
 - 03-10-2026 — Regla general del usuario: **medir la eficacia de todo lo que se hace en el fork** (cada paso define cómo se mide en el banco y se reporta el resultado).
 - 03-10-2026 — Sistema de adversarios (petición del usuario): `@breaker` (4.21), `@mutant` (4.22), `@plan-attacker` (4.23) y desafío de afirmaciones en `@verifier` (4.4); evidencia ejecutable, decide el código, topes de rondas. **El agente los recomienda explicando por qué y el usuario decide siempre** (obligado por código); se mide su eficacia y la precisión de las recomendaciones. Descartados el debate libre, la revisión de opinión sin ejecución, el modelo juez y los juegos de personajes. Van antes de 4.20 y 4.19.
