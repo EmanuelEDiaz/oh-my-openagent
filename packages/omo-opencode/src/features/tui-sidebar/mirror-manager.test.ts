@@ -132,16 +132,41 @@ describe("TuiStateMirror", () => {
     mirror.stop()
   })
 
-  it("#given a started mirror #when started #then heartbeat handle is unref'd", () => {
+  it("#given work in progress #when the mirror is written #then an unref'd heartbeat keeps it fresh", async () => {
     jest.useFakeTimers()
-    const mirror = createMirror()
+    const mirror = createMirror({ projectDir: makeTempDir("busy-heartbeat"), client: createClient({ "ses-main": { type: "busy" } }) })
     const unref = jest.fn()
     const originalSetInterval = globalThis.setInterval
     globalThis.setInterval = jest.fn(() => ({ unref })) as unknown as typeof setInterval
 
     try {
       mirror.start()
+      const written = mirror.flush()
+      jest.advanceTimersByTime(WRITE_DEBOUNCE_MS)
+      await written
+      expect(globalThis.setInterval).toHaveBeenCalledTimes(1)
       expect(unref).toHaveBeenCalledTimes(1)
+    } finally {
+      mirror.stop()
+      globalThis.setInterval = originalSetInterval
+    }
+  })
+
+  it("#given nothing in progress #when the mirror is written #then no heartbeat runs and the idle snapshot stays readable", async () => {
+    jest.useFakeTimers()
+    const projectDir = makeTempDir("idle-no-heartbeat")
+    const mirror = createMirror({ projectDir, client: createClient({}) })
+    const originalSetInterval = globalThis.setInterval
+    globalThis.setInterval = jest.fn(() => ({ unref: jest.fn() })) as unknown as typeof setInterval
+
+    try {
+      mirror.start()
+      const written = mirror.flush()
+      jest.advanceTimersByTime(WRITE_DEBOUNCE_MS)
+      await written
+      expect(globalThis.setInterval).not.toHaveBeenCalled()
+      jest.setSystemTime(Date.now() + 60_000)
+      expect(readMirror(projectDir)).not.toBeNull()
     } finally {
       mirror.stop()
       globalThis.setInterval = originalSetInterval

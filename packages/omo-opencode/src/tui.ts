@@ -4,7 +4,10 @@ import { registerBtwSideTui } from "./features/btw-side"
 import { registerNativeEditionNudgeTui } from "./features/native-edition-nudge"
 import { registerOmoModelsTui } from "./features/omo-models"
 import { computeView, viewKey } from "./features/tui-sidebar/compute-view"
-import { POLL_INTERVAL_MS } from "./features/tui-sidebar/constants"
+import { mkdirSync, watch, type FSWatcher } from "node:fs"
+import { basename, dirname } from "node:path"
+
+import { mirrorFilePath } from "./features/tui-sidebar/mirror-path"
 import { deriveAgents, deriveConfig, deriveJobBoard, deriveLoop, deriveRoster } from "./features/tui-sidebar/derivers"
 import type { ViewNode } from "./features/tui-sidebar/element-helpers"
 import { readMirror } from "./features/tui-sidebar/mirror-io"
@@ -94,17 +97,35 @@ async function loadRosterRows(directory: string): Promise<readonly RosterRow[]> 
   return resolver(directory)
 }
 
-async function readView(directory: string): Promise<SidebarView> {
-  const validation = await loadPluginValidation(directory)
+type StaticParts = { readonly config: ReturnType<typeof deriveConfig>; readonly roster: ReturnType<typeof deriveRoster> }
+
+/** Config and roster only change when OpenCode restarts: computed once, not on every refresh. */
+async function readStaticParts(directory: string, validation?: PluginValidation): Promise<StaticParts> {
+  return {
+    config: deriveConfig(validation ?? (await loadPluginValidation(directory))),
+    roster: deriveRoster(await loadRosterRows(directory)),
+  }
+}
+
+function readView(directory: string, parts: StaticParts): SidebarView {
   const mirror = readMirror(directory)
-  const roster = await loadRosterRows(directory)
-  return computeView({
-    config: deriveConfig(validation),
-    roster: deriveRoster(roster),
-    agents: deriveAgents(mirror),
-    jobs: deriveJobBoard(mirror),
-    loop: deriveLoop(mirror),
-  })
+  return computeView({ ...parts, agents: deriveAgents(mirror), jobs: deriveJobBoard(mirror), loop: deriveLoop(mirror) })
+}
+
+/** Refreshes after the server rewrites its state file: a file-system watch, no polling. */
+export function watchMirror(directory: string, onChange: () => void): FSWatcher | undefined {
+  const file = mirrorFilePath(directory)
+  try {
+    // The directory may not exist before the server's first write.
+    mkdirSync(dirname(file), { recursive: true })
+    const watcher = watch(dirname(file), { persistent: false }, (_event, name) => {
+      if (!name || basename(String(name)).startsWith(basename(file).replace(/\.json$/, ""))) onChange()
+    })
+    watcher.on("error", () => watcher.close())
+    return watcher
+  } catch {
+    return undefined
+  }
 }
 
 export function handleTuiPollError(
@@ -149,14 +170,14 @@ const module: TuiPluginModule = {
     }
 
     const directory = api.state.path.directory
-    if ((await loadPluginValidation(directory)).config.tui?.sidebar?.enabled === false) {
+
+    const validation = await loadPluginValidation(directory)
+    if (validation.config.tui?.sidebar?.enabled === false) {
       return
     }
-
-    let currentView = await readView(directory)
+    const parts = await readStaticParts(directory, validation)
+    let currentView = readView(directory, parts)
     let currentKey = viewKey(currentView)
-    let disposed = false
-    let inFlight = false
     let timer: ReturnType<typeof setTimeout> | null = null
 
     registerSidebarContentSlot({
@@ -169,18 +190,9 @@ const module: TuiPluginModule = {
       renderSidebar: () => materialize(buildViewNodes(currentView, api.theme.current), solid),
     })
 
-    const schedule = (): void => {
-      timer = setTimeout(tick, POLL_INTERVAL_MS)
-    }
-
-    const tick = async (): Promise<void> => {
-      if (disposed || inFlight) {
-        if (!disposed) schedule()
-        return
-      }
-      inFlight = true
+    const refresh = (): void => {
       try {
-        const nextView = await readView(directory)
+        const nextView = readView(directory, parts)
         const nextKey = viewKey(nextView)
         if (nextKey !== currentKey) {
           currentView = nextView
@@ -189,16 +201,32 @@ const module: TuiPluginModule = {
         }
       } catch (error) {
         handleTuiPollError(error)
-      } finally {
-        inFlight = false
-        if (!disposed) schedule()
       }
     }
+    // Coalesce bursts of writes (the server debounces too) into one read.
+    const scheduleRefresh = (): void => {
+      if (timer) return
+      timer = setTimeout(() => {
+        timer = null
+        refresh()
+      }, 120)
+    }
 
-    schedule()
+    // No polling: refresh when the server's state file changes, or, if the file system cannot be watched, when
+    // OpenCode reports session activity.
+    const watcher = watchMirror(directory, scheduleRefresh)
+    const unsubscribe: Array<() => void> = []
+    if (!watcher) {
+      const events = api.event as unknown as { on?: (type: string, handler: () => void) => (() => void) | undefined }
+      for (const type of ["session.status", "session.idle", "session.created", "session.error", "message.part.updated"]) {
+        const off = events.on?.(type, scheduleRefresh)
+        if (off) unsubscribe.push(off)
+      }
+    }
     api.lifecycle.onDispose(() => {
-      disposed = true
       if (timer) clearTimeout(timer)
+      watcher?.close()
+      for (const off of unsubscribe) off()
     })
   },
 }

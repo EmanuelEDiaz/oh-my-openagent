@@ -1,6 +1,6 @@
 import { HEARTBEAT_MS, WRITE_DEBOUNCE_MS } from "./constants"
 import { log } from "../../shared/logger"
-import { writeMirror } from "./mirror-io"
+import { snapshotIsActive, writeMirror } from "./mirror-io"
 import { buildTuiRuntimeSnapshot } from "./snapshot-builder"
 import type {
   BuildTuiRuntimeSnapshotInput,
@@ -73,15 +73,22 @@ export class TuiStateMirror {
     void this.flush()
   }
 
+  /** Writes the current state once; the heartbeat then runs only while something is in progress. */
   start(): void {
     this.stopped = false
-    if (this.heartbeatID !== null) {
-      return
+    void this.flush()
+  }
+
+  private setHeartbeat(active: boolean): void {
+    if (active && this.heartbeatID === null && !this.stopped) {
+      this.heartbeatID = setInterval(() => {
+        void this.flush()
+      }, HEARTBEAT_MS)
+      this.heartbeatID.unref?.()
+    } else if (!active && this.heartbeatID !== null) {
+      clearInterval(this.heartbeatID)
+      this.heartbeatID = null
     }
-    this.heartbeatID = setInterval(() => {
-      void this.flush()
-    }, HEARTBEAT_MS)
-    this.heartbeatID.unref?.()
   }
 
   stop(): void {
@@ -126,6 +133,7 @@ export class TuiStateMirror {
         return
       }
       writeMirror(this.snapshotInput.projectDir, snapshot)
+      this.setHeartbeat(snapshotIsActive(snapshot))
     } catch (error) {
       if (error instanceof Error) {
         this.reportFlushError(error)
