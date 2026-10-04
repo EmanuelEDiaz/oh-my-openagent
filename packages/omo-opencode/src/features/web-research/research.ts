@@ -77,12 +77,13 @@ const TECH_LIKE = { test: (query: string) => CAMEL_OR_FILE.test(query) || TECH_W
 const WEB_PLATFORM = /\b(?:css|html|dom|javascript|fetch|web ?api|browser|canvas|svg|websocket|service worker|flexbox|grid|aria)\b/i
 const ERROR_LIKE = /\w*(?:Error|Exception)\b|\b(?:error|exception|traceback|failed|cannot|panic|segfault|stack trace)\b|\bTS\d{4}\b|\bE[A-Z]{3,}\b|is not (?:a function|defined|iterable)/
 
+/** A link is dead when the page is missing (404/410), the server errors or nothing answers; 401/403/429 are pages behind bot protection. */
 export async function defaultIsLive(url: string): Promise<boolean> {
   for (const method of ["HEAD", "GET"] as const) {
     try {
       const response = await fetch(url, { method, redirect: "follow", signal: AbortSignal.timeout(8000) })
-      if (response.status < 400) return true
-      if (method === "HEAD" && (response.status === 405 || response.status === 403)) continue
+      if (response.status < 400 || [401, 403, 429].includes(response.status)) return true
+      if (method === "HEAD" && response.status === 405) continue
       return false
     } catch {
       if (method === "GET") return false

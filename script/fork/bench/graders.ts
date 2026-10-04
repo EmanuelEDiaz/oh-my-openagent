@@ -200,7 +200,9 @@ export function urlsResolve(): Grader {
       const urls = urlsIn(transcript.answer)
       if (!fetchStatus) return result(name, true, `skipped: ${urls.length} URL(s) not checked offline`)
       const statuses = await Promise.all(urls.map(async (url) => ({ url, status: await fetchStatus(url).catch(() => 0) })))
-      const broken = statuses.filter((entry) => entry.status === 0 || entry.status >= 400)
+      // 401/403/429 mean the server exists but blocks automated requests (e.g. Stack Overflow's bot protection):
+      // only a missing page (404/410), a server error or no answer at all marks a link as broken.
+      const broken = statuses.filter((entry) => entry.status === 0 || (entry.status >= 400 && ![401, 403, 429].includes(entry.status)))
       return broken.length === 0
         ? result(name, true, `${urls.length} URL(s) checked`)
         : result(name, false, `broken: ${broken.map((entry) => `${entry.url} (${entry.status || "unreachable"})`).join("; ")}`)

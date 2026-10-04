@@ -175,6 +175,16 @@ describe("urlsResolve", () => {
     expect(bad.detail).toContain("https://a.dev/missing")
   })
 
+  test("bot protection (401/403/429) is not a broken link; 404 and unreachable are", async () => {
+    const fetchStatus = async (url: string) => (url.includes("so") ? 403 : url.includes("gone") ? 410 : 0)
+    const protectedPage = await urlsResolve().grade(context({ answer: "https://so.dev/q/1" }, { fetchStatus }))
+    const gone = await urlsResolve().grade(context({ answer: "https://a.dev/gone" }, { fetchStatus }))
+    const down = await urlsResolve().grade(context({ answer: "https://nowhere.dev/x" }, { fetchStatus }))
+    expect(protectedPage.pass).toBe(true)
+    expect(gone.pass).toBe(false)
+    expect(down.pass).toBe(false)
+  })
+
   test("without a fetcher URL checks are skipped, not passed silently", async () => {
     const result = await urlsResolve().grade(context({ answer: "https://a.dev/ok" }))
     expect(result.pass).toBe(true)
