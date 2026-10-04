@@ -1,0 +1,1 @@
+{ "name": "top-scores", "private": true, "type": "module", "scripts": { "test": "bun test" } }

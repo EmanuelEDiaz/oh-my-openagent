@@ -1,0 +1,1 @@
+{ "name": "csv-crlf", "private": true, "type": "module", "scripts": { "test": "bun test" } }

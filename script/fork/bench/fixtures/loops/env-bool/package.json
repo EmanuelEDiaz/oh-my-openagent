@@ -1,0 +1,1 @@
+{ "name": "env-bool", "private": true, "type": "module", "scripts": { "test": "bun test" } }

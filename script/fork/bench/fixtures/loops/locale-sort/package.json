@@ -1,0 +1,1 @@
+{ "name": "locale-sort", "private": true, "type": "module", "scripts": { "test": "bun test" } }
