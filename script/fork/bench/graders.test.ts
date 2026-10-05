@@ -13,6 +13,7 @@ import {
   editStats,
   EXPLORE_CONTRACT,
   hiddenTestsPass,
+  loopStats,
   noNewSkips,
   noNewSuppressions,
   noNewTypeEscapes,
@@ -399,5 +400,48 @@ describe("editStats", () => {
     expect(graded.pass).toBe(true)
     expect(graded.detail).toBe("4 edit(s), 2 file(s), 1 identical repeat(s), max 3 on src/a.ts")
     expect((await editStats().grade(context())).detail).toBe("0 edit(s), 0 file(s), 0 identical repeat(s), max 0 on -")
+  })
+})
+
+describe("loopStats", () => {
+  const edit = (newString: string) => ({ tool: "edit", status: "completed", input: { filePath: "src/money.ts", oldString: "x", newString } })
+  const run = (output: string) => ({ tool: "bash", status: "completed", input: { command: "bun test" }, output })
+  const failing = "tests/money.test.ts:\nerror: expect(received).toBe(expected)\n(fail) yen have no decimals [0.41ms]\n 2 pass\n 1 fail\n"
+  const failingAgain = failing.replace("0.41ms", "1.20ms")
+
+  test("counts fix attempts between sightings of the same error and near-identical repeats", async () => {
+    const tools = [run(failing), edit("decimals: 0"), run(failingAgain), edit("return Math.round(value)"), run(failing), edit("decimals: 0"), run(failing)]
+    const graded = await loopStats().grade(context({ tools }))
+    expect(graded.pass).toBe(true)
+    expect(graded.detail).toStartWith("max 3 failed fix(es) on one error, 1 near-identical repeat(s), breaker level 4 on ")
+    expect(graded.detail).toContain("yen have no decimals")
+  })
+
+  test("a passing run or a different error breaks the chain", async () => {
+    const other = failing.replace("yen have no decimals", "dollars have cents")
+    const tools = [run(failing), edit("a"), run(" 3 pass\n 0 fail\n"), edit("b"), run(failing), edit("c"), run(other)]
+    expect((await loopStats().grade(context({ tools }))).detail).toBe("max 0 failed fix(es) on one error, 0 near-identical repeat(s), breaker level 0")
+  })
+
+  test("reads written content and patches as the fix text", async () => {
+    const patch = { tool: "apply_patch", status: "completed", input: { patchText: "*** Update File: src/a.ts\n+const fixed = true\n-const fixed = false" } }
+    const write = { tool: "write", status: "completed", input: { filePath: "src/b.ts", content: "export const b = 1" } }
+    const tools = [run(failing), patch, run(failing), write, run(failing)]
+    expect((await loopStats().grade(context({ tools }))).detail).toStartWith("max 2 failed fix(es) on one error, 0 near-identical repeat(s), breaker level 2")
+  })
+})
+
+describe("loops-hard suite", () => {
+  test("every task has its fixture, a visible test and a hidden test", async () => {
+    const { existsSync, readdirSync } = await import("node:fs")
+    const { LOOP_HARD_TASKS } = await import("./tasks/loops-hard")
+    expect(LOOP_HARD_TASKS.length).toBeGreaterThanOrEqual(6)
+    for (const task of LOOP_HARD_TASKS) {
+      const name = task.id.replace("loops-hard/", "")
+      const dir = join(import.meta.dir, "fixtures", String(task.fixture))
+      expect(readdirSync(join(dir, "tests")).some((file) => file.endsWith(".test.ts"))).toBe(true)
+      expect(existsSync(join(import.meta.dir, "fixtures/loops-hard-hidden", `${name}.hidden.ts`))).toBe(true)
+      expect(task.expect.map((grader) => grader.name)).toContain("info:loops")
+    }
   })
 })

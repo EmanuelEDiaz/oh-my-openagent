@@ -1,0 +1,4 @@
+{
+  "name": "worker",
+  "timeout": "1500ms"
+}

@@ -6,6 +6,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statS
 import { tmpdir } from "node:os"
 import { dirname, isAbsolute, join, relative, resolve } from "node:path"
 
+import { fingerprintError, similarity } from "../../../packages/omo-opencode/src/features/loop-breaker/fingerprint"
 import type { Budget, GradeContext, Grader, GradeResult, Task } from "./types"
 
 /** Ordered section markers of an answer format. */
@@ -542,6 +543,74 @@ export function editStats(): Grader {
       }
       const [topFile, topCount] = [...perFile.entries()].sort((a, b) => b[1] - a[1])[0] ?? ["-", 0]
       return result(name, true, `${edits.length} edit(s), ${perFile.size} file(s), ${repeats} identical repeat(s), max ${topCount} on ${topFile}`)
+    },
+  }
+}
+
+const FAILED_RUN = /^\s*\(fail\)|^\s*[1-9]\d* fail\b|^error:|\berror TS\d{4}\b|^\s*(?:FAIL|FAILED)\b/m
+const PATH_KEYS = new Set(["filePath", "file_path", "path", "oldString", "old_string"])
+
+/** What an edit call adds: new strings, written content, or the `+` lines of a patch. */
+function addedText(input: Readonly<Record<string, unknown>>): string {
+  const direct = input["newString"] ?? input["new_string"] ?? input["content"]
+  if (typeof direct === "string") return direct
+  const patch = input["patchText"] ?? input["patch"]
+  if (typeof patch === "string") return patch.split("\n").filter((line) => line.startsWith("+") && !line.startsWith("+++")).map((line) => line.slice(1)).join("\n")
+  const strings: string[] = []
+  const walk = (value: unknown, key = ""): void => {
+    if (typeof value === "string" && !PATH_KEYS.has(key)) strings.push(value)
+    else if (Array.isArray(value)) value.forEach((item) => walk(item))
+    else if (typeof value === "object" && value !== null) for (const [k, v] of Object.entries(value)) walk(v, k)
+  }
+  walk(input)
+  return strings.join("\n")
+}
+
+/**
+ * Informational, never fails: did the task make the agent loop? Replays the main session's tool calls the way the
+ * loop breaker counts them (`S/features/loop-breaker/`): a failing bash run (failing test, `error:` line, TS error) is
+ * fingerprinted with the breaker's own `fingerprintError`; the edits made between two consecutive sightings of the
+ * same error are one fix attempt; an attempt ≥ 90 % similar (breaker's `similarity`) to an earlier one on that error is
+ * a repeated fix. Reports the worst error's attempts, the repeated fixes, and the level the breaker would reach
+ * (2/3/4 at 2/3/4 attempts, 4 on a repeated fix). Approximation: the bench sees outputs, not exit codes.
+ */
+export function loopStats(): Grader {
+  const name = "info:loops"
+  return {
+    name,
+    grade: ({ transcript }) => {
+      const attempts = new Map<string, { summary: string; texts: string[]; repeated: number }>()
+      let current: string | undefined
+      let pending: string[] = []
+      for (const call of transcript.tools) {
+        if (EDIT_TOOL.test(call.tool)) {
+          const file = String(call.input["filePath"] ?? call.input["file_path"] ?? call.input["path"] ?? "?")
+          pending.push(`${file}\n${addedText(call.input)}`)
+          continue
+        }
+        if (call.tool !== "bash" || call.output === undefined) continue
+        if (!FAILED_RUN.test(call.output)) {
+          current = undefined
+          continue
+        }
+        const fingerprint = fingerprintError(call.output)
+        if (!fingerprint) continue
+        if (current === fingerprint.key && pending.length > 0) {
+          const entry = attempts.get(fingerprint.key) ?? { summary: fingerprint.summary, texts: [], repeated: 0 }
+          const text = pending.join("\n")
+          if (entry.texts.some((previous) => similarity(previous, text) >= 0.9)) entry.repeated++
+          entry.texts.push(text)
+          attempts.set(fingerprint.key, entry)
+        }
+        current = fingerprint.key
+        pending = []
+      }
+      const worst = [...attempts.values()].sort((a, b) => b.texts.length - a.texts.length || b.repeated - a.repeated)[0]
+      const repeated = [...attempts.values()].reduce((sum, entry) => sum + entry.repeated, 0)
+      const count = worst?.texts.length ?? 0
+      const level = repeated > 0 || count >= 4 ? 4 : count >= 3 ? 3 : count >= 2 ? 2 : 0
+      const detail = `max ${count} failed fix(es) on one error, ${repeated} near-identical repeat(s), breaker level ${level}${worst ? ` on "${worst.summary.slice(0, 120)}"` : ""}`
+      return result(name, true, detail)
     },
   }
 }
