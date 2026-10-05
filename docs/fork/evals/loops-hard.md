@@ -8,17 +8,13 @@ Generado por `script/fork/bench/run.ts` (plan: `docs/fork/plans/test-bench.md`).
 | Fecha | Etiqueta | Conjunto | Modelos | pass@1 | pass^k | Tokens medios | Fallos infra |
 |---|---|---|---|---|---|---|---|
 | 2026-10-05 | lh-off | all | opencode/big-pickle | 86 % | — | 78348 | 2 |
+| 2026-10-05 | fix-round-half | all | opencode/big-pickle | 100 % | — | 74570 | 0 |
+| 2026-10-05 | fix-bigint-json | all | opencode/big-pickle | 100 % | — | 66284 | 0 |
 <!-- history:end -->
 
-## Última ejecución — 2026-10-05, lh-off
-- k = 3; turnos medios 12.6; tiempo medio 108 s.
+## Última ejecución — 2026-10-05, fix-bigint-json
+- k = 3; turnos medios 14.0; tiempo medio 118 s.
 
 | Tarea | Pasa | pass^k | Fallos infra | Correctores que fallan |
 |---|---|---|---|---|
-| loops-hard/stale-shadow | 1/1 | — | 0 | — |
-| loops-hard/codegen-preload | 1/1 | — | 0 | — |
-| loops-hard/wrapper-rethrow | 1/1 | — | 0 | — |
-| loops-hard/round-half | 0/1 | — | 0 | outcome:hiddenTests ×1 |
-| loops-hard/tz-month | 1/1 | — | 0 | — |
-| loops-hard/bigint-json | 1/1 | — | 2 | — |
-| loops-hard/shallow-defaults | 1/1 | — | 0 | — |
+| loops-hard/bigint-json | 1/1 | — | 0 | — |

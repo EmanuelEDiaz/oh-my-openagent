@@ -1,6 +1,6 @@
 # Arreglos de la validación de `loops-hard` (05-10-2026)
 
-Estado: **implementado (05-10-2026), QA aislada en curso**, rama `fix/bench-findings`. `S/` = `packages/omo-opencode/src/`.
+Estado: **implementado y con QA aislada 5/5 (05-10-2026)**; una propuesta nueva pendiente (comandos encadenados de solo lectura), rama `fix/bench-findings`. `S/` = `packages/omo-opencode/src/`.
 
 ## Hallazgos y causa real (investigación del código y de los registros del entorno aislado)
 1. **"El agente se para" (`round-half`)** — no fue una parada prematura. El agente lanzó los tests con `process_start`,
@@ -78,7 +78,22 @@ pedir permiso y sigue pidiéndolo para `rm`; repetir la validación de `loops-ha
   `runner.test.ts`; `bun test script/fork/bench` 84/84.
 - **Chequeo de tipos** del paquete y de `script/` limpios.
 
-## QA aislada (en curso)
-Proveedor que retiene las cabeceras (escenario `header-hold`, límite acortado a 15 s en el entorno aislado) y repetición
-con el dist arreglado de las 4 tareas afectadas (`loops-hard/round-half`, `loops-hard/bigint-json`, `loops/csv-crlf`,
-`loops/env-bool`). Resultados se añaden aquí al terminar.
+## QA aislada (05-10-2026, dist de `fix/bench-findings`, big-pickle) — 5/5
+| Prueba | Resultado |
+|---|---|
+| `header-hold`: el proveedor retiene las cabeceras 40 s (límite acortado a 15 s) | **pasa** en 109 s: `HeaderTimeoutError` → reintento, mismo modelo, tarea resuelta, muy antes del vigilante de 4 min |
+| `loops-hard/round-half` (antes: aviso de proceso perdido) | **pasa** (16 turnos); 0 esperas de permiso, 0 recuperaciones |
+| `loops-hard/bigint-json` (antes: permiso de `test-writer` sin contestar) | **pasa** (14 turnos); 0 esperas, 0 recuperaciones |
+| `loops/csv-crlf` (antes: cuelgue de 240 s) | **pasa**; 0 esperas, 0 recuperaciones |
+| `loops/env-bool` (antes: cuelgue de 240 s) | **pasa**; 1 espera de permiso (ver abajo), 0 recuperaciones |
+
+- **Límite honesto de esta QA:** en `round-half` el agente no usó `process_start` y en `bigint-json` no delegó en
+  `test-writer`, así que esas dos ejecuciones no ejercitan los arreglos A y C; los cubren sus pruebas unitarias (que
+  fallaban antes) y tendrán un escenario determinista con el modelo guionizado de 0.16.
+- **Hallazgo nuevo (`env-bool`):** `test-writer` pidió permiso para un comando encadenado de solo lectura
+  (`bun test … | tail; echo …; git status --porcelain; git diff --stat`). Por diseño un comando con `|`/`;` pregunta
+  (OpenCode compara la cadena entera), pero los modelos encadenan así a menudo y en uso real saltaría un aviso de
+  permiso. Propuesta pendiente de aprobación: en el hook de permisos del plugin, aprobar un comando encadenado solo si
+  **cada trozo** está en la lista de solo lectura o de ejecutar tests y no hay redirección a archivos ni sustitución.
+- **Evidencia:** `.omo/evidence/0.15/qa-1791235625263.jsonl` (header-hold) y `.omo/evals/*-fix-{round-half,bigint-json,
+  csv-crlf,env-bool}-*.jsonl`; registro de la cadena `.omo/evals/fix-qa.log`.
