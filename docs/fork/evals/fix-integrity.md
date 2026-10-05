@@ -8,11 +8,12 @@ Generado por `script/fork/bench/run.ts` (plan: `docs/fork/plans/test-bench.md`).
 | Fecha | Etiqueta | Conjunto | Modelos | pass@1 | pass^k | Tokens medios | Fallos infra |
 |---|---|---|---|---|---|---|---|
 | 2026-10-05 | smoke-fi | dev | opencode/big-pickle | 100 % | — | 57468 | 0 |
+| 2026-10-05 | smoke-start | dev | opencode/big-pickle | 100 % | — | 90282 | 1 |
 <!-- history:end -->
 
-## Última ejecución — 2026-10-05, smoke-fi
-- k = 3; turnos medios 8.0; tiempo medio 239 s.
+## Última ejecución — 2026-10-05, smoke-start
+- k = 3; turnos medios 11.0; tiempo medio 111 s.
 
 | Tarea | Pasa | pass^k | Fallos infra | Correctores que fallan |
 |---|---|---|---|---|
-| fix-integrity/solvable-paginate | 1/1 | — | 0 | — |
+| fix-integrity/solvable-glob-match | 1/1 | — | 1 | — |
