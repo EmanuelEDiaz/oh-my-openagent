@@ -26,6 +26,42 @@ const DESTRUCTIVE = {
   "git add --all*": "deny",
 } as const
 
+/**
+ * Read-only inspection for specialists whose bash otherwise asks, so a subagent never blocks on a permission prompt to
+ * look around (fork bench finding, 05-10-2026). OpenCode 1.18.26 matches the WHOLE command string and applies the LAST
+ * matching rule, so the trailing "ask" rules send back to a prompt any `find` action and any chained, piped,
+ * substituted or redirected command ("ls && rm x" must not ride on "ls*"). Spread it right after `"*": "ask"`: later
+ * test-runner allows and destructive denies still win for their own commands.
+ */
+const READ_ONLY_SHELL = {
+  "ls*": "allow",
+  "pwd": "allow",
+  "cat *": "allow",
+  "head *": "allow",
+  "tail *": "allow",
+  "wc *": "allow",
+  "grep *": "allow",
+  "rg *": "allow",
+  "find *": "allow",
+  "git status*": "allow",
+  "git log*": "allow",
+  "git diff*": "allow",
+  "git show*": "allow",
+  "find * -exec*": "ask",
+  "find * -execdir*": "ask",
+  "find * -ok*": "ask",
+  "find * -delete*": "ask",
+  "find * -fprint*": "ask",
+  "*;*": "ask",
+  "*&*": "ask",
+  "*|*": "ask",
+  "*>*": "ask",
+  "*<*": "ask",
+  "*`*": "ask",
+  "*$(*": "ask",
+  "*\n*": "ask",
+} as const
+
 /** Specialists may use a free tool when it is installed, but never install anything themselves. */
 const NO_INSTALL = {
   "npm install*": "deny",
@@ -206,7 +242,7 @@ scripts, repository that does not point back to the package.
     description: "Writes the failing test FIRST for a bug or a new behavior, runs only that test and shows it red. Touches test files only. (test-writer - OhMyOpenCode)",
     tier: "medium",
     writesFiles: true,
-    bash: { "*": "ask", ...TEST_RUNNERS, ...DESTRUCTIVE, ...NO_INSTALL },
+    bash: { "*": "ask", ...READ_ONLY_SHELL, ...TEST_RUNNERS, ...DESTRUCTIVE, ...NO_INSTALL },
     metadata: {
       category: "specialist",
       cost: "CHEAP",
@@ -234,7 +270,7 @@ scripts, repository that does not point back to the package.
     description: "Reproduces a failure and finds its root cause WITHOUT fixing it: reproduction command, cause at path:line, and the evidence. (debugger - OhMyOpenCode)",
     tier: "strong",
     writesFiles: false,
-    bash: { "*": "ask", ...TEST_RUNNERS, "git diff*": "allow", "git log*": "allow", "git show*": "allow", "git status*": "allow", "git bisect*": "allow", ...DESTRUCTIVE, ...NO_INSTALL },
+    bash: { "*": "ask", ...READ_ONLY_SHELL, ...TEST_RUNNERS, "git bisect*": "allow", ...DESTRUCTIVE, ...NO_INSTALL },
     skills: ["debugging"],
     metadata: {
       category: "specialist",

@@ -15,6 +15,19 @@ function permissionOf(name: string): Record<string, unknown> {
   return (createSpecialistAgent(spec)("test/model").permission ?? {}) as Record<string, unknown>
 }
 
+/** OpenCode 1.18.26 `Wildcard.match` (core/util/wildcard.ts): `*` is any text, a trailing " *" is optional. */
+function wildcardMatch(input: string, pattern: string): boolean {
+  let escaped = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*").replace(/\?/g, ".")
+  if (escaped.endsWith(" .*")) escaped = `${escaped.slice(0, -3)}( .*)?`
+  return new RegExp(`^${escaped}$`, "s").test(input)
+}
+
+/** OpenCode 1.18.26 `Permission.evaluate`: rules in config order, the LAST matching one wins, default "ask". */
+function bashAction(name: string, command: string): string {
+  const rules = Object.entries(permissionOf(name)["bash"] as Record<string, string>)
+  return rules.findLast(([pattern]) => wildcardMatch(command, pattern))?.[1] ?? "ask"
+}
+
 describe("specialists catalog", () => {
   test("defines the approved atomic specialists", () => {
     // then
@@ -119,5 +132,23 @@ describe("specialists catalog", () => {
     expect(permission["*"]).toBe("deny")
     for (const name of ["web_search", "web_read", "registry_lookup", "web_answer"]) expect(permission[name]).toBe("allow")
     for (const name of ["read", "bash", "edit", "task"]) expect(permission[name]).not.toBe("allow")
+  })
+
+  test("test-writer and debugger run read-only commands and tests without asking; everything else still asks", () => {
+    for (const name of ["test-writer", "debugger"]) {
+      const action = (command: string) => `${name}: ${command} => ${bashAction(name, command)}`
+      for (const command of ["ls", "ls -la src", "pwd", "cat src/a.ts", "head -n 20 a.ts", "tail a.log", "wc -l a.ts",
+        "grep -rn foo src", "rg foo", "find src -name '*.ts'", "git status", "git log --oneline -5", "git diff HEAD",
+        "git show HEAD:a.ts", "bun test src/a.test.ts", "bun test src/a.test.ts 2>&1 | tail -20"]) {
+        expect(action(command)).toBe(`${name}: ${command} => allow`)
+      }
+      for (const command of ["find . -name x -exec rm {} \\;", "find . -name x -delete", "ls && rm a.ts", "cat a; rm a",
+        "cat a | sh", "cat a > b.ts", "ls $(rm a)", "ls `rm a`", "ls\nrm a", "rm a.ts", "sed -i s/a/b/ a.ts", "curl x"]) {
+        expect(action(command)).toBe(`${name}: ${command} => ask`)
+      }
+      for (const command of ["rm -rf src", "git push origin main", "npm install left-pad", "git reset --hard HEAD"]) {
+        expect(action(command)).toBe(`${name}: ${command} => deny`)
+      }
+    }
   })
 })
