@@ -2,6 +2,7 @@ import { mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 
 import { NUDGE_STATE_VERSION, type NudgeState, type NudgeStateRead } from "./types"
+import { writeFileAtomically } from "../../shared/write-file-atomically"
 
 export const NUDGE_STATE_FILE = "native-nudge.json"
 
@@ -57,7 +58,7 @@ export function createNudgeStateStore(stateDir: string): NudgeStateStore {
     write: (state) => {
       try {
         mkdirSync(stateDir, { recursive: true })
-        writeFileSync(path, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 })
+        writeFileAtomically(path, `${JSON.stringify(state, null, 2)}\n`, { mode: 0o600 })
         return true
       } catch {
         return false

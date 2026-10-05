@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from "bun:test"
-import { readFileSync, writeFileSync, existsSync, rmSync, mkdirSync, statSync } from "fs"
+import { readFileSync, writeFileSync, existsSync, rmSync, mkdirSync, statSync, readdirSync, renameSync, utimesSync } from "fs"
 import { join } from "path"
 import { tmpdir } from "os"
-import { writeFileAtomically } from "./write-file-atomically"
+import { cleanStaleAtomicTempFiles, writeFileAtomically } from "./write-file-atomically"
 
 const testDir = join(tmpdir(), "write-file-atomically-test-" + Date.now())
 
@@ -108,5 +108,97 @@ describe("writeFileAtomically", () => {
         },
       }),
     ).toThrow("EIO")
+  })
+
+  it("#given two writers #when both write the same file #then temp names differ and no temp is left", () => {
+    // given
+    const filePath = join(testDir, "shared.json")
+    const tempPaths: string[] = []
+
+    // when
+    writeFileAtomically(filePath, "first", {
+      beforeRenameSync: (firstTemp) => {
+        tempPaths.push(firstTemp)
+        writeFileAtomically(filePath, "second", { beforeRenameSync: (secondTemp) => tempPaths.push(secondTemp) })
+      },
+    })
+
+    // then
+    expect(tempPaths).toHaveLength(2)
+    expect(tempPaths[0]).not.toBe(tempPaths[1])
+    expect(tempPaths[0]).toMatch(/\.tmp-\d+-[0-9a-f]+$/)
+    expect(readFileSync(filePath, "utf-8")).toBe("first")
+    expect(readdirSync(testDir)).toEqual(["shared.json"])
+  })
+
+  it("#given rename fails #when writeFileAtomically called #then the temp file is removed and the error propagates", () => {
+    // given
+    const filePath = join(testDir, "rename-fails.json")
+
+    // when/then
+    expect(() =>
+      writeFileAtomically(filePath, "x", {
+        renameSync: () => {
+          throw Object.assign(new Error("EXDEV: cross-device"), { code: "EXDEV" })
+        },
+      }),
+    ).toThrow("EXDEV")
+    expect(readdirSync(testDir)).toEqual([])
+  })
+
+  it("#given Windows rename is busy twice #when writeFileAtomically called #then it retries and succeeds", () => {
+    // given
+    const filePath = join(testDir, "busy.json")
+    writeFileSync(filePath, "old")
+    let calls = 0
+
+    // when
+    writeFileAtomically(filePath, "new", {
+      platform: "win32",
+      renameSync: (from, to) => {
+        calls++
+        if (calls <= 2) throw Object.assign(new Error("EBUSY: resource busy"), { code: "EBUSY" })
+        renameSync(from, to)
+      },
+    })
+
+    // then
+    expect(calls).toBe(3)
+    expect(readFileSync(filePath, "utf-8")).toBe("new")
+  })
+})
+
+describe("cleanStaleAtomicTempFiles", () => {
+  it("#given old and fresh temp files #when cleaned #then only the old ones go", () => {
+    // given
+    const old = join(testDir, "state.json.tmp-123-abcdef")
+    const fresh = join(testDir, "state.json.tmp-456-012345")
+    const keep = join(testDir, "state.json")
+    for (const path of [old, fresh, keep]) writeFileSync(path, "x")
+    const past = new Date(Date.now() - 20 * 60_000)
+    utimesSync(old, past, past)
+    utimesSync(keep, past, past)
+
+    // when
+    const removed = cleanStaleAtomicTempFiles(testDir)
+
+    // then
+    expect(removed).toBe(1)
+    expect(readdirSync(testDir).sort()).toEqual(["state.json", "state.json.tmp-456-012345"])
+  })
+
+  it("#given recursive option #when cleaned #then nested temp files go too; missing dir is harmless", () => {
+    // given
+    mkdirSync(join(testDir, "nested"))
+    const nested = join(testDir, "nested", "a.json.tmp-1-ff")
+    writeFileSync(nested, "x")
+
+    // when
+    const removed = cleanStaleAtomicTempFiles(testDir, { recursive: true, maxAgeMs: 0, now: Date.now() + 1000 })
+
+    // then
+    expect(removed).toBe(1)
+    expect(existsSync(nested)).toBe(false)
+    expect(cleanStaleAtomicTempFiles(join(testDir, "missing"))).toBe(0)
   })
 })

@@ -3,11 +3,12 @@
  * query is never paid twice, and a spent source is skipped until its quota resets.
  */
 import { createHash } from "node:crypto"
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync } from "node:fs"
 import { homedir } from "node:os"
 import { join } from "node:path"
 
 import type { SearchHit } from "./sources"
+import { writeFileAtomically } from "../../shared/write-file-atomically"
 
 const TTL_MS = 24 * 60 * 60_000
 
@@ -51,7 +52,7 @@ export function createSearchCache(dir: string = defaultCacheDir(), now: () => nu
       memory.set(key, entry)
       try {
         mkdirSync(dir, { recursive: true })
-        writeFileSync(file(key), JSON.stringify(entry))
+        writeFileAtomically(file(key), JSON.stringify(entry))
       } catch {
         // the cache is an optimisation; a read-only disk only costs quota
       }
@@ -63,7 +64,7 @@ export function createSearchCache(dir: string = defaultCacheDir(), now: () => nu
       const quota = { ...readQuota(), [source]: midnight.getTime() }
       try {
         mkdirSync(dir, { recursive: true })
-        writeFileSync(quotaFile, JSON.stringify(quota))
+        writeFileAtomically(quotaFile, JSON.stringify(quota))
       } catch {
         // remembered for this process only
       }

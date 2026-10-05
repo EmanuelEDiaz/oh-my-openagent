@@ -1,8 +1,9 @@
-import { existsSync, readFileSync, writeFileSync, unlinkSync, mkdirSync } from "node:fs"
+import { existsSync, readFileSync, unlinkSync, mkdirSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { parseFrontmatter } from "../../shared/frontmatter"
 import type { IterationCommitExpectation, RalphLoopState } from "./types"
 import { DEFAULT_STATE_FILE, DEFAULT_COMPLETION_PROMISE, DEFAULT_MAX_ITERATIONS } from "./constants"
+import { writeFileAtomically } from "../../shared/write-file-atomically"
 
 export function getStateFilePath(directory: string, customPath?: string): string {
   return customPath
@@ -149,7 +150,7 @@ ${sessionIdLine}${ultraworkLine}${verificationPendingLine}${strategyLine}${messa
 ${state.prompt}
 `
 
-    writeFileSync(filePath, content, "utf-8")
+    writeFileAtomically(filePath, content)
     return true
   } catch (error) {
     if (!(error instanceof Error)) {

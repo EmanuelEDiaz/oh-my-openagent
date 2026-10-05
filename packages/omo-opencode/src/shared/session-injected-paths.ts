@@ -3,9 +3,9 @@ import {
   mkdirSync,
   readFileSync,
   unlinkSync,
-  writeFileSync,
 } from "node:fs";
 import { join } from "node:path";
+import { writeFileAtomically } from "./write-file-atomically";
 
 export interface InjectedPathsData {
   sessionID: string;
@@ -45,7 +45,7 @@ export function createInjectedPathsStorage(storageDir: string) {
       updatedAt: Date.now(),
     };
 
-    writeFileSync(getStoragePath(sessionID), JSON.stringify(data, null, 2));
+    writeFileAtomically(getStoragePath(sessionID), JSON.stringify(data, null, 2));
   };
 
   const clearInjectedPaths = (sessionID: string): void => {

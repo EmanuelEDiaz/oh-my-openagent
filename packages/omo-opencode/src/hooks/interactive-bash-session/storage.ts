@@ -2,7 +2,6 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
-  writeFileSync,
   unlinkSync,
 } from "node:fs";
 import { join } from "node:path";
@@ -11,6 +10,7 @@ import type {
   InteractiveBashSessionState,
   SerializedInteractiveBashSessionState,
 } from "./types";
+import { writeFileAtomically } from "../../shared/write-file-atomically";
 
 function getStoragePath(sessionID: string): string {
   return join(INTERACTIVE_BASH_SESSION_STORAGE, `${sessionID}.json`);
@@ -51,7 +51,7 @@ export function saveInteractiveBashSessionState(
     tmuxSessions: Array.from(state.tmuxSessions),
     updatedAt: state.updatedAt,
   };
-  writeFileSync(filePath, JSON.stringify(serialized, null, 2));
+  writeFileAtomically(filePath, JSON.stringify(serialized, null, 2));
 }
 
 export function clearInteractiveBashSessionState(sessionID: string): void {

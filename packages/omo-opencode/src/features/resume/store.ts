@@ -3,7 +3,7 @@
  * a resume card is written to `.omo/runs/<id>/` and the uncommitted work is captured in `refs/omo/wip/<id>`: a commit
  * object built from a temporary index, so the user's index, files, branch and history are never touched.
  */
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -128,7 +128,7 @@ export function saveResume(projectDir: string, card: ResumeCard): string {
   const dir = join(runsDir(projectDir), card.id)
   mkdirSync(dir, { recursive: true })
   const gitignore = join(runsDir(projectDir), ".gitignore")
-  if (!existsSync(gitignore)) writeFileSync(gitignore, "*\n")
+  if (!existsSync(gitignore)) writeFileAtomically(gitignore, "*\n")
   writeFileAtomically(join(dir, "resume.json"), `${JSON.stringify(card, null, 2)}\n`)
   writeFileAtomically(join(dir, "RESUME.md"), renderResumeMarkdown(card))
   return dir
