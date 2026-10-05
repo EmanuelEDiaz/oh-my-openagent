@@ -66,7 +66,7 @@ la lectura reales funcionan; una URL inventada se rechaza y la respuesta corregi
   (indisciplina del modelo; el aviso al padre lo marca como no verificado).
 - **Datos crudos:** `.omo/evals/2026-10-04-web-researcher-wr-bigpickle-1791137363064.jsonl` (fáciles),
   `…-wr-holdout-1791143379859.jsonl` (reserva), `…-web-researcher-hard-wrh-1791144543708.jsonl` (difíciles, antes),
-  `2026-10-05-web-researcher-hard-wrh2-*.jsonl` (difíciles, con mejoras); `@librarian`:
+  `2026-10-05-web-researcher-hard-wrh2-1791201681077.jsonl` (difíciles, con mejoras); `@librarian`:
   `…-librarian-web-lib-bigpickle-1791140593632.jsonl`, `…-lib-holdout-1791143905633.jsonl`,
   `…-librarian-hard-libh-1791146811113.jsonl`; desglose de contexto en los `*.context.md` de cada ejecución.
 
