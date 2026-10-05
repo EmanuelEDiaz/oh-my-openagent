@@ -1,6 +1,6 @@
 # Paso 0.15 — Cortes de red, congelamientos y procesos matados sin perder nada
 
-Parte del roadmap: `docs/fork/roadmap.md` (fila 0.15). Estado: **plan detallado, pendiente de aprobación (05-10-2026)**.
+Parte del roadmap: `docs/fork/roadmap.md` (fila 0.15). Estado: **plan aprobado (05-10-2026)**; implementación en `feat/resilience`.
 Rutas: `S/` = `packages/omo-opencode/src/`, `MC/` = `packages/model-core/src/`.
 
 ## Problema (usuario, 05-10-2026)
