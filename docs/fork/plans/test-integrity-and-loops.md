@@ -236,6 +236,26 @@ o preguntar), `opencode/big-pickle` en todos los agentes, agente "Sisyphus - ult
   `…-fi-off-1791214725511.jsonl` (+ `*.context.md` con el desglose de contexto por tarea); informe
   `docs/fork/evals/fix-integrity.md`.
 
+## Resultados 0.9b (05-10-2026) — **datos no válidos para medir el freno; no cerrada**
+Mismo banco y modelo, 1 repetición, suite `loops` (8 tareas).
+
+| | Con freno | Sin freno (`disabled_hooks: loop-breaker`) |
+|---|---|---|
+| Resueltas | 7/8 | 8/8 |
+| Tokens / tiempo / turnos (media) | ~291k / 66 s / 9,4 | ~303k / 85 s / 9,6 |
+| Veces que el freno actuó | **0** | — |
+| Fallos de infraestructura (cuelgue de 240 s, repetidos y en verde) | 0 | 2 (`csv-crlf`, `env-bool`) |
+
+- **Por qué no valen:** el freno no se activó en ninguna tarea y big-pickle no repitió arreglos en ninguna de las dos
+  tandas (~9 turnos por tarea): la suite **no provoca bucles**, así que no puede medir si el freno ayuda.
+- **El fallo con freno (`once-listener`)** no es del freno: el modelo pidió la herramienta `bash\x00` (byte nulo en el
+  nombre), OpenCode la rechazó como inválida y el turno acabó sin respuesta (2 turnos).
+- **Siguiente:** tareas que de verdad hagan entrar en bucle a modelos gratuitos (causa lejos del síntoma con mensajes
+  engañosos, arreglo obvio que no funciona, dependencia con comportamiento sorprendente), **validadas primero sin
+  freno** (solo cuentan las que provocan ≥3 arreglos casi iguales), y luego 3 repeticiones con y sin.
+- **Evidencia:** `.omo/evals/2026-10-05-loops-loops-on-1791216761633.jsonl`, `…-loops-off-1791217324483.jsonl`;
+  informe `docs/fork/evals/loops.md`.
+
 ## Criterios de aceptación
 ```gherkin
 Feature: integridad de tests y bucles
