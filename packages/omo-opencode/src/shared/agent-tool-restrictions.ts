@@ -1,4 +1,6 @@
-import { stripInvisibleAgentCharacters } from "./agent-display-names"
+import { SPECIALISTS } from "../agents/specialists/catalog"
+import { isZenGated } from "../features/zen-free-gate"
+import { getAgentConfigKey, stripInvisibleAgentCharacters } from "./agent-display-names"
 
 /**
  * Agent tool restrictions for session.prompt calls.
@@ -72,6 +74,25 @@ export function getAgentToolRestrictions(agentName: string, options: AgentToolRe
   return {
     ...(options.includeTeamToolDenylist === false ? {} : TEAM_TOOL_DENYLIST),
     ...agentRestrictions,
+    ...specialistRestrictions(stripped),
+  }
+}
+
+/**
+ * Specialists are atomic and never delegate (only tab agents orchestrate). The per-prompt tool map is applied after the
+ * agent's own permissions, so it must repeat the denial or `call_omo_agent: true` would win. A specialist with
+ * `onlyTools` (web-researcher) sees nothing else: "*" first, then its own tools (OpenCode applies the last match).
+ */
+function specialistRestrictions(agentName: string): Record<string, boolean> {
+  const key = getAgentConfigKey(agentName)
+  const spec = SPECIALISTS.find((candidate) => candidate.name === key || candidate.name === agentName.toLowerCase())
+  if (!spec) return {}
+  // A Zen-gated agent keeps bash/read listed (denied by its permission): a per-prompt "*": false would hide them again.
+  return {
+    ...(spec.onlyTools && !isZenGated(spec.name) ? { "*": false } : {}),
+    task: false,
+    call_omo_agent: false,
+    ...Object.fromEntries((spec.onlyTools ?? []).map((tool) => [tool, true])),
   }
 }
 

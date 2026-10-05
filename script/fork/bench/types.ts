@@ -7,6 +7,8 @@ export type ToolCall = {
   readonly status: string
   readonly input: Readonly<Record<string, unknown>>
   readonly error?: string
+  /** Tool output, truncated: lets graders check that cited URLs came from the agent's own tool results. */
+  readonly output?: string
 }
 
 export type Tokens = {

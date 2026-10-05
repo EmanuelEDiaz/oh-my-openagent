@@ -39,6 +39,8 @@ Parte del roadmap: `docs/fork/roadmap.md`. Estado: **plan aprobado (01-10-2026)*
 - Inspect AI (con su agente `opencode()` en Docker) queda como opción para la Fase 5 si promptfoo se queda corto.
 
 ## Fase 4 — Plantilla para cada especialista
+- **Ficha obligatoria** (usuario, 05-10-2026): `docs/fork/agents/<agente>.md` con estructura, funcionamiento y pruebas
+  con resultados como evidencia (plantilla en `docs/fork/agents/README.md`).
 **Regla de arquitectura (usuario, 03-10-2026):**
 - solo los agentes de tab (Sisyphus, Hephaestus, Atlas, Prometheus) orquestan;
 - los de "@" son atómicos: resuelven un problema concreto y **nunca delegan**;

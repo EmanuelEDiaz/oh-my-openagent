@@ -12046,6 +12046,134 @@
           ],
           "additionalProperties": false
         },
+        "test_integrity": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "enabled"
+          ],
+          "additionalProperties": false
+        },
+        "edit_diagnostics": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "revert_syntax_errors": {
+              "default": true,
+              "type": "boolean"
+            },
+            "use_plugin_lsp": {
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "enabled",
+            "revert_syntax_errors",
+            "use_plugin_lsp"
+          ],
+          "additionalProperties": false
+        },
+        "web_research": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "max_searches": {
+              "default": 8,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20
+            },
+            "max_reads": {
+              "default": 6,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20
+            },
+            "searxng_url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "tavily_api_key": {
+              "type": "string"
+            },
+            "jina_api_key": {
+              "type": "string"
+            },
+            "stackexchange_key": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "enabled",
+            "max_searches",
+            "max_reads"
+          ],
+          "additionalProperties": false
+        },
+        "loop_breaker": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "nudge_after": {
+              "default": 2,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 9007199254740991
+            },
+            "research_after": {
+              "default": 3,
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 9007199254740991
+            },
+            "block_after": {
+              "default": 4,
+              "type": "integer",
+              "minimum": 3,
+              "maximum": 9007199254740991
+            }
+          },
+          "required": [
+            "enabled",
+            "nudge_after",
+            "research_after",
+            "block_after"
+          ],
+          "additionalProperties": false
+        },
+        "retry_budget": {
+          "type": "object",
+          "properties": {
+            "max_per_task": {
+              "default": 6,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 20
+            }
+          },
+          "required": [
+            "max_per_task"
+          ],
+          "additionalProperties": false
+        },
+        "zen_free_gate": {
+          "type": "boolean"
+        },
         "team_mode": {
           "type": "object",
           "properties": {
@@ -30169,6 +30297,134 @@
                   "memory_check_interval_ms"
                 ],
                 "additionalProperties": false
+              },
+              "test_integrity": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "default": true,
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "enabled"
+                ],
+                "additionalProperties": false
+              },
+              "edit_diagnostics": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "revert_syntax_errors": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "use_plugin_lsp": {
+                    "default": true,
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "enabled",
+                  "revert_syntax_errors",
+                  "use_plugin_lsp"
+                ],
+                "additionalProperties": false
+              },
+              "web_research": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "max_searches": {
+                    "default": 8,
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20
+                  },
+                  "max_reads": {
+                    "default": 6,
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20
+                  },
+                  "searxng_url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "tavily_api_key": {
+                    "type": "string"
+                  },
+                  "jina_api_key": {
+                    "type": "string"
+                  },
+                  "stackexchange_key": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "enabled",
+                  "max_searches",
+                  "max_reads"
+                ],
+                "additionalProperties": false
+              },
+              "loop_breaker": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "nudge_after": {
+                    "default": 2,
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 9007199254740991
+                  },
+                  "research_after": {
+                    "default": 3,
+                    "type": "integer",
+                    "minimum": 2,
+                    "maximum": 9007199254740991
+                  },
+                  "block_after": {
+                    "default": 4,
+                    "type": "integer",
+                    "minimum": 3,
+                    "maximum": 9007199254740991
+                  }
+                },
+                "required": [
+                  "enabled",
+                  "nudge_after",
+                  "research_after",
+                  "block_after"
+                ],
+                "additionalProperties": false
+              },
+              "retry_budget": {
+                "type": "object",
+                "properties": {
+                  "max_per_task": {
+                    "default": 6,
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 20
+                  }
+                },
+                "required": [
+                  "max_per_task"
+                ],
+                "additionalProperties": false
+              },
+              "zen_free_gate": {
+                "type": "boolean"
               },
               "team_mode": {
                 "type": "object",

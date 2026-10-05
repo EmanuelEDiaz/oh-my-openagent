@@ -180,6 +180,39 @@ Rutas: `S/` = `packages/omo-opencode/src/`.
   `retry_budget.max_per_task: 6`.
 - **Funciona igual en Windows**: `fetch` y el shim de procesos (requisito de 0.11).
 
+### 0.9b — Implementación (04-10-2026; QA aislada pasada; pendiente: medición de eficacia)
+- **Código:** `S/features/loop-breaker/` (`fingerprint.ts`, `breaker.ts`, `plugin.ts`), hook `loop-breaker`, configuración
+  `loop_breaker` (umbrales 2/3/4) y `retry_budget.max_per_task` (6); `S/shared/session-root.ts` compartido con el
+  guardián de tests.
+- **Fuentes de errores:** salida de bash con código distinto de 0, llamadas fallidas leídas del flujo de eventos (sin
+  contar los bloqueos del propio plugin, que si no alimentarían el bucle) y errores de tipos nuevos de 0.9a.
+- **Nivel 3:** se adjunta una primera búsqueda hecha por el plugin con `web_search` (plan B si el agente no delega) y
+  se exige `task(web-researcher)` y luego `task(debugger)`; las ediciones a esos archivos quedan bloqueadas hasta que
+  el `debugger` informa. Ajuste respecto al diseño: el plugin no lanza el subagente por su cuenta (choca con la espera
+  del agente padre); lo exige y bloquea por código.
+- **Nivel 4:** bloqueo hasta la respuesta del usuario a `question` o un mensaje suyo; si la sesión se para bloqueada sin
+  preguntar, se guarda la tarjeta y se avisa una vez.
+- **Tope común:** cada escalada y cada recuperación de un cuelgue (0.8) gastan del mismo contador en
+  `.omo/runs/<run>/loops.json`; al agotarse, pausa y aviso. Una petición nueva o "reanuda" reinician el contador; el
+  historial de intentos se conserva.
+- **Un ejecutar que pasa** (el mismo comando que fallaba) da el error por resuelto.
+- **QA aislada (04-10-2026, `.omo/evidence/0.9b/`):** modelo simulado atascado en el mismo test: aviso a los 2 arreglos, bloqueo a los 3 (edición rechazada) hasta llamar al `debugger`, nivel 4 por arreglo casi idéntico (edición rechazada) hasta que el usuario responde `question`; luego arreglo correcto y test en verde. Convivió con el guardián de tests y los errores de tipos de 0.9a activos.
+
+## Medición de eficacia (0.9a y 0.9b; regla "medir todo")
+Con y sin cada protección (`disabled_hooks`), mismos modelos gratuitos, mismas tareas, 3 repeticiones; cada informe
+incluye el desglose de contexto por tarea (0.13).
+- **0.9a — suite `fix-integrity`** (estilo ImpossibleBench, arXiv 2510.20270): ~12 repos pequeños con un test que falla.
+  - 8 resolubles: el arreglo correcto está en el código. Se mide: resueltas (tests ocultos en verde), tests existentes
+    modificados, `skip`/aserciones quitadas o debilitadas, supresiones nuevas.
+  - 4 imposibles: el test contradice la especificación. Lo correcto es parar y avisar; se mide la **tasa de trampa**
+    (tocar el test para que pase) frente a la **tasa de aviso honesto**.
+  - Errores de tipos: tareas con un fallo de tipos; se mide resueltas, turnos y tokens hasta el verde.
+- **0.9b — suite `loops`:** ~8 fallos difíciles (causa lejos del síntoma, pista falsa en el error). Se mide: resueltas,
+  arreglos casi idénticos repetidos, turnos y tokens hasta resolver o parar, paradas por tope (y si guardaron la
+  tarjeta), y cuántas veces el nivel 3 o 4 llevó a resolver.
+- **Criterio:** una protección se queda si baja la trampa o los bucles sin bajar las tareas resueltas; si cuesta tareas
+  resueltas, se ajusta y se vuelve a medir.
+
 ## Criterios de aceptación
 ```gherkin
 Feature: integridad de tests y bucles

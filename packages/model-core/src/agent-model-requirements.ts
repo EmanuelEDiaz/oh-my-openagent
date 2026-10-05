@@ -181,6 +181,7 @@ export const SPECIALIST_MODEL_TIERS = {
   "dependency-check": "fast",
   verifier: "fast",
   "git-committer": "fast",
+  "web-researcher": "fast",
   "test-writer": "medium",
   "ui-tester": "medium",
   "test-reviewer": "medium",

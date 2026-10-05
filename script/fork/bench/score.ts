@@ -11,7 +11,7 @@ const INFRA_PATTERNS = [
   /free tier/i,
   /usage limit|quota/i,
   /overloaded/i,
-  /timed out|stalled/i,
+  /timed out|stalled|never started|no assistant message in the session|MessageAbortedError/i,
   /ECONNREFUSED|ECONNRESET|ETIMEDOUT|fetch failed|socket hang up/i,
   /ProviderAuthError/i,
   /server did not start|server error|server unresponsive/i,

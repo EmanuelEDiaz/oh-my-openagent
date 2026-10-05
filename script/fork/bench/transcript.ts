@@ -33,6 +33,7 @@ export function toTranscript(messages: readonly RawMessage[], delegatedAgents: r
         status: part.state?.status ?? "unknown",
         input: part.state?.input ?? {},
         ...(part.state?.error === undefined ? {} : { error: part.state.error }),
+        ...(typeof part.state?.output === "string" ? { output: part.state.output.slice(0, 40_000) } : {}),
       })),
   )
   const sum = (pick: (info: RawInfo) => number | undefined) => assistants.reduce((total, message) => total + (pick(message.info) ?? 0), 0)

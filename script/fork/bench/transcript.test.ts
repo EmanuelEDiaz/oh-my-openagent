@@ -35,7 +35,7 @@ describe("toTranscript", () => {
     expect(transcript.model).toBe("opencode/big-pickle")
     expect(transcript.answer).toBe("<results>done</results>")
     expect(transcript.tools).toEqual([
-      { tool: "grep", status: "completed", input: { pattern: "x" } },
+      { tool: "grep", status: "completed", input: { pattern: "x" }, output: "..." },
       { tool: "bash", status: "error", input: { command: "rm" }, error: "denied" },
     ])
     expect(transcript.tokens).toEqual({ input: 200, output: 40, reasoning: 10, cacheRead: 20, cacheWrite: 2 })

@@ -10,6 +10,7 @@ import { homedir } from "node:os"
 import { join, resolve, sep } from "node:path"
 
 import { createOpencodeClient } from "@opencode-ai/sdk/v2"
+import { parseJsonc } from "../../../packages/utils/src/jsonc-parser"
 
 export type Sandbox = { readonly root: string; readonly env: Readonly<Record<string, string>> }
 
@@ -45,6 +46,9 @@ function copyIfExists(from: string, to: string): void {
   if (existsSync(from)) cpSync(from, to, { recursive: true })
 }
 
+/** Default model for anything not pinned in the sandbox (override with OMO_BENCH_DEFAULT_MODEL). */
+export const FREE_DEFAULT_MODEL = process.env.OMO_BENCH_DEFAULT_MODEL ?? "opencode/big-pickle"
+
 export function createSandbox(root: string, pluginEntry: string): Sandbox {
   assertSafeSandboxRoot(root)
   const dirs = ["home/.omo", "config/opencode", "data/opencode", "state", "cache/opencode", "work"]
@@ -59,7 +63,8 @@ export function createSandbox(root: string, pluginEntry: string): Sandbox {
   writeFileSync(
     join(root, "config/opencode/opencode.json"),
     // No file snapshots: the bench never undoes, and OpenCode would copy every task's repo into its data dir.
-    JSON.stringify({ $schema: "https://opencode.ai/config.json", plugin: [`file://${realpathSync(pluginEntry)}`], snapshot: false }, null, 2),
+    // Free defaults: an agent without a pinned model must never fall back to a paid one on the user's key.
+    JSON.stringify({ $schema: "https://opencode.ai/config.json", plugin: [`file://${realpathSync(pluginEntry)}`], snapshot: false, model: FREE_DEFAULT_MODEL, small_model: FREE_DEFAULT_MODEL }, null, 2),
   )
   return {
     root,
@@ -188,4 +193,46 @@ export function destroySandbox(sandbox: Sandbox): void {
     }
   }
   rmSync(sandbox.root, { recursive: true, force: true })
+}
+
+/**
+ * Pins agents to models inside the sandbox's copy of omo.jsonc only (e.g. the same free model for two agents being
+ * compared). The user's real configuration is never touched.
+ */
+export function overrideAgentModels(sandbox: Sandbox, overrides: Readonly<Record<string, string>>): void {
+  if (Object.keys(overrides).length === 0) return
+  const path = join(sandbox.root, "home/.omo/omo.jsonc")
+  const config = (existsSync(path) ? parseJsonc<Record<string, unknown>>(readFileSync(path, "utf8")) : {}) ?? {}
+  const scope = ((config["[opencode]"] as Record<string, unknown> | undefined) ?? (config["[opencode]"] = {})) as Record<string, unknown>
+  const agents = ((scope["agents"] as Record<string, Record<string, unknown>> | undefined) ?? (scope["agents"] = {})) as Record<string, Record<string, unknown>>
+  for (const [agent, model] of Object.entries(overrides)) {
+    const { models: _models, fallback_models: _fallbacks, ...rest } = agents[agent] ?? {}
+    agents[agent] = { ...rest, model }
+  }
+  writeFileSync(path, JSON.stringify(config, null, 2))
+}
+
+/**
+ * Sandbox-only plugin settings for an A/B run: every agent and category on one model, and hooks to switch off
+ * (e.g. measuring a guard with and without it). The user's real configuration is never touched.
+ */
+export function overridePluginConfig(sandbox: Sandbox, options: { readonly allModels?: string; readonly disabledHooks?: readonly string[] }): void {
+  if (!options.allModels && !options.disabledHooks?.length) return
+  const path = join(sandbox.root, "home/.omo/omo.jsonc")
+  const config = (existsSync(path) ? parseJsonc<Record<string, unknown>>(readFileSync(path, "utf8")) : {}) ?? {}
+  const scope = ((config["[opencode]"] as Record<string, unknown> | undefined) ?? (config["[opencode]"] = {})) as Record<string, unknown>
+  if (options.allModels) {
+    for (const section of ["agents", "categories"]) {
+      const entries = (scope[section] as Record<string, Record<string, unknown>> | undefined) ?? {}
+      for (const [name, entry] of Object.entries(entries)) {
+        const { models: _models, fallback_models: _fallbacks, ...rest } = entry ?? {}
+        entries[name] = { ...rest, model: options.allModels }
+      }
+      scope[section] = entries
+    }
+  }
+  if (options.disabledHooks?.length) {
+    scope["disabled_hooks"] = [...new Set([...((scope["disabled_hooks"] as string[] | undefined) ?? []), ...options.disabledHooks])]
+  }
+  writeFileSync(path, JSON.stringify(config, null, 2))
 }

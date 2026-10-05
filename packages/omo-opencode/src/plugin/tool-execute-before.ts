@@ -98,6 +98,7 @@ export function createToolExecuteBeforeHandler(args: {
     await hooks.nonInteractiveEnv?.["tool.execute.before"]?.(input, output)
     await hooks.managedProcessGuard?.["tool.execute.before"]?.(input, output)
     await hooks.testIntegrityGuard?.["tool.execute.before"]?.(input, output)
+    await hooks.loopBreaker?.["tool.execute.before"]?.(input, output)
     await hooks.editDiagnostics?.["tool.execute.before"]?.(input, output)
     await hooks.bashFileReadGuard?.["tool.execute.before"]?.(input, output)
     await hooks.commentChecker?.["tool.execute.before"]?.(input, output)

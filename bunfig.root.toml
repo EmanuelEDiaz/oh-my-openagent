@@ -1,6 +1,7 @@
 [test]
 preload = ["./test-env.ts", "./test-setup.ts"]
 pathIgnorePatterns = [
+  "script/fork/bench/fixtures/**",
   "dist/**",
   "packages/web/**",
   "packages/lsp-tools-mcp/**",

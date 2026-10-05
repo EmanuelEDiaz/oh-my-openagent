@@ -1,0 +1,1 @@
+{ "name": "config-merge", "private": true, "type": "module", "scripts": { "test": "bun test" } }

@@ -76,6 +76,7 @@ async function runChatMessageHooks(args: {
   await hooks.noHephaestusNonGpt?.["chat.message"]?.(input, output)
   await hooks.hephaestusAgentsMdInjector?.["chat.message"]?.(input, output)
   await hooks.testIntegrityGuard?.["chat.message"]?.(input, output)
+  await hooks.loopBreaker?.["chat.message"]?.(input, output)
 }
 
 export function createChatMessageHandler(args: {

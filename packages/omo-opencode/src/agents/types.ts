@@ -195,7 +195,8 @@ export type SpecialistAgentName =
   | "lang-reviewer"
   | "architect-reviewer"
   | "docs-writer"
-  | "git-committer";
+  | "git-committer"
+  | "web-researcher";
 
 export type OverridableAgentName = "build" | BuiltinAgentName;
 
