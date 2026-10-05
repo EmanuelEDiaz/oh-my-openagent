@@ -22,11 +22,13 @@ function fakeChild(pid: number): FakeChild {
   }
 }
 
-let dir = ""
-afterEach(() => { if (dir) rmSync(dir, { recursive: true, force: true }) })
+// Every setup() gets its own dir; a test may call it more than once, so all of them are removed.
+const dirs: string[] = []
+afterEach(() => { for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true }) })
 
 function setup(overrides: Partial<ProcessManagerDeps> = {}) {
-  dir = mkdtempSync(join(tmpdir(), "managed-process-"))
+  const dir = mkdtempSync(join(tmpdir(), "managed-process-"))
+  dirs.push(dir)
   const children: FakeChild[] = []
   const notes: Array<{ sessionID: string; text: string }> = []
   const toasts: string[] = []
@@ -134,7 +136,7 @@ describe("managed processes (fork 0.8b)", () => {
     const { manager } = setup({ terminate: async (pid) => { stopped.push(pid); return { survivorPids: [] } } })
     await manager.start({ sessionID: "s1", name: "tmp", command: "x" })
     await manager.start({ sessionID: "s1", name: "db", command: "y", keepAlive: true })
-    const registry = JSON.parse(readFileSync(join(dir, "processes.json"), "utf8")) as Array<{ name: string; pid: number }>
+    const registry = JSON.parse(readFileSync(join(dirs.at(-1) ?? "", "processes.json"), "utf8")) as Array<{ name: string; pid: number }>
     expect(registry.map((entry) => entry.name)).toEqual(["tmp", "db"])
     await manager.shutdown()
     expect(stopped).toEqual([1000])
@@ -164,5 +166,61 @@ describe("managed processes (fork 0.8b)", () => {
     await manager.start({ sessionID: "s2", name: "c", command: "z" })
     await manager.stopSession("s1")
     expect(stopped).toEqual([1000])
+  })
+
+  test("an exit notice dropped while the session is busy is sent once on the next idle", async () => {
+    let busy = true
+    const sent: string[] = []
+    const { manager, children } = setup({
+      notify: async (_sessionID, text) => { if (busy) return false; sent.push(text); return true },
+    })
+    await manager.start({ sessionID: "s1", name: "tests", command: "bun test" })
+    children[0]!.exit(1)
+    await flush()
+    expect(sent).toHaveLength(0)
+    expect(manager.hasPendingNotice("s1")).toBe(true)
+    const registry = JSON.parse(readFileSync(join(dirs.at(-1) ?? "", "processes.json"), "utf8")) as Array<{ noticePending: boolean }>
+    expect(registry[0]!.noticePending).toBe(true)
+
+    busy = false
+    await manager.onSessionIdle("s1")
+    await manager.onSessionIdle("s1")
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toContain("exit code 1")
+    expect(manager.hasPendingNotice("s1")).toBe(false)
+  })
+
+  test("a still-busy idle keeps the notice; the retry timer delivers it once", async () => {
+    let busy = true
+    const sent: string[] = []
+    const { manager, children, timers } = setup({
+      notify: async (_sessionID, text) => { if (busy) return false; sent.push(text); return true },
+    })
+    await manager.start({ sessionID: "s1", name: "tests", command: "bun test" })
+    children[0]!.exit(0)
+    await flush()
+    await manager.onSessionIdle("s1")
+    expect(manager.hasPendingNotice("s1")).toBe(true)
+    busy = false
+    for (const timer of timers.filter((entry) => entry.ms === 5000)) timer.fn()
+    await flush()
+    await manager.onSessionIdle("s1")
+    expect(sent).toHaveLength(1)
+  })
+
+  test("a deleted session drops its pending notices", async () => {
+    let busy = true
+    const sent: string[] = []
+    const { manager, children } = setup({
+      notify: async (_sessionID, text) => { if (busy) return false; sent.push(text); return true },
+    })
+    await manager.start({ sessionID: "s1", name: "tests", command: "bun test" })
+    children[0]!.exit(0)
+    await flush()
+    await manager.stopSession("s1")
+    busy = false
+    await manager.onSessionIdle("s1")
+    expect(sent).toHaveLength(0)
+    expect(manager.hasPendingNotice("s1")).toBe(false)
   })
 })

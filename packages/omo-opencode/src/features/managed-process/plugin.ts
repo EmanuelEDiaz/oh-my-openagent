@@ -9,7 +9,7 @@ import type { ProcessesConfig } from "../../config/schema/processes"
 import { createInternalAgentTextPart } from "../../shared"
 import { log } from "../../shared/logger"
 import { parseModel, resolveSessionTarget } from "../../shared/session-target"
-import { dispatchInternalPrompt } from "../../hooks/shared/prompt-async-gate"
+import { dispatchInternalPrompt, isInternalPromptDispatchAccepted } from "../../hooks/shared/prompt-async-gate"
 import type { PluginContext } from "../../plugin/types"
 import { createProcessManager, type ProcessManager } from "./manager"
 import { shellArgv } from "./shell"
@@ -81,6 +81,8 @@ export function createPluginProcessManager(ctx: PluginContext, config: Partial<P
         },
       })
       log("[managed-process] session notified", { sessionID, status: result.status })
+      // Busy session (active/reserved/failed): the manager keeps the notice and sends it on the next idle.
+      return isInternalPromptDispatchAccepted(result)
     },
     toast: async (message) => {
       await ctx.client.tui
