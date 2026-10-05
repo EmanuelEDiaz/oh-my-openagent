@@ -76,3 +76,47 @@ describe("stall watchdog (fork 0.8a)", () => {
     expect(watchdog.recordStall("task-b")).toBe(1)
   })
 })
+
+describe("stall watchdog and network waits (fork 0.15)", () => {
+  const retry = (sessionID: string) => ({ type: "session.status", properties: { sessionID, status: { type: "retry", attempt: 1, message: "fetch failed", next: 0 } } })
+
+  test("a session in OpenCode's own retry backoff is waiting, not stalled", () => {
+    const { watchdog, advance } = setup()
+    watchdog.observe(busy("s1"))
+    watchdog.observe(retry("s1"))
+    advance(INACTIVITY * 3)
+    expect(watchdog.findStalled()).toEqual([])
+  })
+
+  test("leaving the retry backoff restarts the window", () => {
+    const { watchdog, advance } = setup()
+    watchdog.observe(busy("s1"))
+    watchdog.observe(retry("s1"))
+    advance(INACTIVITY * 2)
+    watchdog.observe(busy("s1"))
+    advance(INACTIVITY - 1)
+    expect(watchdog.findStalled()).toEqual([])
+    advance(2)
+    expect(watchdog.findStalled().map((stall) => stall.sessionID)).toEqual(["s1"])
+  })
+
+  test("a session waiting for the network (network guard) is not stalled", () => {
+    let now = 0
+    const watchdog = createStallWatchdog({ inactivityMs: INACTIVITY, now: () => now, isWaiting: (id) => id === "offline" })
+    watchdog.observe(busy("offline"))
+    watchdog.observe(busy("online"))
+    now += INACTIVITY + 1
+    expect(watchdog.findStalled().map((stall) => stall.sessionID)).toEqual(["online"])
+  })
+
+  test("after a freeze busy sessions restart their window", () => {
+    const { watchdog, advance } = setup()
+    watchdog.observe(busy("s1"))
+    watchdog.observe(busy("s2"))
+    watchdog.observe(idle("s2"))
+    advance(INACTIVITY - 1)
+    expect(watchdog.resetBusyProgress()).toEqual(["s1"])
+    advance(INACTIVITY - 1)
+    expect(watchdog.findStalled()).toEqual([])
+  })
+})

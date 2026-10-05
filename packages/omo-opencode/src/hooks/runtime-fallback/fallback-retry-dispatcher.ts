@@ -4,6 +4,7 @@ import { HOOK_NAME } from "./constants"
 import { log } from "../../shared/logger"
 import { prepareFallback } from "./fallback-state"
 import { restoreFallbackState, snapshotFallbackState } from "./fallback-state-snapshot"
+import { getNetworkGuard } from "../../features/network-guard"
 
 type DispatchFallbackRetryOptions = {
   sessionID: string
@@ -25,6 +26,11 @@ export async function dispatchFallbackRetry(
   helpers: AutoRetryHelpers,
   options: DispatchFallbackRetryOptions,
 ): Promise<void> {
+  // Timeouts can fire while the session waits for the network; a fallback then would only burn the chain.
+  if (getNetworkGuard()?.isWaiting(options.sessionID)) {
+    log(`[${HOOK_NAME}] Fallback skipped - session is waiting for the network`, { sessionID: options.sessionID, source: options.source })
+    return
+  }
   const snapshot = snapshotFallbackState(options.state)
   const result = prepareFallback(
     options.sessionID,

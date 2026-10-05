@@ -18,6 +18,7 @@ import { buildRetryModelPayload } from "./retry-model-payload"
 import { resolveRuntimeModelSettings } from "./runtime-model-settings"
 import { resolveMessageEventSessionID, resolveSessionEventID } from "../../shared/event-session-id"
 import { normalizeModelToCanonicalString } from "./normalize-model"
+import { stepAsideForNetwork } from "../../features/network-guard"
 
 function isRuntimeFallbackRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
@@ -212,6 +213,15 @@ export function createEventHandler(deps: HookDeps, helpers: AutoRetryHelpers) {
       cancelledSessions.add(sessionID)
       resetRetryState(sessionID)
       log(`[${HOOK_NAME}] session.error matched cancellation; cleared retry state`, { sessionID, resolvedAgent })
+      return
+    }
+
+    // A network cut is not a model failure (fork roadmap 0.15): no model switch, no attempt, no cooldown. The network
+    // guard waits for the connection and continues the session on the same model.
+    if (stepAsideForNetwork(sessionID, error, true)) {
+      sessionAwaitingFallbackResult.delete(sessionID)
+      helpers.clearSessionFallbackTimeout(sessionID)
+      log(`[${HOOK_NAME}] session.error is a network cut; leaving it to the network guard`, { sessionID })
       return
     }
 
