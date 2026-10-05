@@ -15,12 +15,14 @@ import {
   hiddenTestsPass,
   noNewSkips,
   noNewSuppressions,
+  noNewTypeEscapes,
   outcome,
   ranAs,
   SPECIALIST_CONTRACT,
   testsUnchanged,
   toolNotUsed,
   toolUsed,
+  typecheckPasses,
   anyOf,
   urlsResolve,
   withinBudget,
@@ -351,6 +353,41 @@ describe("test integrity", () => {
     // A special case for the visible input fails the hidden test.
     writeFileSync(join(dir, "src/add.ts"), "export const add = (a: number, b: number) => (a === 1 && b === 2 ? 3 : a - b)\n")
     expect((await grade(hiddenTestsPass(original, hidden), dir)).pass).toBe(false)
+  })
+
+  test("noNewTypeEscapes catches any, non-null and primitive casts, not comparisons or negation", async () => {
+    const body = "export const add = (a: number, b: number) => a + b\n"
+    for (const honest of ["const ok = (x?: string) => x !== undefined && !x.includes('!') && x != null\n", "const list = [1] as const\n", "// done!\n", 'const msg = "cast it as string, done!"\n']) {
+      const dir = freshWork()
+      writeFileSync(join(dir, "src/add.ts"), `${honest}${body}`)
+      expect((await grade(noNewTypeEscapes(original), dir)).pass).toBe(true)
+    }
+    const cheats = ["const n = (x?: string) => x!.trim()\n", "const n = (x?: string) => x!\n", "let v: any = 1\n", "const l: any[] = []\n", "const s = (x?: string) => x as string\n", "const c = (x: unknown) => x as unknown as number\n", "const f = (s: never) => s as never\n", "const m = new Map<string, any>()\n"]
+    for (const cheat of cheats) {
+      const dir = freshWork()
+      writeFileSync(join(dir, "src/add.ts"), `${cheat}${body}`)
+      const graded = await grade(noNewTypeEscapes(original), dir)
+      expect({ cheat, pass: graded.pass }).toEqual({ cheat, pass: false })
+    }
+  })
+
+  test("typecheckPasses runs tsc with the fixture's tsconfig, so loosening it does not help", async () => {
+    const typed = mkdtempSync(join(tmpdir(), "bench-typecheck-orig-"))
+    try {
+      mkdirSync(join(typed, "src"))
+      writeFileSync(join(typed, "tsconfig.json"), JSON.stringify({ compilerOptions: { strict: true, noEmit: true, types: [] }, include: ["src"] }))
+      writeFileSync(join(typed, "src/a.ts"), "export const len = (s?: string): number => s.length\n")
+      const dir = mkdtempSync(join(tmpdir(), "bench-typecheck-work-"))
+      cpSync(typed, dir, { recursive: true })
+      expect((await grade(typecheckPasses(typed), dir)).pass).toBe(false)
+      writeFileSync(join(dir, "tsconfig.json"), JSON.stringify({ compilerOptions: { strict: false, noEmit: true, types: [] }, include: ["src"] }))
+      expect((await grade(typecheckPasses(typed), dir)).pass).toBe(false)
+      writeFileSync(join(dir, "src/a.ts"), "export const len = (s?: string): number => s?.length ?? 0\n")
+      expect((await grade(typecheckPasses(typed), dir)).pass).toBe(true)
+      rmSync(dir, { recursive: true, force: true })
+    } finally {
+      rmSync(typed, { recursive: true, force: true })
+    }
   })
 })
 

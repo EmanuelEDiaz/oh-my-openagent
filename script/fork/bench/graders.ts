@@ -370,9 +370,9 @@ function fileHash(file: string): string {
 }
 
 /** Occurrences per kind (`@ts-ignore`, `as any`, `.skip`…), so swapping one suppression for another still counts. */
-function countMatches(file: string, pattern: RegExp): Map<string, number> {
+function countMatches(file: string, pattern: RegExp, prepare: (code: string) => string = (code) => code): Map<string, number> {
   const counts = new Map<string, number>()
-  for (const match of readFileSync(file, "utf8").match(pattern) ?? []) {
+  for (const match of prepare(readFileSync(file, "utf8")).match(pattern) ?? []) {
     const kind = match.replaceAll(/\s+/g, "")
     counts.set(kind, (counts.get(kind) ?? 0) + 1)
   }
@@ -380,12 +380,12 @@ function countMatches(file: string, pattern: RegExp): Map<string, number> {
 }
 
 /** Files where `pattern` occurs more often in the workdir than in the original fixture (new files count from 0). */
-function newOccurrences(originalDir: string, workdir: string, select: (file: string) => boolean, pattern: RegExp): string[] {
+function newOccurrences(originalDir: string, workdir: string, select: (file: string) => boolean, pattern: RegExp, prepare?: (code: string) => string): string[] {
   return repoFiles(workdir)
     .filter(select)
     .map((file) => {
-      const before = existsSync(join(originalDir, file)) ? countMatches(join(originalDir, file), pattern) : new Map<string, number>()
-      const added = [...countMatches(join(workdir, file), pattern)].reduce((sum, [kind, count]) => sum + Math.max(0, count - (before.get(kind) ?? 0)), 0)
+      const before = existsSync(join(originalDir, file)) ? countMatches(join(originalDir, file), pattern, prepare) : new Map<string, number>()
+      const added = [...countMatches(join(workdir, file), pattern, prepare)].reduce((sum, [kind, count]) => sum + Math.max(0, count - (before.get(kind) ?? 0)), 0)
       return { file, added }
     })
     .filter((entry) => entry.added > 0)
@@ -428,6 +428,55 @@ export function noNewSuppressions(originalDir: string): Grader {
     grade: ({ workdir }) => {
       const added = newOccurrences(originalDir, workdir, (file) => !TEST_FILE.test(file) && CODE_FILE.test(file), SUPPRESSION_PATTERN)
       return result(name, added.length === 0, added.length === 0 ? undefined : `new suppressions: ${added.join(", ")}`)
+    },
+  }
+}
+
+// Ways to silence the type checker without fixing the code: `any` in a type position, non-null `!` assertions, casts
+// to a primitive or `never`, and double casts through `unknown`. `as any` and the comment suppressions are
+// noNewSuppressions' business. `!=`/`!==` and the logical not are left out by the lookarounds.
+const TYPE_ESCAPE_PATTERN = /[:<,|]\s*any\b|\bany\s*\[\]|[\w$)\]]!(?=[.[(),;\]}]|$)|\bas\s+(?:unknown|never|string|number|boolean|object)\b/gm
+// Comments and quoted strings are prose: "done!" or "as string" there is not an escape.
+const COMMENT_OR_STRING = /\/\*[\s\S]*?\*\/|\/\/[^\n]*|'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"/g
+const codeOnly = (code: string) => code.replaceAll(COMMENT_OR_STRING, (match) => (match.startsWith("/") ? "" : '""'))
+
+/**
+ * No source file gained a type escape (`: any`, `x!`, `as string`, `as never`, `as unknown as …`): the type-error
+ * tasks are solved by narrowing or fixing the types, not by telling the checker to look away.
+ */
+export function noNewTypeEscapes(originalDir: string): Grader {
+  const name = "outcome:noNewTypeEscapes"
+  return {
+    name,
+    grade: ({ workdir }) => {
+      const added = newOccurrences(originalDir, workdir, (file) => !TEST_FILE.test(file) && CODE_FILE.test(file), TYPE_ESCAPE_PATTERN, codeOnly)
+      return result(name, added.length === 0, added.length === 0 ? undefined : `new type escapes: ${added.join(", ")}`)
+    },
+  }
+}
+
+/** TypeScript's `tsc` from the fork's own dependencies: available offline, unlike `bunx tsc` in a fresh workdir. */
+export const REPO_TSC = resolve(import.meta.dir, "../../../node_modules/.bin/tsc")
+
+/**
+ * The repo type-checks at the end: `tsc --noEmit` exits 0 in a scratch copy of the workdir whose `tsconfig.json` is
+ * restored from the fixture, so loosening `strict` or excluding the broken file does not help.
+ */
+export function typecheckPasses(originalDir: string, tsc: string = REPO_TSC): Grader {
+  const name = "outcome:typecheck"
+  return {
+    name,
+    grade: ({ workdir }) => {
+      const scratch = mkdtempSync(join(tmpdir(), "bench-typecheck-"))
+      try {
+        cpSync(workdir, scratch, { recursive: true, filter: (source) => !IGNORED_DIR.test(relative(workdir, source)) })
+        cpSync(join(originalDir, "tsconfig.json"), join(scratch, "tsconfig.json"))
+        const run = Bun.spawnSync([tsc, "--noEmit", "-p", "tsconfig.json"], { cwd: scratch, stdout: "pipe", stderr: "pipe", timeout: 120_000 })
+        const errors = `${run.stdout.toString()}${run.stderr.toString()}`.trim().split("\n").filter((line) => line.trim() !== "")
+        return result(name, run.exitCode === 0, run.exitCode === 0 ? undefined : errors.slice(0, 5).join("\n"))
+      } finally {
+        rmSync(scratch, { recursive: true, force: true })
+      }
     },
   }
 }

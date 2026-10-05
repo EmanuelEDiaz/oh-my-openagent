@@ -135,6 +135,13 @@ El plugin lee `${XDG_STATE_HOME:-~/.local/state}/omo/earlyoom-kills.log` al arra
 (`S/features/interruption/process-identity.ts`). Sin la guía, la causa sale igual como "probablemente por falta de RAM"
 por la memoria y la presión medidas antes del kill.
 
+### F. Nombres de herramienta rotos (añadido 05-10-2026, usuario)
+En el banco, big-pickle pidió la herramienta `bash\x00`; OpenCode la rechazó como inválida y el turno acabó sin
+respuesta. Se reparan los nombres que llegan con caracteres de control, espacios o mayúsculas cuando, limpios, coinciden
+con **una sola** herramienta disponible; si no coinciden con ninguna o con varias, no se toca (OpenCode avisa al modelo
+como hasta ahora). Se cuenta cuántas veces pasa en todas las transcripciones guardadas del banco (antes) y tras el
+cambio. Pruebas: nulo, espacios, mayúsculas, nombre ambiguo, nombre inexistente.
+
 ### Configuración (`resilience` en `omo.jsonc`)
 `network_probe_limit` 12, `network_backoff_s` [5,15,30,60], `freeze_threshold_s` 10, `wip_heartbeat_s` 15,
 `low_memory_mb` 700, `resume_memory_mb` 900, `neutral_probe_url`, `low_memory_ratio` 0.10, `enabled` true. Windows y Linux (sin `/proc/meminfo` → `os.freemem()`).
