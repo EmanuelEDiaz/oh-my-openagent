@@ -188,6 +188,9 @@ async function main(): Promise<void> {
 
   const summary = summarize(results, k)
   console.log(JSON.stringify({ ...summary, tasks: undefined }, null, 2))
+  // Run-time info grades (runner.ts): permission prompts the agent hit and stall-watchdog recoveries, per run.
+  const total = (name: string) => results.reduce((sum, run) => sum + Number(run.grades.find((grade) => grade.name === name)?.detail?.match(/^\d+/)?.[0] ?? 0), 0)
+  console.log(`permission waits: ${total("info:permissions")}; stall-watchdog recoveries: ${total("info:recoveries")}`)
   console.log(`raw results: ${rawFile}`)
   if (proxy && existsSync(contextFile)) {
     const records = readFileSync(contextFile, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line) as ContextRecord)

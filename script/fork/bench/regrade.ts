@@ -23,6 +23,9 @@ import { LIBRARIAN_WEB_TASKS, WEB_RESEARCHER_TASKS } from "./tasks/web-research"
 import { LIBRARIAN_HARD_TASKS, WEB_RESEARCHER_HARD_TASKS } from "./tasks/web-research-hard"
 import type { RunResult, Task } from "./types"
 
+/** Info grades the runner records while the task runs (runner.ts `runtimeInfo`). */
+const RUNTIME_INFO_GRADES: ReadonlySet<string> = new Set(["info:permissions", "info:recoveries"])
+
 const REPO = join(import.meta.dir, "../../..")
 const TASKS: readonly Task[] = [...EXPLORE_TASKS, ...WEB_RESEARCHER_TASKS, ...LIBRARIAN_WEB_TASKS, ...WEB_RESEARCHER_HARD_TASKS, ...LIBRARIAN_HARD_TASKS, ...FIX_INTEGRITY_TASKS, ...LOOP_TASKS]
 
@@ -36,6 +39,8 @@ export async function regradeResult(result: RunResult, task: Task, fixtureDir: s
     const recorded = new Map(result.grades.map((grade) => [grade.name, grade]))
     const grades = await Promise.all(gradersFor(task).map((grader) =>
       grader.name.startsWith("outcome") && recorded.has(grader.name) ? recorded.get(grader.name)! : grader.grade({ transcript, workdir })))
+    // Measured during the run (runner.ts), not from the transcript: carried over as recorded.
+    grades.push(...result.grades.filter((grade) => RUNTIME_INFO_GRADES.has(grade.name)))
     const pass = transcript.error === undefined && grades.every((grade) => grade.pass)
     const { failure: _previous, ...rest } = result
     return { ...rest, pass, ...(pass ? {} : { failure: "task" as const }), grades }
