@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 
 import { getOmoOpenCodeCacheDir } from "../../shared/data-path"
+import { writeFileAtomically } from "../../shared/write-file-atomically"
 
 export type BenchmarkFacts = {
   readonly source: "Artificial Analysis"
@@ -150,7 +151,7 @@ export function createExternalDataStore(options: {
     const data: ExternalData = { fetchedAt: new Date(now()).toISOString(), benchmarks, openRouter }
     try {
       mkdirSync(dirname(cachePath), { recursive: true })
-      writeFileSync(cachePath, JSON.stringify(data))
+      writeFileAtomically(cachePath, JSON.stringify(data))
     } catch {
       return data
     }

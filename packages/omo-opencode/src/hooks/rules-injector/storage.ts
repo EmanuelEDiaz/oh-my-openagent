@@ -2,12 +2,12 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
-  writeFileSync,
   unlinkSync,
 } from "node:fs";
 import { join } from "node:path";
 import { RULES_INJECTOR_STORAGE } from "./constants";
 import type { InjectedRulesData } from "./types";
+import { writeFileAtomically } from "../../shared/write-file-atomically";
 
 function getStoragePath(sessionID: string): string {
   return join(RULES_INJECTOR_STORAGE, `${sessionID}.json`);
@@ -49,13 +49,13 @@ export function saveInjectedRules(
 
   mkdirSync(RULES_INJECTOR_STORAGE, { recursive: true });
   try {
-    writeFileSync(getStoragePath(sessionID), JSON.stringify(storageData, null, 2));
+    writeFileAtomically(getStoragePath(sessionID), JSON.stringify(storageData, null, 2));
   } catch (error) {
     if (!(error instanceof Error) || !("code" in error) || error.code !== "ENOENT") {
       throw error;
     }
     mkdirSync(RULES_INJECTOR_STORAGE, { recursive: true });
-    writeFileSync(getStoragePath(sessionID), JSON.stringify(storageData, null, 2));
+    writeFileAtomically(getStoragePath(sessionID), JSON.stringify(storageData, null, 2));
   }
 }
 

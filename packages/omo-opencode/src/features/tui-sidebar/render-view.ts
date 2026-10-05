@@ -5,6 +5,7 @@ import { assertNever } from "./state-types"
 import type {
   AgentsState,
   ConfigBanner,
+  ConnectionState,
   JobBoardState,
   LoopState,
   RosterState,
@@ -28,6 +29,7 @@ export function buildViewNodes(view: SidebarView, theme: ThemeLike): ViewNode[] 
       return [
         box({ flexDirection: "column", gap: 1 }, [
           ...configBannerNodes(view.configBanner, theme),
+          ...connectionNodes(view.connection ?? { kind: "none" }, theme),
           ...loopNodes(view.loop, theme),
           ...agentNodes(view.agents, theme),
           ...jobNodes(view.jobs, theme),
@@ -51,6 +53,7 @@ function linesForView(view: SidebarView): string[] {
     case "active":
       return [
         ...configBannerLines(view.configBanner),
+        ...connectionLines(view.connection ?? { kind: "none" }),
         ...loopLines(view.loop),
         ...agentLines(view.agents),
         ...jobLines(view.jobs),
@@ -83,6 +86,31 @@ function configBannerLines(banner: ConfigBanner): string[] {
       return ["config invalid - run doctor"]
     default:
       return assertNever(banner)
+  }
+}
+
+function connectionNodes(connection: ConnectionState, theme: ThemeLike): ViewNode[] {
+  return connectionLines(connection).map((line) => text({ fg: connection.kind === "frozen" ? theme.info : theme.warning }, line))
+}
+
+/** One line, as the guard's toasts say it: "Sin conexión · reintento 3/12 en 15s"; nothing when online. */
+function connectionLines(connection: ConnectionState): string[] {
+  switch (connection.kind) {
+    case "none":
+      return []
+    case "frozen":
+      return ["Reanudando tras congelamiento…"]
+    case "offline":
+    case "provider-down": {
+      const what = connection.kind === "offline" ? "Sin conexión" : "Proveedor sin respuesta"
+      const attempt = connection.attempt === null
+        ? ""
+        : ` · reintento ${connection.attempt}${connection.limit === null ? "" : `/${connection.limit}`}`
+      const wait = connection.inS === null ? "" : ` en ${connection.inS}s`
+      return [`${what}${attempt}${wait}`]
+    }
+    default:
+      return assertNever(connection)
   }
 }
 

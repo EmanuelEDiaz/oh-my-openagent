@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { CONTINUATION_MARKER_DIR } from "./constants"
 import type {
@@ -6,6 +6,7 @@ import type {
   ContinuationMarkerSource,
   ContinuationMarkerState,
 } from "./types"
+import { writeFileAtomically } from "../../shared/write-file-atomically"
 
 function getMarkerPath(directory: string, sessionID: string): string {
   return join(directory, CONTINUATION_MARKER_DIR, `${sessionID}.json`)
@@ -56,7 +57,7 @@ export function setContinuationMarkerSource(
 
   const markerPath = getMarkerPath(directory, sessionID)
   mkdirSync(join(directory, CONTINUATION_MARKER_DIR), { recursive: true })
-  writeFileSync(markerPath, JSON.stringify(next, null, 2), "utf-8")
+  writeFileAtomically(markerPath, JSON.stringify(next, null, 2))
   return next
 }
 

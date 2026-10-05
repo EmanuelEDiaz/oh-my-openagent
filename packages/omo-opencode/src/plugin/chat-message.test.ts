@@ -14,6 +14,8 @@ import { getAgentListDisplayName } from "../shared/agent-display-names"
 import { getOmoOpenCodeCacheDir, getOpenCodeCacheDir } from "../shared/data-path"
 import { OMO_INTERNAL_INITIATOR_MARKER } from "../shared/internal-initiator-marker"
 import { clearSessionModel, getSessionModel, setSessionModel } from "../shared/session-model-state"
+import { _setInterruptionNotesForTesting, type InterruptionNotes } from "../features/interruption/plugin"
+import { createInternalAgentContinuationTextPart } from "../shared/internal-initiator-marker"
 import { createChatMessageHandler } from "./chat-message"
 import type { PluginContext } from "./types"
 
@@ -1042,5 +1044,51 @@ describe("createChatMessageHandler - TUI variant passthrough", () => {
 
     //#then
     expect(getSessionAgent("test-session")).toBe("Hephaestus - Deep Agent")
+  })
+})
+
+describe("createChatMessageHandler - one-shot interruption note (fork 0.15 D)", () => {
+  const NOTE = "<omo-interrupted-work>cut</omo-interrupted-work>"
+  let asked: string[] = []
+  beforeEach(() => {
+    asked = []
+    _setInterruptionNotesForTesting(unsafeTestValue<InterruptionNotes>({
+      noteFor: async (sessionID: string) => {
+        asked.push(sessionID)
+        return NOTE
+      },
+    }))
+  })
+  afterEach(() => _setInterruptionNotesForTesting(undefined))
+
+  test("rides on the user's own text, not on an internal part that comes first", async () => {
+    const handler = createChatMessageHandler(createMockHandlerArgs())
+    const internal = `<system-reminder>todo continuation</system-reminder>\n${OMO_INTERNAL_INITIATOR_MARKER}`
+    const output: ChatMessageHandlerOutput = { message: {}, parts: [{ type: "text", text: internal }, { type: "text", text: "continúa" }] }
+
+    await handler(createMockInput("sisyphus"), output)
+
+    expect(output.parts[0]!.text).toBe(internal)
+    expect(output.parts[1]!.text).toBe(`continúa\n\n---\n\n${NOTE}`)
+  })
+
+  test("an internal continuation (network-guard, todo, ralph) neither gets nor consumes the note", async () => {
+    const handler = createChatMessageHandler(createMockHandlerArgs())
+    const part = createInternalAgentContinuationTextPart("[network-guard] Connection restored after 2 min. Continue from the last completed step.")
+    const output: ChatMessageHandlerOutput = { message: {}, parts: [{ ...part }] }
+
+    await handler(createMockInput("sisyphus"), output)
+
+    expect(asked).toEqual([])
+    expect(output.parts).toEqual([{ ...part }])
+  })
+
+  test("a message with only an attachment gets the note as its own part", async () => {
+    const handler = createChatMessageHandler(createMockHandlerArgs())
+    const output: ChatMessageHandlerOutput = { message: {}, parts: [{ type: "file", url: "file:///a.png" }] }
+
+    await handler(createMockInput("sisyphus"), output)
+
+    expect(output.parts[1]).toEqual({ type: "text", text: NOTE, synthetic: true })
   })
 })

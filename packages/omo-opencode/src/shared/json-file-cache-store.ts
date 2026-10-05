@@ -1,7 +1,8 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 
 import { log } from "./logger"
+import { writeFileAtomically } from "./write-file-atomically"
 
 type JsonFileCacheStoreOptions<TValue> = {
 	getCacheDir: () => string
@@ -87,7 +88,7 @@ export function createJsonFileCacheStore<TValue>(
 		const cacheFile = getCacheFilePath()
 
 		try {
-			writeFileSync(cacheFile, options.serialize?.(value) ?? JSON.stringify(value, null, 2))
+			writeFileAtomically(cacheFile, options.serialize?.(value) ?? JSON.stringify(value, null, 2))
 			memoryValue = value
 			writtenInCurrentProcess = true
 			log(`[${options.logPrefix}] ${options.cacheLabel} written`, options.describe(value))

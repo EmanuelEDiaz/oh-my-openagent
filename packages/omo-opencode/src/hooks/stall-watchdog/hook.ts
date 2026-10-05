@@ -13,7 +13,11 @@ export type StallWatchdogHookOptions = {
   readonly inactivityMs: number
   readonly checkIntervalMs: number
   readonly maxStallsPerTask: number
+  /** A monotonic-clock jump of more than this over the check interval is a freeze (0.15 B); undefined disables it. */
+  readonly freezeThresholdMs?: number
 }
+
+export type FreezeKind = "freeze" | "suspend"
 
 export type StallWatchdogHookDeps = {
   readonly now?: () => number
@@ -29,6 +33,19 @@ export type StallWatchdogHookDeps = {
   readonly pause?: (sessionID: string, reason: string, attempts: Array<{ model?: string; outcome: string }>) => Promise<void>
   /** The task's retry budget shared with the loop breaker (0.9b); exhausted → pause like the stall cap. */
   readonly chargeBudget?: (sessionID: string) => { used: number; max: number; exhausted: boolean } | undefined
+  /** The session waits for the network (network guard, 0.15): not stalled. */
+  readonly isWaiting?: (sessionID: string) => boolean
+  /** OpenCode's retry message is a network cut and network resilience is on: its backoff is a wait (0.15). */
+  readonly isNetworkRetry?: (message: unknown) => boolean
+  /**
+   * Asked before a stall is recovered: true when the network or a freeze caused it and the network guard took over
+   * on the same model, so no stall is counted, no budget charged and no model switched (0.15 A4).
+   */
+  readonly takeOverStall?: (sessionID: string, opts: { stopped: boolean }) => Promise<boolean>
+  /** The process was frozen or the system suspended; busy sessions may have dead sockets (0.15 B). */
+  readonly onFreeze?: (sessionIDs: readonly string[], seconds: number, kind: FreezeKind) => void
+  readonly monotonicNow?: () => number
+  readonly wallNow?: () => number
 }
 
 const STREAM_TIMEOUT = /SSE read timed out|ProviderResponseStreamError/i
@@ -50,10 +67,20 @@ export function createStallWatchdogHook(options: StallWatchdogHookOptions, deps:
     maxStallsPerTask: options.maxStallsPerTask,
     ...(deps.now ? { now: deps.now } : {}),
     ...(deps.hasManagedProcess ? { hasManagedProcess: deps.hasManagedProcess } : {}),
+    ...(deps.isWaiting ? { isWaiting: deps.isWaiting } : {}),
+    ...(deps.isNetworkRetry ? { isNetworkRetry: deps.isNetworkRetry } : {}),
   })
   setStallWatchdog(watchdog)
 
   async function recoverMainSession(sessionID: string, silentMs: number, alreadyStopped = false): Promise<void> {
+    const networkCut = await deps.takeOverStall?.(sessionID, { stopped: alreadyStopped }).catch((error) => {
+      log(`[${HOOK_NAME}] network check failed`, { sessionID, error: String(error) })
+      return false
+    })
+    if (networkCut) {
+      log(`[${HOOK_NAME}] stall caused by the network or a freeze; the network guard continues on the same model`, { sessionID })
+      return
+    }
     const stalls = watchdog.recordStall(sessionID)
     if (!alreadyStopped) {
       await deps.abort(sessionID).catch((error) => log(`[${HOOK_NAME}] abort failed`, { sessionID, error: String(error) }))
@@ -79,7 +106,36 @@ export function createStallWatchdogHook(options: StallWatchdogHookOptions, deps:
     })
   }
 
+  const monotonicNow = deps.monotonicNow ?? (() => performance.now())
+  const wallNow = deps.wallNow ?? Date.now
+  let lastMonotonic = monotonicNow()
+  let lastWall = wallNow()
+
+  /**
+   * Freeze detection (0.15 B) on the monotonic clock, which NTP does not move: a tick that arrives far later than the
+   * interval means the process was stopped (RAM pressure, SIGSTOP). A wall-clock jump the monotonic clock did not see
+   * is a system suspend. Either way the silence was not the model's.
+   */
+  function detectFreeze(): void {
+    const monotonic = monotonicNow()
+    const wall = wallNow()
+    const monotonicElapsed = monotonic - lastMonotonic
+    const wallElapsed = wall - lastWall
+    lastMonotonic = monotonic
+    lastWall = wall
+    if (options.freezeThresholdMs === undefined) return
+    const limit = options.checkIntervalMs + options.freezeThresholdMs
+    const kind: FreezeKind | undefined = monotonicElapsed > limit ? "freeze" : wallElapsed > limit ? "suspend" : undefined
+    if (!kind) return
+    const elapsed = kind === "freeze" ? monotonicElapsed : wallElapsed
+    const seconds = Math.round((elapsed - options.checkIntervalMs) / 1000)
+    const sessions = watchdog.resetBusyProgress()
+    log(`[${HOOK_NAME}] process ${kind === "freeze" ? "frozen" : "suspended"} for ${seconds} s`, { busySessions: sessions.length })
+    deps.onFreeze?.(sessions, seconds, kind)
+  }
+
   async function check(): Promise<void> {
+    detectFreeze()
     for (const stall of watchdog.findStalled()) {
       if (deps.isSubagentSession(stall.sessionID)) {
         log(`[${HOOK_NAME}] subagent stalled; its owner will retry`, { sessionID: stall.sessionID, silentMs: stall.silentMs })

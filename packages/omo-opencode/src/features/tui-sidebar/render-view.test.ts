@@ -105,4 +105,23 @@ describe("tui sidebar renderView", () => {
     expect(description).toContain("gpt-5.5")
     expect(nodes[0]?.kind).toBe("box")
   })
+
+  it("#given a network wait #when describing #then it shows one Spanish line before the other sections", () => {
+    // given
+    const offline = computeView({ ...activeSections, connection: { kind: "offline", attempt: 3, limit: 12, inS: 15 } })
+    const provider = computeView({ ...activeSections, connection: { kind: "provider-down", attempt: 2, limit: 12, inS: null } })
+    const retrying = computeView({ ...activeSections, connection: { kind: "offline", attempt: 4, limit: null, inS: 7 } })
+    const frozen = computeView({ ...activeSections, connection: { kind: "frozen" } })
+    const online = computeView({ ...activeSections, connection: { kind: "none" } })
+
+    // then
+    expect(describeView(offline)).toContain("Sin conexión · reintento 3/12 en 15s")
+    expect(describeView(offline).indexOf("Sin conexión")).toBeLessThan(describeView(offline).indexOf("ULW"))
+    expect(describeView(provider)).toContain("Proveedor sin respuesta · reintento 2/12")
+    expect(describeView(provider)).not.toContain(" en ")
+    expect(describeView(retrying)).toContain("Sin conexión · reintento 4 en 7s")
+    expect(describeView(frozen)).toContain("Reanudando tras congelamiento…")
+    expect(describeView(online)).not.toContain("conexión")
+    expect(JSON.stringify(buildViewNodes(offline, theme))).toContain("Sin conexión · reintento 3/12 en 15s")
+  })
 })

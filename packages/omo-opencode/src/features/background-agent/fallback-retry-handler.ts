@@ -12,6 +12,7 @@ import {
 } from "../../shared/model-error-classifier"
 import { transformModelForProvider } from "../../shared/provider-model-id-transform"
 import { abortWithTimeout } from "./abort-with-timeout"
+import { stepAsideForNetwork } from "../network-guard"
 import { ensureCurrentAttempt, scheduleRetryAttempt } from "./attempt-lifecycle"
 
 export class TeamModeFallbackError extends Error {
@@ -20,6 +21,9 @@ export class TeamModeFallbackError extends Error {
     this.name = "TeamModeFallbackError"
   }
 }
+
+const NETWORK_GAVE_UP_SOURCES = new Set(["session.error", "message.updated"])
+const NETWORK_RETRYING_SOURCES = new Set(["session.status", "polling:session.status"])
 
 function canonicalizeModelID(modelID: string): string {
   return modelID.toLowerCase().replace(/\./g, "-")
@@ -70,6 +74,14 @@ export async function tryFallbackRetry(args: {
 }): Promise<boolean> {
   const { task, errorInfo, source, concurrencyManager, client, idleDeferralTimers, queuesByKey, processKey, onRetrying } = args
   const deps = { ...defaultFallbackRetryHandlerDeps, ...args.deps }
+  // A network cut is not a model failure (fork roadmap 0.15): no model switch, no attempt, no cooldown. OpenCode's
+  // own retry status is left alone; once OpenCode gives up, the network guard continues the same session. Prompt
+  // dispatch failures (promptAsync.*) talk to the local OpenCode server and keep their own handling.
+  const networkSource = NETWORK_GAVE_UP_SOURCES.has(source) || NETWORK_RETRYING_SOURCES.has(source)
+  if (networkSource && stepAsideForNetwork(task.sessionId, errorInfo, NETWORK_GAVE_UP_SOURCES.has(source))) {
+    deps.log("[background-agent] Network cut; no fallback", { taskId: task.id, source, errorMessage: errorInfo.message?.slice(0, 100) })
+    return false
+  }
   const fallbackChain = task.fallbackChain
   const canUseProviderExhaustionFallback = deps.isProviderExhaustionFallbackEligible(errorInfo)
   const canRetry =

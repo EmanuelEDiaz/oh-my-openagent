@@ -8,6 +8,7 @@ import { readMirror } from "./mirror-io"
 import { TuiStateMirror } from "./mirror-manager"
 import type { SessionAgentResolver } from "./snapshot-builder"
 import type { BackgroundTaskSnapshot } from "../background-agent/types"
+import type { NetworkGuardSessionView } from "../network-guard"
 
 type StatusRow = { readonly type: string }
 type StatusMap = Record<string, StatusRow>
@@ -61,6 +62,8 @@ function createMirror(input?: {
   readonly backgroundManager?: FakeBackgroundManager
   readonly sessionAgentResolver?: SessionAgentResolver
   readonly reportFlushError?: (error: Error) => void
+  readonly getConnectionViews?: () => readonly NetworkGuardSessionView[] | undefined
+  readonly subscribeConnection?: (listener: () => void) => () => void
 }): TuiStateMirror {
   const projectDir = input?.projectDir ?? makeTempDir("project")
   return new TuiStateMirror({
@@ -69,6 +72,8 @@ function createMirror(input?: {
     backgroundManager: input?.backgroundManager ?? createBackgroundManager([]),
     sessionAgentResolver: input?.sessionAgentResolver ?? resolveTestSessionAgent,
     reportFlushError: input?.reportFlushError,
+    getConnectionViews: input?.getConnectionViews ?? (() => []),
+    subscribeConnection: input?.subscribeConnection ?? (() => () => undefined),
   })
 }
 
@@ -285,5 +290,34 @@ describe("TuiStateMirror", () => {
 
     // then
     expect(buildCount).toBe(1)
+  })
+
+  it("#given a started mirror #when the network guard changes #then it rewrites the mirror with the wait and unsubscribes on stop", async () => {
+    // given: real timers; each flush resolves after the 250ms debounce
+    const projectDir = makeTempDir("connection-change")
+    let views: NetworkGuardSessionView[] = []
+    let listener: (() => void) | undefined
+    const unsubscribe = jest.fn()
+    const mirror = createMirror({
+      projectDir,
+      getConnectionViews: () => views,
+      subscribeConnection: (next) => {
+        listener = next
+        return unsubscribe
+      },
+    })
+    mirror.start()
+    await mirror.flush()
+    expect(readMirror(projectDir)?.connection).toBeUndefined()
+
+    // when
+    views = [{ sessionID: "ses-main", phase: "offline", attempt: 1, limit: 12, verdict: "offline", nextAt: Date.now() + 15_000, since: Date.now() }]
+    listener?.()
+    await mirror.flush()
+
+    // then
+    expect(readMirror(projectDir)?.connection).toMatchObject({ state: "offline", attempt: 2, limit: 12 })
+    mirror.stop()
+    expect(unsubscribe).toHaveBeenCalledTimes(1)
   })
 })

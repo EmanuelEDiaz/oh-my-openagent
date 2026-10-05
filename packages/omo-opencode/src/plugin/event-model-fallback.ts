@@ -6,6 +6,7 @@ import {
   setPendingModelFallback,
   type ModelFallbackHook,
 } from "../hooks/model-fallback/hook";
+import { stepAsideForNetwork } from "../features/network-guard";
 import { shouldRetryError } from "../shared/model-error-classifier";
 import { AGENT_MODEL_REQUIREMENTS } from "../shared/model-requirements";
 import { extractRetryAttempt, normalizeRetryStatusMessage } from "../shared/retry-status-utils";
@@ -122,6 +123,9 @@ export function createModelFallbackEventHandler(args: {
     const lastHandled = lastHandledModelErrorMessageID.get(params.sessionID);
     if (lastHandled === assistantMessageID) return true;
 
+    // A network cut is waited out on the same model by the network guard (fork roadmap 0.15).
+    if (stepAsideForNetwork(params.sessionID, assistantError, true)) return false;
+
     const errorName = extractErrorName(assistantError);
     const errorMessage = extractErrorMessage(assistantError);
     if (!shouldRetryError({ name: errorName, message: errorMessage })) return false;
@@ -168,6 +172,8 @@ export function createModelFallbackEventHandler(args: {
     if (lastHandledRetryStatusKey.get(params.sessionID) === retryKey) return true;
     lastHandledRetryStatusKey.set(params.sessionID, retryKey);
 
+    // OpenCode is retrying a network cut itself: let it, without switching models.
+    if (stepAsideForNetwork(params.sessionID, retryMessage, false)) return false;
     if (!shouldRetryError({ name: undefined, message: retryMessage })) return false;
 
     const agentName = resolveFallbackAgentName({
@@ -205,7 +211,9 @@ export function createModelFallbackEventHandler(args: {
     errorName?: string;
     props?: Record<string, unknown>;
   }): Promise<void> => {
-    if (!shouldHandleModelFallback() || !shouldRetryError({ name: params.errorName, message: params.errorMessage })) return;
+    if (!shouldHandleModelFallback()) return;
+    if (stepAsideForNetwork(params.sessionID, params.props?.error ?? { name: params.errorName, message: params.errorMessage }, true)) return;
+    if (!shouldRetryError({ name: params.errorName, message: params.errorMessage })) return;
 
     const agentName = resolveFallbackAgentName({
       currentAgent: getSessionAgent(params.sessionID),

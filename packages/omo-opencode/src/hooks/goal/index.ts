@@ -1,5 +1,6 @@
 import type { PluginInput } from "@opencode-ai/plugin"
 import { dispatchInternalPrompt, isInternalPromptDispatchAccepted } from "../shared/prompt-async-gate"
+import { createInternalAgentContinuationTextPart } from "../../shared/internal-initiator-marker"
 import { createGoalController, type GoalController } from "./controller"
 import { buildContinuationPrompt } from "./prompt"
 import type { Goal } from "./types"
@@ -58,7 +59,8 @@ export function createGoalHook(ctx: PluginInput, options: GoalHookOptions): Goal
         input: {
           path: { id: sessionID },
           body: {
-            parts: [{ type: "text", text: promptText }],
+            // Marked internal: user-only features (e.g. the fork 0.15 resume note) must not treat it as the user's message.
+            parts: [createInternalAgentContinuationTextPart(promptText)],
           },
         },
       })

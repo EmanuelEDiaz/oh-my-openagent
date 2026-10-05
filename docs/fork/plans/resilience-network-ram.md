@@ -1,6 +1,6 @@
 # Paso 0.15 — Cortes de red, congelamientos y procesos matados sin perder nada
 
-Parte del roadmap: `docs/fork/roadmap.md` (fila 0.15). Estado: **plan detallado, pendiente de aprobación (05-10-2026)**.
+Parte del roadmap: `docs/fork/roadmap.md` (fila 0.15). Estado: **plan aprobado (05-10-2026)**; implementación en `feat/resilience`.
 Rutas: `S/` = `packages/omo-opencode/src/`, `MC/` = `packages/model-core/src/`.
 
 ## Problema (usuario, 05-10-2026)
@@ -94,7 +94,7 @@ Rutas: `S/` = `packages/omo-opencode/src/`, `MC/` = `packages/model-core/src/`.
    → tarjeta de reanudación + aviso "la sesión X se cortó" con la causa probable: OOM del kernel si subió `oom_kill`
    en `/proc/vmstat`; "falta de RAM" si llegó SIGTERM con memoria baja (earlyoom avisa así antes de matar) o la última
    muestra era baja/PSI alta; si no, "el proceso terminó".
-   Guía opcional para earlyoom: `--avoid '^(opencode|bun)$'` y un script `-N` que deja `.omo/runs/oom-<pid>.json`.
+   Si earlyoom dejó constancia del kill (guía de abajo), la causa es exacta: "earlyoom lo cerró por falta de RAM".
 4. **Límite honesto:** mensajes, archivos y estado se conservan (OpenCode guarda los mensajes en SQLite mientras
    llegan); la respuesta que se generaba en el instante del kill se vuelve a pedir.
 
@@ -118,6 +118,22 @@ Rutas: `S/` = `packages/omo-opencode/src/`, `MC/` = `packages/model-core/src/`.
 - Se mide cuánta memoria cuesta de verdad un subagente (caída de `MemAvailable` tras lanzarlo): los subagentes son
   sesiones dentro del mismo proceso; lo caro suelen ser los procesos hijos (LSP, bash).
 - Convive con la pausa por memoria alta ya existente de 0.9b (`memory-watch`), sin duplicar avisos.
+
+### Guía opcional para earlyoom (Linux)
+earlyoom manda SIGTERM al ≤10 % de memoria y swap libres y SIGKILL al ≤5 %. Dos ajustes opcionales en
+`/etc/default/earlyoom` (`EARLYOOM_ARGS`), con `sudo systemctl restart earlyoom` después:
+- `--avoid '^(opencode|bun)$'`: prefiere matar otros procesos antes que OpenCode.
+- `-N /usr/local/bin/omo-earlyoom-note`: anota cada kill para que la tarjeta diga la causa exacta. El script:
+  ```sh
+  #!/bin/sh
+  # earlyoom runs it as root: write to the user's state dir (replace USER).
+  dir=/home/USER/.local/state/omo
+  mkdir -p "$dir" && echo "$EARLYOOM_PID $EARLYOOM_NAME $(date -Is)" >> "$dir/earlyoom-kills.log"
+  chown -R USER "$dir"
+  ```
+El plugin lee `${XDG_STATE_HOME:-~/.local/state}/omo/earlyoom-kills.log` al arrancar
+(`S/features/interruption/process-identity.ts`). Sin la guía, la causa sale igual como "probablemente por falta de RAM"
+por la memoria y la presión medidas antes del kill.
 
 ### Configuración (`resilience` en `omo.jsonc`)
 `network_probe_limit` 12, `network_backoff_s` [5,15,30,60], `freeze_threshold_s` 10, `wip_heartbeat_s` 15,
@@ -144,3 +160,33 @@ Rutas: `S/` = `packages/omo-opencode/src/`, `MC/` = `packages/model-core/src/`.
 ## Entregables
 Código y pruebas en la rama `feat/resilience`; evidencia en `.omo/evidence/0.15/`; este plan y el roadmap actualizados;
 merge `--no-ff` a `mis-mejoras` tras la QA y la suite de integración.
+
+## Implementación (05-10-2026, rama `feat/resilience`)
+- **A/B red y congelamiento:** `MC/network-error-classifier.ts` (`isNetworkError`: cualquier código HTTP = no es red);
+  `S/features/network-guard/` (guardián, sondeo doble con variación, monitor `ip` en Linux mientras hay sesiones
+  ocupadas, huella de `os.networkInterfaces()` para detectar cambios de red sin error, toasts, línea en la barra
+  lateral); salidas tempranas en `runtime-fallback`, `model-fallback` y el reintento de subagentes; el vigilante (0.8)
+  trata como espera solo los reintentos de red y no cobra presupuesto por red, cambio de red o congelamiento.
+- **C/D/E:** `S/shared/write-file-atomically.ts` (temporal único, limpieza al arrancar) y 14 escritores migrados;
+  `S/features/interruption/` (registro de interrupciones que se fusionan, marca WIP con pid + hora de arranque +
+  `boot_id`, huérfanos, causa probable con `oom_kill`/PSI/registro de earlyoom, nota de un solo uso con comprobación de
+  ediciones a medias); `S/features/background-agent/memory-gate.ts` (cola con histéresis, PSI, espera máxima 4 min).
+- **Decisiones durante la implementación:**
+  - la continuación tras volver la red fija explícitamente el modelo que usaba la sesión (sin modelo, OpenCode podría
+    usar el del agente);
+  - proveedor que falla por transporte con la red bien: tras 2 reanudaciones sin datos del modelo pasa al respaldo y
+    cobra el presupuesto de 0.9b (evita un bucle sin fin);
+  - si el usuario escribe o aborta durante la espera, no se manda la continuación automática;
+  - cerrar OpenCode a mano mientras trabaja también deja la nota de reanudación (el trabajo quedó cortado igual);
+  - una ventana viva de OpenCode (pid vivo con la misma hora de arranque) nunca se trata como huérfana aunque esté
+    congelada; sin `/proc` (Windows/macOS), solo tras 24 h sin latido;
+  - `network-guard` se apaga con `resilience.enabled: false` (no con `disabled_hooks`);
+  - el aviso de continuación del hook `goal` pasa a marcarse como interno para que la nota no se pegue a él.
+- **Revisión independiente:** 3 fallos graves (reintento que se cuelga sin recuperación, bucle con el proveedor caído,
+  el cambio de red seguía el camino viejo), 7 medios y 6 menores; todos arreglados con una prueba que fallaba antes.
+- **Pruebas unitarias:** 369 en verde en los módulos tocados; chequeo de tipos limpio. Los 65 fallos de
+  `src/hooks/runtime-fallback` al correr la carpeta entera son previos (un `mock.module` de `hook.init.test.ts` se
+  filtra a otros archivos; fallan igual en HEAD sin 0.15).
+- **QA aislada:** `script/fork/qa/resilience.ts` (corte corto, corte largo con nota, congelamiento, kill con
+  "sigue con eso", kill con otra petición); no arranca si dejaría menos de 3 GB libres. Resultados: pendientes de correr
+  al terminar la medición de 0.9b.

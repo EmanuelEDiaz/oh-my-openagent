@@ -198,4 +198,24 @@ describe("tui sidebar computeView", () => {
     // then
     expect(changedKey).not.toBe(originalKey)
   })
+
+  it("#given only a network wait #when computing view #then it is active and the countdown changes the key", () => {
+    // given
+    const sections = {
+      config: validConfig,
+      roster,
+      agents: idleAgents,
+      jobs: idleJobs,
+      loop: idleLoop,
+      connection: { kind: "offline", attempt: 2, limit: 12, inS: 15 } as const,
+    }
+
+    // when
+    const view = computeView(sections)
+    const later = computeView({ ...sections, connection: { ...sections.connection, inS: 13 } })
+
+    // then
+    expect(view.kind).toBe("active")
+    expect(viewKey(view)).not.toBe(viewKey(later))
+  })
 })

@@ -11,6 +11,8 @@ type SessionState = {
   lastProgress: number
   runningTools: Set<string>
   reported: boolean
+  /** OpenCode is retrying the request itself (session.status retry): waiting, not stalled (fork roadmap 0.15). */
+  retrying: boolean
 }
 
 export type Stall = { readonly sessionID: string; readonly silentMs: number }
@@ -22,6 +24,13 @@ export type StallWatchdogOptions = {
   readonly hasManagedProcess?: (sessionID: string) => boolean
   /** Stalls tolerated per task before recovery stops and the user is told (default 2). */
   readonly maxStallsPerTask?: number
+  /** Sessions waiting for the network (network guard, 0.15) are waiting, not stalled. */
+  readonly isWaiting?: (sessionID: string) => boolean
+  /**
+   * True when OpenCode's retry message is a network cut and network resilience is on (0.15): only then is its retry
+   * backoff a wait. Unset: every retry (429, 5xx…) counts as silence, as before 0.15.
+   */
+  readonly isNetworkRetry?: (message: unknown) => boolean
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -42,7 +51,7 @@ export function createStallWatchdog(options: StallWatchdogOptions) {
   function state(sessionID: string): SessionState {
     let current = sessions.get(sessionID)
     if (!current) {
-      current = { busy: false, lastProgress: now(), runningTools: new Set(), reported: false }
+      current = { busy: false, lastProgress: now(), runningTools: new Set(), reported: false, retrying: false }
       sessions.set(sessionID, current)
     }
     return current
@@ -51,6 +60,7 @@ export function createStallWatchdog(options: StallWatchdogOptions) {
   function progress(current: SessionState): void {
     current.lastProgress = now()
     current.reported = false
+    current.retrying = false
   }
 
   return {
@@ -68,17 +78,24 @@ export function createStallWatchdog(options: StallWatchdogOptions) {
         current.busy = false
         current.runningTools.clear()
         current.reported = false
+        current.retrying = false
         return
       }
       if (event.type === "session.status") {
-        const type = record(record(event.properties)?.status)?.type
+        const status = record(record(event.properties)?.status)
+        const type = status?.type
         if (type === "idle") {
           current.busy = false
           current.runningTools.clear()
           current.reported = false
-        } else if (!current.busy) {
-          current.busy = true
-          progress(current)
+          current.retrying = false
+        } else {
+          // Leaving OpenCode's retry backoff restarts the window: that wait was not the model's silence.
+          if (!current.busy || current.retrying) {
+            current.busy = true
+            progress(current)
+          }
+          current.retrying = type === "retry" && options.isNetworkRetry?.(status?.message) === true
         }
         return
       }
@@ -104,8 +121,9 @@ export function createStallWatchdog(options: StallWatchdogOptions) {
     findStalled(): Stall[] {
       const stalls: Stall[] = []
       for (const [sessionID, current] of sessions) {
-        if (!current.busy || current.reported || current.runningTools.size > 0) continue
+        if (!current.busy || current.reported || current.runningTools.size > 0 || current.retrying) continue
         if (options.hasManagedProcess?.(sessionID)) continue
+        if (options.isWaiting?.(sessionID)) continue
         const silentMs = now() - current.lastProgress
         if (silentMs <= options.inactivityMs) continue
         current.reported = true
@@ -117,6 +135,21 @@ export function createStallWatchdog(options: StallWatchdogOptions) {
     /** Sessions currently producing work (busy), for saving resume cards before the process dies. */
     busySessions(): string[] {
       return [...sessions].filter(([, current]) => current.busy).map(([sessionID]) => sessionID)
+    },
+
+    /**
+     * After a freeze or suspend (fork roadmap 0.15 B): the silence was the process's, not the model's, so busy
+     * sessions restart their inactivity window. Returns the busy sessions.
+     */
+    resetBusyProgress(): string[] {
+      const busy: string[] = []
+      for (const [sessionID, current] of sessions) {
+        if (!current.busy) continue
+        current.lastProgress = now()
+        current.reported = false
+        busy.push(sessionID)
+      }
+      return busy
     },
 
     isStalled(sessionID: string): boolean {

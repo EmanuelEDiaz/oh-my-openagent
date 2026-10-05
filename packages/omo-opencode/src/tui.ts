@@ -8,7 +8,7 @@ import { mkdirSync, watch, type FSWatcher } from "node:fs"
 import { basename, dirname } from "node:path"
 
 import { mirrorFilePath } from "./features/tui-sidebar/mirror-path"
-import { deriveAgents, deriveConfig, deriveJobBoard, deriveLoop, deriveRoster } from "./features/tui-sidebar/derivers"
+import { deriveAgents, deriveConfig, deriveConnection, deriveJobBoard, deriveLoop, deriveRoster } from "./features/tui-sidebar/derivers"
 import type { ViewNode } from "./features/tui-sidebar/element-helpers"
 import { readMirror } from "./features/tui-sidebar/mirror-io"
 import { buildViewNodes } from "./features/tui-sidebar/render-view"
@@ -109,7 +109,13 @@ async function readStaticParts(directory: string, validation?: PluginValidation)
 
 function readView(directory: string, parts: StaticParts): SidebarView {
   const mirror = readMirror(directory)
-  return computeView({ ...parts, agents: deriveAgents(mirror), jobs: deriveJobBoard(mirror), loop: deriveLoop(mirror) })
+  return computeView({
+    ...parts,
+    agents: deriveAgents(mirror),
+    jobs: deriveJobBoard(mirror),
+    loop: deriveLoop(mirror),
+    connection: deriveConnection(mirror),
+  })
 }
 
 /** Refreshes after the server rewrites its state file: a file-system watch, no polling. */

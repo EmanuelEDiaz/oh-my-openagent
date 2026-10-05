@@ -36,7 +36,7 @@ TUI side:     1s poll → readMirror() → derivers → computeView() → viewKe
 
 - `TuiStateMirror` — constructed in `src/create-managers.ts` when sidebar enabled; deps injected (`client`, `backgroundManager`, optional `getStatuses`/`sessionAgentResolver`).
 - `readMirror`, `computeView`, `viewKey`, `buildViewNodes`, derivers, `POLL_INTERVAL_MS` — consumed by `src/tui.ts` on the render side.
-- `TuiRuntimeSnapshot` — the cross-process contract; bump `MIRROR_SCHEMA_VERSION` on shape changes (readers drop non-matching versions).
+- `TuiRuntimeSnapshot` — the cross-process contract; bump `MIRROR_SCHEMA_VERSION` on breaking shape changes (readers drop non-matching versions); a new optional field keeps the version, since the schema strips unknown keys.
 
 ## LIFECYCLE / WIRING
 
@@ -54,6 +54,6 @@ TUI side:     1s poll → readMirror() → derivers → computeView() → viewKe
 ## ANTI-PATTERNS
 
 - Don't share memory between plugin and TUI sides; the mirror file is the only channel.
-- Don't change snapshot shape without bumping `MIRROR_SCHEMA_VERSION`; old readers silently drop the file otherwise.
+- Don't make a breaking snapshot change (removed/renamed/retyped field) without bumping `MIRROR_SCHEMA_VERSION`; old readers would misread the file otherwise. Optional additions (e.g. `connection`, fork 0.15) keep the version.
 - Don't write the mirror directly; go through `TuiStateMirror.flush()` so debounce and in-flight dedup hold.
 - Don't add new timing values inline; all knobs live in `constants.ts`.

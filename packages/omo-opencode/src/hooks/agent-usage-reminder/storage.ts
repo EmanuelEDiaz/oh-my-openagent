@@ -2,12 +2,12 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
-  writeFileSync,
   unlinkSync,
 } from "node:fs";
 import { join } from "node:path";
 import { AGENT_USAGE_REMINDER_STORAGE } from "./constants";
 import type { AgentUsageState } from "./types";
+import { writeFileAtomically } from "../../shared/write-file-atomically";
 
 function getStoragePath(sessionID: string): string {
   return join(AGENT_USAGE_REMINDER_STORAGE, `${sessionID}.json`);
@@ -31,7 +31,7 @@ export function saveAgentUsageState(state: AgentUsageState): void {
   }
 
   const filePath = getStoragePath(state.sessionID);
-  writeFileSync(filePath, JSON.stringify(state, null, 2));
+  writeFileAtomically(filePath, JSON.stringify(state, null, 2));
 }
 
 export function clearAgentUsageState(sessionID: string): void {

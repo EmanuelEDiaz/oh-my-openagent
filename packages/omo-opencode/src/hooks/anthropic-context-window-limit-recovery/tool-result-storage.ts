@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
 
 import { getMessageIds } from "./message-storage-directory"
@@ -6,6 +6,7 @@ import { PART_STORAGE_DIR, TRUNCATION_MESSAGE } from "./storage-paths"
 import type { StoredToolPart, ToolResultInfo } from "./tool-part-types"
 import { isSqliteBackend } from "../../shared/opencode-storage-detection"
 import { log } from "../../shared/logger"
+import { writeFileAtomically } from "../../shared/write-file-atomically"
 
 let hasLoggedTruncateWarning = false
 
@@ -79,7 +80,7 @@ export function truncateToolResult(partPath: string): {
 		// See issue #1734 — Improvement 1 (non-destructive recovery).
 		const backupPath = `${partPath}.original`
 		try {
-			writeFileSync(backupPath, part.state.output)
+			writeFileAtomically(backupPath, part.state.output)
 		} catch {
 			// Best-effort backup — truncation proceeds even if backup fails
 		}
@@ -93,7 +94,7 @@ export function truncateToolResult(partPath: string): {
 		}
 		part.state.time.compacted = Date.now()
 
-		writeFileSync(partPath, JSON.stringify(part, null, 2))
+		writeFileAtomically(partPath, JSON.stringify(part, null, 2))
 
 		return { success: true, toolName, originalSize }
 	} catch (error) {

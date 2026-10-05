@@ -4,10 +4,11 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 
 import { LOOP_FRESH_MS } from "./constants"
-import { buildTuiRuntimeSnapshot } from "./snapshot-builder"
+import { buildTuiRuntimeSnapshot, connectionFromGuard } from "./snapshot-builder"
 import { TuiRuntimeSnapshotSchema } from "./snapshot-schema"
 import type { SessionAgentResolver } from "./snapshot-builder"
 import type { BackgroundTaskSnapshot } from "../background-agent/types"
+import type { NetworkGuardSessionView } from "../network-guard"
 
 type StatusRow = { readonly type: string }
 type StatusMap = Record<string, StatusRow>
@@ -203,5 +204,77 @@ describe("buildTuiRuntimeSnapshot", () => {
       { title: "atlas background task", status: "running", toolCalls: 1, lastTool: "read" },
     ])
     expect(JSON.stringify(snapshot)).not.toContain("sk-live")
+  })
+
+  it("#given a fake guard waiting between probes #when building #then the snapshot carries the next attempt and time", async () => {
+    // given
+    const projectDir = makeTempDir("connection")
+    const views: NetworkGuardSessionView[] = [
+      { sessionID: "ses-main", phase: "offline", attempt: 2, limit: 12, verdict: "offline", nextAt: 5_000, since: 1_000 },
+    ]
+
+    // when
+    const snapshot = await buildTuiRuntimeSnapshot({
+      projectDir,
+      client: createClient({}),
+      backgroundManager: createBackgroundManager([]),
+      getConnectionViews: () => views,
+    })
+
+    // then
+    expect(TuiRuntimeSnapshotSchema.safeParse(snapshot).success).toBe(true)
+    expect(snapshot.connection).toEqual({ state: "offline", attempt: 3, limit: 12, nextAt: 5_000, since: 1_000 })
+  })
+
+  it("#given no guard or an online guard #when building #then the snapshot has no connection key", async () => {
+    // given
+    const projectDir = makeTempDir("online")
+
+    // when
+    const withoutGuard = await buildTuiRuntimeSnapshot({
+      projectDir,
+      client: createClient({}),
+      backgroundManager: createBackgroundManager([]),
+      getConnectionViews: () => undefined,
+    })
+    const online = await buildTuiRuntimeSnapshot({
+      projectDir,
+      client: createClient({}),
+      backgroundManager: createBackgroundManager([]),
+      getConnectionViews: () => [],
+    })
+
+    // then
+    expect("connection" in withoutGuard).toBe(false)
+    expect("connection" in online).toBe(false)
+  })
+})
+
+describe("connectionFromGuard", () => {
+  it("#given a probe in flight with the provider down #when mapping #then it shows the running attempt and no wait", () => {
+    expect(connectionFromGuard([{ sessionID: "s", phase: "offline", attempt: 2, limit: 12, verdict: "provider-down", since: 10 }]))
+      .toEqual({ state: "provider-down", attempt: 2, limit: 12, nextAt: null, since: 10 })
+  })
+
+  it("#given OpenCode retrying and a guard cycle #when mapping #then the guard cycle wins", () => {
+    const views: NetworkGuardSessionView[] = [
+      { sessionID: "a", phase: "retrying", attempt: 4, limit: 12, nextAt: 99, since: 1 },
+      { sessionID: "b", phase: "offline", attempt: 0, limit: 12, since: 5 },
+    ]
+    expect(connectionFromGuard(views)).toEqual({ state: "offline", attempt: 0, limit: 12, nextAt: null, since: 5 })
+  })
+
+  it("#given only OpenCode retrying #when mapping #then it shows its attempt without a limit", () => {
+    expect(connectionFromGuard([{ sessionID: "a", phase: "retrying", attempt: 4, limit: 12, nextAt: 99, since: 1 }]))
+      .toEqual({ state: "offline", attempt: 4, limit: null, nextAt: 99, since: 1 })
+  })
+
+  it("#given a session resumed after a freeze #when mapping #then it reports frozen", () => {
+    expect(connectionFromGuard([{ sessionID: "a", phase: "online", limit: 12, frozenSeconds: 40 }]))
+      .toEqual({ state: "frozen", attempt: null, limit: null, nextAt: null, since: null })
+  })
+
+  it("#given nothing waits #when mapping #then it returns null", () => {
+    expect(connectionFromGuard([])).toBeNull()
   })
 })

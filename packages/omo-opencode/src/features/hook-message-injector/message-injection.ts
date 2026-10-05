@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { createInternalAgentTextPart } from "../../shared/internal-initiator-marker"
 import { log } from "../../shared/logger"
@@ -8,6 +8,7 @@ import { generateMessageId, generatePartId } from "./id-generation"
 import { findNearestMessageWithFields } from "./json-message-lookup"
 import { getOrCreateMessageDir } from "./message-directory"
 import type { MessageMeta, OriginalMessageContext, StoredMessage, TextPart } from "./types"
+import { writeFileAtomically } from "../../shared/write-file-atomically"
 
 function resolveModel(originalMessage: OriginalMessageContext, fallback: StoredMessage | null): MessageMeta["model"] {
   if (originalMessage.model?.providerID && originalMessage.model?.modelID) {
@@ -119,8 +120,8 @@ export function injectHookMessage(
 
     const messagePath = join(messageDir, `${messageID}.json`)
     const partPath = join(partDir, `${partID}.json`)
-    writeFileSync(partPath, JSON.stringify(textPart, null, 2))
-    writeFileSync(messagePath, JSON.stringify(messageMeta, null, 2))
+    writeFileAtomically(partPath, JSON.stringify(textPart, null, 2))
+    writeFileAtomically(messagePath, JSON.stringify(messageMeta, null, 2))
 
     return true
   } catch (error) {

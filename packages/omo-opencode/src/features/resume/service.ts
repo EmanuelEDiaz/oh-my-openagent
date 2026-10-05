@@ -110,6 +110,11 @@ export function createResumeService(deps: ResumeServiceDeps) {
 
     checkMemory,
 
+    /** True while the high-memory warning of this service is active (the low-RAM subagent gate stays quiet then). */
+    isMemoryHigh(): boolean {
+      return memoryWatch?.isHigh() ?? false
+    },
+
     dispose(): void {
       if (memoryTimer) clearInterval(memoryTimer)
       memoryTimer = undefined

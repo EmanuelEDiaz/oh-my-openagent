@@ -1,9 +1,12 @@
 /** Real OpenCode wiring for the stall watchdog hook (fork roadmap 0.8a). */
+import { isNetworkError } from "@oh-my-opencode/model-core"
+
 import type { OhMyOpenCodeConfig } from "../../config"
 import { abortWithTimeout } from "../../features/background-agent/abort-with-timeout"
 import { getActiveProcessManager } from "../../features/managed-process"
 import { getActiveResumeService } from "../../features/resume/plugin"
 import { getActiveLoopBreaker } from "../../features/loop-breaker/plugin"
+import { getNetworkGuard, isNetworkResilienceEnabled } from "../../features/network-guard"
 import { subagentSessions, syncSubagentSessions } from "../../features/claude-code-session-state"
 import { createInternalAgentContinuationTextPart } from "../../shared"
 import { log } from "../../shared/logger"
@@ -33,6 +36,11 @@ export function createPluginStallWatchdogHook(ctx: PluginContext, pluginConfig: 
     },
     fallbackModels: (sessionID, agent) => getFallbackModelsForSession(sessionID, agent, pluginConfig),
     chargeBudget: (sessionID) => getActiveLoopBreaker()?.charge(sessionID, "stall recovery"),
+    // Network cuts and freezes (fork roadmap 0.15): read lazily, the guard may be created after this hook.
+    isWaiting: (sessionID) => getNetworkGuard()?.isWaiting(sessionID) ?? false,
+    isNetworkRetry: (message) => isNetworkResilienceEnabled() && isNetworkError(message),
+    takeOverStall: async (sessionID, opts) => (await getNetworkGuard()?.takeOverStall(sessionID, opts)) ?? false,
+    onFreeze: (sessionIDs, seconds) => getNetworkGuard()?.afterFreeze(sessionIDs, seconds),
     continueSession: async (sessionID, input) => {
       const model = input.model ? parseModel(input.model) : undefined
       const result = await dispatchInternalPrompt({
@@ -60,6 +68,7 @@ export function createPluginStallWatchdogHook(ctx: PluginContext, pluginConfig: 
       inactivityMs: stall?.inactivity_ms ?? 240_000,
       checkIntervalMs: stall?.check_interval_ms ?? 15_000,
       maxStallsPerTask: stall?.max_stalls_per_task ?? 2,
+      ...(pluginConfig.resilience?.enabled === false ? {} : { freezeThresholdMs: (pluginConfig.resilience?.freeze_threshold_s ?? 10) * 1000 }),
     },
     deps,
   )

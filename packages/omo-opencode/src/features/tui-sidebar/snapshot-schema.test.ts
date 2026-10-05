@@ -89,4 +89,54 @@ describe("TuiRuntimeSnapshotSchema", () => {
     // then
     expect(parsed).toBeNull()
   })
+
+  it("#given a snapshot with a network wait #when parsed #then the connection round-trips", () => {
+    // given
+    const snapshot: TuiRuntimeSnapshot = {
+      version: MIRROR_SCHEMA_VERSION,
+      projectDir: "/tmp/project",
+      updatedAt: 1,
+      activeAgents: [],
+      jobBoard: [],
+      loop: null,
+      connection: { state: "offline", attempt: 3, limit: 12, nextAt: 1_718_000_015, since: 1_718_000_000 },
+    }
+
+    // when
+    const parsed = parseSnapshot(snapshot)
+
+    // then
+    expect(parsed).toEqual(snapshot)
+  })
+
+  it("#given a mirror written without a connection #when parsed #then it still parses with no connection", () => {
+    // given
+    const raw = { version: MIRROR_SCHEMA_VERSION, projectDir: "/tmp/project", updatedAt: 1, activeAgents: [], jobBoard: [], loop: null }
+
+    // when
+    const parsed = parseSnapshot(raw)
+
+    // then
+    expect(parsed).not.toBeNull()
+    expect(parsed?.connection).toBeUndefined()
+  })
+
+  it("#given an unknown connection state #when parsed #then it returns null", () => {
+    // given
+    const raw = {
+      version: MIRROR_SCHEMA_VERSION,
+      projectDir: "/tmp/project",
+      updatedAt: 1,
+      activeAgents: [],
+      jobBoard: [],
+      loop: null,
+      connection: { state: "flaky", attempt: null, limit: null, nextAt: null, since: null },
+    }
+
+    // when
+    const parsed = parseSnapshot(raw)
+
+    // then
+    expect(parsed).toBeNull()
+  })
 })

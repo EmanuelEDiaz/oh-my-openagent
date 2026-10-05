@@ -10,6 +10,7 @@ import { resolveFallbackBootstrapModel } from "./fallback-bootstrap-model"
 import { dispatchFallbackRetry } from "./fallback-retry-dispatcher"
 import { resolveSessionEventID } from "../../shared/event-session-id"
 import { normalizeModelToCanonicalString } from "./normalize-model"
+import { stepAsideForNetwork } from "../../features/network-guard"
 
 export function createSessionStatusHandler(
   deps: HookDeps,
@@ -33,6 +34,11 @@ export function createSessionStatusHandler(
     if (!sessionID || status?.type !== "retry") return
 
     const retryMessage = typeof status.message === "string" ? status.message : ""
+    // OpenCode is retrying a network cut itself: never abort its retry nor switch models (fork roadmap 0.15).
+    if (stepAsideForNetwork(sessionID, retryMessage, false)) {
+      log(`[${HOOK_NAME}] session.status retry is a network cut; leaving OpenCode's retry alone`, { sessionID, attempt: status.attempt })
+      return
+    }
     const retrySignal = extractAutoRetrySignal({ status: retryMessage, message: retryMessage })
     if (!retrySignal) {
       // Fallback: status.type is already "retry", so check the message against

@@ -11,6 +11,7 @@ import { hasVisibleAssistantResponse } from "./visible-assistant-response"
 import { subagentSessions } from "../../features/claude-code-session-state"
 import { resolveMessageEventSessionID } from "../../shared/event-session-id"
 import { normalizeModelToCanonicalString } from "./normalize-model"
+import { stepAsideForNetwork } from "../../features/network-guard"
 
 export { hasVisibleAssistantResponse } from "./visible-assistant-response"
 
@@ -78,6 +79,13 @@ export function createMessageUpdateHandler(deps: HookDeps, helpers: AutoRetryHel
     }
 
     if (sessionID && role === "assistant" && error) {
+      // A network cut is not a model failure (fork roadmap 0.15): the network guard waits and continues on the same model.
+      if (info?.error && stepAsideForNetwork(sessionID, info.error, true)) {
+        sessionAwaitingFallbackResult.delete(sessionID)
+        helpers.clearSessionFallbackTimeout(sessionID)
+        log(`[${HOOK_NAME}] message.updated error is a network cut; leaving it to the network guard`, { sessionID, model })
+        return
+      }
       let state = sessionStates.get(sessionID)
       const pendingFallbackModel = state?.pendingFallbackModel
       const wasAwaitingFallbackResult = sessionAwaitingFallbackResult.has(sessionID)
