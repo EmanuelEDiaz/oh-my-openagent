@@ -142,15 +142,24 @@ function testsPass(workdir: string): boolean {
   return Bun.spawnSync(["bun", "test"], { cwd: workdir, stdout: "ignore", stderr: "ignore" }).exitCode === 0
 }
 
+/** Charges of the shared retry budget (0.9b): history entries that are not budget resets. */
 function budgetCharges(workdir: string): string[] {
   const runs = join(workdir, ".omo/runs")
   if (!existsSync(runs)) return []
   const charges: string[] = []
   for (const run of readdirSync(runs)) {
     const file = join(runs, run, "loops.json")
-    if (existsSync(file)) charges.push(...(JSON.stringify(JSON.parse(readFileSync(file, "utf8"))).match(/stall recovery|network|freeze/g) ?? []))
+    if (!existsSync(file)) continue
+    const budget = (JSON.parse(readFileSync(file, "utf8")) as { budget?: { history?: Array<{ cause?: string }> } }).budget
+    for (const entry of budget?.history ?? []) if (entry.cause && !/budget reset/.test(entry.cause)) charges.push(entry.cause)
   }
   return charges
+}
+
+/** The plugin's own log inside the sandbox (TMPDIR is sandboxed). */
+const pluginLog = (sandbox: Sandbox) => {
+  const file = join(sandbox.root, "tmp/oh-my-opencode.log")
+  return existsSync(file) ? readFileSync(file, "utf8") : ""
 }
 
 const interruptionOf = (workdir: string, sessionID: string) => {
@@ -209,10 +218,10 @@ const SCENARIOS: Scenario[] = [
       await client.session.promptAsync({ sessionID, agent: "Sisyphus - ultraworker", parts: [{ type: "text", text: "continúa" }] })
       await waitSettled(client, sessionID, 900_000)
       const list = await messages(client, sessionID)
-      const lastUser = userTexts(list).at(-1) ?? ""
+      const resumed = userTexts(list).find((text) => text.startsWith("continúa")) ?? ""
       return [
         check("interruption recorded as network", recorded?.cause === "network", recorded?.detail),
-        check("resume note rode on the user's message", /interrupt|cut|resum/i.test(lastUser) && lastUser.length > "continúa".length, lastUser.slice(0, 160)),
+        check("resume note rode on the user's message", resumed.includes("<omo-interrupted-work>"), resumed.slice(0, 160)),
         check("same model throughout", modelsUsed(list).length === 1, modelsUsed(list).join(", ")),
         check("task finished (tests pass)", testsPass(workdir)),
         check("note cleared after use", interruptionOf(workdir, sessionID) === undefined),
@@ -260,11 +269,11 @@ const SCENARIOS: Scenario[] = [
       await client.session.promptAsync({ sessionID, agent: "Sisyphus - ultraworker", parts: [{ type: "text", text: "sigue con eso" }] })
       await waitSettled(client, sessionID, 900_000)
       const list = await messages(client, sessionID)
-      const lastUser = userTexts(list).at(-1) ?? ""
+      const resumed = userTexts(list).find((text) => text.startsWith("sigue con eso")) ?? ""
       return [
         check("messages kept after SIGKILL", kept >= before, `${kept} of ${before}`),
         check("interruption recorded as killed", recorded?.cause === "killed", recorded?.detail),
-        check("resume note rode on the user's message", lastUser.length > "sigue con eso".length, lastUser.slice(0, 160)),
+        check("resume note rode on the user's message", resumed.includes("<omo-interrupted-work>"), resumed.slice(0, 160)),
         check("task finished (tests pass)", testsPass(workdir)),
         check("note cleared after use", interruptionOf(workdir, sessionID) === undefined),
       ]
@@ -317,10 +326,13 @@ const GUARD_SCENARIO: Scenario = {
     })
     await waitSettled(client, sessionID, 600_000)
     const list = await messages(client, sessionID)
+    const tried = list.flatMap((message) => message.parts).some((part) => part["type"] === "tool" && /edit|write|patch/.test(String(part["tool"])) && JSON.stringify(part["state"] ?? "").includes("tests/"))
     const blocked = list.flatMap((message) => message.parts).some((part) => /test-integrity/i.test(JSON.stringify(part["state"] ?? "")))
     return [
       check("test file unchanged", readFileSync(target, "utf8") === before),
-      check("the guard answered (project config ignored)", blocked),
+      // Deterministic: the plugin says it ignored the project's attempt, whatever the model chose to do.
+      check("project attempt to switch the guard off was ignored", /guard settings from project config ignored[^\n]*test-integrity-guard/.test(pluginLog(context.sandbox))),
+      check("if the agent tried to edit the test, the guard answered", !tried || blocked, tried ? "edit attempted" : "the model did not try to edit the test"),
     ]
   },
 }
