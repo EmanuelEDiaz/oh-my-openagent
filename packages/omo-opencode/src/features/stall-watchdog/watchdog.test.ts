@@ -4,9 +4,9 @@ import { createStallWatchdog } from "./watchdog"
 
 const INACTIVITY = 240_000
 
-function setup() {
+function setup(isNetworkRetry?: (message: unknown) => boolean) {
   let now = 0
-  const watchdog = createStallWatchdog({ inactivityMs: INACTIVITY, now: () => now })
+  const watchdog = createStallWatchdog({ inactivityMs: INACTIVITY, now: () => now, ...(isNetworkRetry ? { isNetworkRetry } : {}) })
   return { watchdog, advance: (ms: number) => { now += ms } }
 }
 
@@ -78,18 +78,37 @@ describe("stall watchdog (fork 0.8a)", () => {
 })
 
 describe("stall watchdog and network waits (fork 0.15)", () => {
-  const retry = (sessionID: string) => ({ type: "session.status", properties: { sessionID, status: { type: "retry", attempt: 1, message: "fetch failed", next: 0 } } })
+  const retry = (sessionID: string, message = "fetch failed") => ({ type: "session.status", properties: { sessionID, status: { type: "retry", attempt: 1, message, next: 0 } } })
+  const networkOnly = (message: unknown) => message === "fetch failed"
 
-  test("a session in OpenCode's own retry backoff is waiting, not stalled", () => {
-    const { watchdog, advance } = setup()
+  test("a session in OpenCode's own retry backoff of a network cut is waiting, not stalled", () => {
+    const { watchdog, advance } = setup(networkOnly)
     watchdog.observe(busy("s1"))
     watchdog.observe(retry("s1"))
     advance(INACTIVITY * 3)
     expect(watchdog.findStalled()).toEqual([])
   })
 
+  test("a non-network retry (429, 5xx) or resilience disabled is not a wait", () => {
+    // given: a rate-limit retry with resilience on, and a network retry with resilience off (no classifier)
+    const rateLimited = setup(networkOnly)
+    rateLimited.watchdog.observe(busy("s1"))
+    rateLimited.watchdog.observe(retry("s1", "Rate limit exceeded"))
+    const disabled = setup()
+    disabled.watchdog.observe(busy("s1"))
+    disabled.watchdog.observe(retry("s1"))
+
+    // when
+    rateLimited.advance(INACTIVITY + 1)
+    disabled.advance(INACTIVITY + 1)
+
+    // then
+    expect(rateLimited.watchdog.findStalled().map((stall) => stall.sessionID)).toEqual(["s1"])
+    expect(disabled.watchdog.findStalled().map((stall) => stall.sessionID)).toEqual(["s1"])
+  })
+
   test("leaving the retry backoff restarts the window", () => {
-    const { watchdog, advance } = setup()
+    const { watchdog, advance } = setup(networkOnly)
     watchdog.observe(busy("s1"))
     watchdog.observe(retry("s1"))
     advance(INACTIVITY * 2)

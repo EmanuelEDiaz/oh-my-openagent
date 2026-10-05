@@ -1,10 +1,12 @@
 /** Real OpenCode wiring for the stall watchdog hook (fork roadmap 0.8a). */
+import { isNetworkError } from "@oh-my-opencode/model-core"
+
 import type { OhMyOpenCodeConfig } from "../../config"
 import { abortWithTimeout } from "../../features/background-agent/abort-with-timeout"
 import { getActiveProcessManager } from "../../features/managed-process"
 import { getActiveResumeService } from "../../features/resume/plugin"
 import { getActiveLoopBreaker } from "../../features/loop-breaker/plugin"
-import { getNetworkGuard } from "../../features/network-guard"
+import { getNetworkGuard, isNetworkResilienceEnabled } from "../../features/network-guard"
 import { subagentSessions, syncSubagentSessions } from "../../features/claude-code-session-state"
 import { createInternalAgentContinuationTextPart } from "../../shared"
 import { log } from "../../shared/logger"
@@ -36,6 +38,7 @@ export function createPluginStallWatchdogHook(ctx: PluginContext, pluginConfig: 
     chargeBudget: (sessionID) => getActiveLoopBreaker()?.charge(sessionID, "stall recovery"),
     // Network cuts and freezes (fork roadmap 0.15): read lazily, the guard may be created after this hook.
     isWaiting: (sessionID) => getNetworkGuard()?.isWaiting(sessionID) ?? false,
+    isNetworkRetry: (message) => isNetworkResilienceEnabled() && isNetworkError(message),
     takeOverStall: async (sessionID, opts) => (await getNetworkGuard()?.takeOverStall(sessionID, opts)) ?? false,
     onFreeze: (sessionIDs, seconds) => getNetworkGuard()?.afterFreeze(sessionIDs, seconds),
     continueSession: async (sessionID, input) => {

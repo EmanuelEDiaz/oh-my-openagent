@@ -26,6 +26,11 @@ export type StallWatchdogOptions = {
   readonly maxStallsPerTask?: number
   /** Sessions waiting for the network (network guard, 0.15) are waiting, not stalled. */
   readonly isWaiting?: (sessionID: string) => boolean
+  /**
+   * True when OpenCode's retry message is a network cut and network resilience is on (0.15): only then is its retry
+   * backoff a wait. Unset: every retry (429, 5xx…) counts as silence, as before 0.15.
+   */
+  readonly isNetworkRetry?: (message: unknown) => boolean
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -77,7 +82,8 @@ export function createStallWatchdog(options: StallWatchdogOptions) {
         return
       }
       if (event.type === "session.status") {
-        const type = record(record(event.properties)?.status)?.type
+        const status = record(record(event.properties)?.status)
+        const type = status?.type
         if (type === "idle") {
           current.busy = false
           current.runningTools.clear()
@@ -89,7 +95,7 @@ export function createStallWatchdog(options: StallWatchdogOptions) {
             current.busy = true
             progress(current)
           }
-          current.retrying = type === "retry"
+          current.retrying = type === "retry" && options.isNetworkRetry?.(status?.message) === true
         }
         return
       }

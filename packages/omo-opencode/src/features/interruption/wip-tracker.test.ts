@@ -6,7 +6,7 @@ import { createWipTracker, summarizeToolInput } from "./wip-tracker"
 
 const MB = 1024 ** 2
 
-function setup(options: { availableMb?: number } = {}) {
+function setup(options: { availableMb?: number; isWaiting?: (sessionID: string) => boolean } = {}) {
   const writes: WipMarker[] = []
   let removed = 0
   const recorded: Interruption[] = []
@@ -27,6 +27,7 @@ function setup(options: { availableMb?: number } = {}) {
     },
     record: (interruption) => recorded.push(interruption),
     now: () => clock,
+    ...(options.isWaiting ? { isWaiting: options.isWaiting } : {}),
   })
   return { tracker, writes, recorded, removed: () => removed, tick: (ms: number) => (clock += ms) }
 }
@@ -82,6 +83,21 @@ describe("work-in-progress marker tracker (fork 0.15)", () => {
     expect(recorded[0]).toMatchObject({ sessionID: "ses_a", cause: "killed", tools: [{ callID: "c9", tool: "edit", summary: "src/a.ts" }] })
     expect(recorded[0]!.detail).toContain("memory was low")
     expect(removed()).toBe(1)
+  })
+
+  test("a session waiting for the network after its error stays in the marker and is recorded on shutdown", () => {
+    // given: the turn ended on a network error and the network guard waits for the connection
+    const { tracker, writes, recorded, removed } = setup({ isWaiting: (sessionID) => sessionID === "ses_a" })
+    tracker.onEvent(status("ses_a", "busy"))
+    tracker.onEvent({ type: "session.error", properties: { sessionID: "ses_a", error: { name: "UnknownError", data: { message: "fetch failed" } } } })
+
+    // then
+    expect(removed()).toBe(0)
+    expect(writes.at(-1)!.sessions.map((session) => session.sessionID)).toEqual(["ses_a"])
+
+    // when OpenCode is closed during the wait
+    tracker.shutdown()
+    expect(recorded).toEqual([expect.objectContaining({ sessionID: "ses_a", cause: "network", detail: "OpenCode was closed while waiting for the network" })])
   })
 
   test("a clean shutdown with nothing busy records nothing", () => {

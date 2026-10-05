@@ -5,6 +5,8 @@
  * provider and a neutral HTTPS site with backoff: both down → our network is down, wait; only the provider down →
  * after one more probe cycle hand off to the normal fallback path. When the network returns the session continues on
  * the same model; when the probe limit is spent the work is recorded for resumption, never moved to another model.
+ * While a session is busy it also watches for network changes (Linux `ip monitor`, and an address fingerprint on every
+ * platform): a stream that goes silent after a network change or a freeze is a cut, resumed on the same model.
  */
 import { isNetworkError } from "@oh-my-opencode/model-core"
 
@@ -39,8 +41,18 @@ export type NetworkGuardDeps = {
   /** The provider is down but our network is fine: the normal fallback path takes over. */
   readonly handOff: (sessionID: string, detail: string) => Promise<void>
   readonly recordInterruption: (sessionID: string, detail: string) => void
-  /** Wakes the probes as soon as the network changes (Linux `ip monitor`); undefined when unavailable. */
+  /**
+   * Reports network changes at once (Linux `ip monitor`); undefined when unavailable. Runs while a session is busy or
+   * waits: it wakes the probes and marks the change for silent sessions.
+   */
   readonly watchLink?: (onChange: () => void) => { stop(): void } | undefined
+  /** Cheap fingerprint of the local addresses (os.networkInterfaces); compared on every check to see a change. */
+  readonly networkFingerprint?: () => string
+  /**
+   * Charges the task's retry budget shared with the loop breaker (0.9b) when the provider keeps failing although the
+   * network works; exhausted → the work is saved instead of switching models.
+   */
+  readonly chargeBudget?: (sessionID: string) => { used: number; max: number; exhausted: boolean } | undefined
   readonly log?: (message: string, data?: Record<string, unknown>) => void
   /** The `snapshot()` view changed (the sidebar mirror is rewritten). */
   readonly onChange?: () => void
@@ -68,6 +80,8 @@ export type NetworkGuardSessionView = {
 type Cycle = {
   gaveUp: boolean
   since: number
+  /** Last network error of this cycle: user activity after it means the user took over. */
+  anchor: number
   attempt: number
   cancelled: boolean
   retryAfterMs?: number
@@ -79,6 +93,8 @@ type Cycle = {
 
 type SessionState = {
   busy: boolean
+  /** When the current turn started (idle → busy). */
+  busyAt?: number
   lastData: number
   runningTools: Set<string>
   phase: Phase
@@ -86,13 +102,25 @@ type SessionState = {
   cycle?: Cycle
   /** Probed once for this silence; cleared by the next stream data. */
   silentChecked: boolean
-  /** Busy while the process was frozen or suspended; cleared by the next stream data. */
+  /** Busy while the process was frozen or suspended; cleared by the next stream data or when the session ends. */
   frozenSeconds?: number
   /** OpenCode's own retry of a network error (phase "retrying"). */
   retry?: { attempt?: number; nextAt?: number; since: number }
+  /** Same-model continuations sent with no model data since: the provider's transport fails while the network works. */
+  resumesWithoutData: number
+  /** Last event of the session, for pruning idle sessions. */
+  touchedAt: number
+  lastUserMessageID?: string
+  lastUserAt?: number
+  lastAbortAt?: number
+  /** Assistant message whose network error was already handled (a later update of it is not a new cut). */
+  lastErrorMessageID?: string
 }
 
 const LINK_WAKE_MIN_GAP_MS = 2_000
+/** Continuations on the same model that may fail in a row before the provider is treated as down. */
+const MAX_RESUMES_WITHOUT_DATA = 2
+const IDLE_PRUNE_MS = 30 * 60_000
 
 function record(value: unknown): Record<string, unknown> | undefined {
   return typeof value === "object" && value !== null ? (value as Record<string, unknown>) : undefined
@@ -129,6 +157,9 @@ export const restoredText = (after: string): string =>
 export const unfrozenText = (seconds: number): string =>
   `[network-guard] The process was frozen for ${seconds} s and the model connection was lost. Continue from the last completed step; check the effect of any tool call that was cut before repeating it.`
 
+export const networkChangedText =
+  "[network-guard] The network changed while the model was answering and the connection was lost. Continue from the last completed step; check the effect of any tool call that was cut before repeating it."
+
 export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGuardDeps) {
   const now = deps.now ?? Date.now
   const random = deps.random ?? Math.random
@@ -143,6 +174,9 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
   let link: { stop(): void } | undefined
   let lastProbeAt = 0
   let lastView = "[]"
+  let fingerprint: string | undefined
+  /** Last network change seen (link monitor or address fingerprint), epoch ms. */
+  let networkChangedAt: number | undefined
 
   /** Tells the listener when the sidebar view changed; cheap when nothing waits (the view is "[]"). */
   function changed(): void {
@@ -156,7 +190,7 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
   function state(sessionID: string): SessionState {
     let current = sessions.get(sessionID)
     if (!current) {
-      current = { busy: false, lastData: now(), runningTools: new Set(), phase: "online", silentChecked: false }
+      current = { busy: false, lastData: now(), runningTools: new Set(), phase: "online", silentChecked: false, resumesWithoutData: 0, touchedAt: now() }
       sessions.set(sessionID, current)
     }
     return current
@@ -186,7 +220,31 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
     })
   }
 
+  function noteNetworkChange(): void {
+    networkChangedAt = now()
+    // A silent session already probed gets one more check: the change may have killed its stream.
+    for (const current of sessions.values()) if (current.busy) current.silentChecked = false
+    log("[network-guard] network changed")
+  }
+
+  /** Compares the address fingerprint with the last one; a difference is a network change. */
+  function checkFingerprint(): void {
+    if (!deps.networkFingerprint) return
+    let next: string
+    try {
+      next = deps.networkFingerprint()
+    } catch (error) {
+      log("[network-guard] network fingerprint failed", { error: String(error) })
+      return
+    }
+    if (fingerprint !== undefined && next !== fingerprint) noteNetworkChange()
+    fingerprint = next
+  }
+
   function onLinkChange(): void {
+    // With a fingerprint, only a real address change counts (route and lifetime updates are frequent noise).
+    if (deps.networkFingerprint) checkFingerprint()
+    else noteNetworkChange()
     if (now() - lastProbeAt < LINK_WAKE_MIN_GAP_MS) return
     log("[network-guard] network change; probing now")
     for (const wake of [...wakers]) wake()
@@ -198,8 +256,9 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
     cycle.wake?.()
   }
 
+  /** The link monitor runs while a session waits on the network or is busy (a change may kill its stream). */
   function updateLinkWatch(): void {
-    const waiting = [...sessions.values()].some((current) => current.cycle && !current.cycle.cancelled)
+    const waiting = [...sessions.values()].some((current) => current.busy || (current.cycle && !current.cycle.cancelled))
     if (waiting && !link) link = deps.watchLink?.(onLinkChange)
     if (!waiting && link) {
       link.stop()
@@ -222,12 +281,49 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
     return current.busy && current.lastData <= since
   }
 
+  /** The user wrote or pressed Esc after the cycle's last network error: the session is theirs again. */
+  function userTookOver(current: SessionState, cycle: Cycle): boolean {
+    if ((current.lastUserAt ?? -Infinity) > cycle.anchor || (current.lastAbortAt ?? -Infinity) > cycle.anchor) return true
+    // OpenCode had ended the turn: a turn started after the error is one the user started.
+    return cycle.gaveUp && current.busy && (current.busyAt ?? -Infinity) > cycle.anchor
+  }
+
+  /** Why a silent stream was cut although the network works: a freeze, or a network change during the silence. */
+  function cutText(current: SessionState): string | undefined {
+    if (current.frozenSeconds !== undefined) return unfrozenText(current.frozenSeconds)
+    if (networkChangedAt !== undefined && networkChangedAt > current.lastData) return networkChangedText
+    return undefined
+  }
+
+  async function handOff(sessionID: string, current: SessionState, gaveUp: boolean, since: number, detail: string, charge: boolean): Promise<void> {
+    current.resumesWithoutData = 0
+    if (!gaveUp && stillHung(current, since)) await deps.abort(sessionID).catch(() => undefined)
+    const budget = charge ? deps.chargeBudget?.(sessionID) : undefined
+    if (budget?.exhausted) {
+      log("[network-guard] the task's retry budget is spent; work saved for resumption", { sessionID, used: budget.used, max: budget.max })
+      deps.recordInterruption(sessionID, `${detail}; retry budget spent (${budget.used}/${budget.max})`)
+      await deps.toast("El proveedor sigue fallando y el presupuesto de reintentos está agotado. El trabajo está guardado; escribe cualquier mensaje para continuar.", "error")
+      return
+    }
+    await deps.handOff(sessionID, detail)
+  }
+
+  /**
+   * Continues on the same model, unless the last continuations all failed before any model data: then the provider's
+   * transport is what fails (the neutral site may answer while the provider refuses), so the fallback path takes over.
+   */
   async function resumeSameModel(sessionID: string, current: SessionState, gaveUp: boolean, since: number, text: string): Promise<void> {
+    if (!gaveUp && !stillHung(current, since)) return
+    if (current.resumesWithoutData >= MAX_RESUMES_WITHOUT_DATA) {
+      log("[network-guard] the provider keeps failing although the network works; handing off to the fallback path", { sessionID, resumes: current.resumesWithoutData })
+      await handOff(sessionID, current, gaveUp, since, `provider failed ${current.resumesWithoutData + 1} times in a row while the network works`, true)
+      return
+    }
     if (!gaveUp) {
-      // OpenCode never errored: the turn is still hung on a dead socket. Stop it, unless data came back on its own.
-      if (!stillHung(current, since)) return
+      // OpenCode never errored: the turn is still hung on a dead socket. Stop it.
       await deps.abort(sessionID).catch((error) => log("[network-guard] abort failed", { sessionID, error: String(error) }))
     }
+    current.resumesWithoutData += 1
     await deps.continueSession(sessionID, text)
   }
 
@@ -237,7 +333,7 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
       current.cycle.gaveUp ||= gaveUp
       return
     }
-    const cycle: Cycle = { gaveUp, since: now(), attempt: 0, cancelled: false }
+    const cycle: Cycle = { gaveUp, since: now(), anchor: now(), attempt: 0, cancelled: false }
     current.cycle = cycle
     current.phase = "offline"
     current.retry = undefined
@@ -251,6 +347,12 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
         if (cycle.cancelled) return
         cycle.verdict = verdict
         changed()
+        if ((verdict === "online" || (verdict === "provider-down" && providerDownSeen)) && userTookOver(current, cycle)) {
+          log("[network-guard] the user took the session over; no continuation", { sessionID })
+          current.phase = "online"
+          cycle.cancelled = true
+          return
+        }
         if (verdict === "online") {
           const after = formatDuration(now() - cycle.since)
           log("[network-guard] connection restored", { sessionID, after, gaveUp: cycle.gaveUp })
@@ -265,8 +367,7 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
             log("[network-guard] provider unreachable, our network is fine; handing off to the fallback path", { sessionID })
             current.phase = "online"
             cycle.cancelled = true
-            if (!cycle.gaveUp && stillHung(current, cycle.since)) await deps.abort(sessionID).catch(() => undefined)
-            await deps.handOff(sessionID, "provider unreachable while the network works")
+            await handOff(sessionID, current, cycle.gaveUp, cycle.since, "provider unreachable while the network works", false)
             return
           }
           providerDownSeen = true
@@ -304,14 +405,31 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
   }
 
   /**
-   * One probe for a silent or freeze-suspect session: offline starts a cycle; with `resumeFrozen`, a session that
-   * stayed silent since a freeze is resumed on the same model (its socket died during the freeze).
+   * Network up but the stream silent since a freeze or a network change: its socket died with the old link. Resumed
+   * on the same model. False when there is no such cause (a model matter).
    */
-  async function checkSilent(sessionID: string, resumeFrozen: boolean): Promise<void> {
+  async function resumeCut(sessionID: string, current: SessionState, stopped: boolean, since: number): Promise<boolean> {
+    const text = cutText(current)
+    if (!text) return false
+    log("[network-guard] silent after a freeze or a network change; resuming on the same model", { sessionID, frozenSeconds: current.frozenSeconds })
+    current.frozenSeconds = undefined
+    changed()
+    if (text === networkChangedText && (stopped || stillHung(current, since))) {
+      await deps.toast("La red cambió durante la respuesta; continuando en la misma sesión.", "info")
+    }
+    await resumeSameModel(sessionID, current, stopped, since, text)
+    return true
+  }
+
+  /**
+   * One probe for a silent or freeze-suspect session: offline starts a cycle; with `resume`, a session that stayed
+   * silent since a freeze or a network change is resumed on the same model.
+   */
+  async function checkSilent(sessionID: string, resume: boolean): Promise<void> {
     const current = state(sessionID)
     if (current.cycle) return
     // The freeze probe must not use up the silent-stream check that may resume the session later.
-    if (resumeFrozen) current.silentChecked = true
+    if (resume) current.silentChecked = true
     const since = now()
     const verdict = await probeOnce(sessionID)
     if (verdict === "offline") {
@@ -319,13 +437,7 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
       startCycle(sessionID, false, verdict)
       return
     }
-    if (resumeFrozen && verdict === "online" && current.frozenSeconds !== undefined && stillHung(current, since)) {
-      const seconds = current.frozenSeconds
-      current.frozenSeconds = undefined
-      log("[network-guard] silent after a freeze; resuming on the same model", { sessionID, seconds })
-      changed()
-      await resumeSameModel(sessionID, current, false, since, unfrozenText(seconds))
-    }
+    if (resume && verdict === "online" && stillHung(current, since)) await resumeCut(sessionID, current, false, since)
   }
 
   /**
@@ -336,6 +448,7 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
     current.lastData = now()
     current.silentChecked = false
     current.frozenSeconds = undefined
+    if (fromModel) current.resumesWithoutData = 0
     leaveRetrying(current)
     if (current.cycle && !current.cycle.cancelled && (fromModel || !current.cycle.gaveUp)) {
       cancelCycle(current.cycle)
@@ -348,10 +461,32 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
     current.retry = undefined
   }
 
+  /**
+   * OpenCode's retry is a wait only until its next attempt plus the silent-stream window: an attempt that hangs
+   * without a status change must not exempt the session from every check.
+   */
+  function retryActive(current: SessionState): boolean {
+    if (current.phase !== "retrying") return false
+    const from = current.retry?.nextAt ?? current.retry?.since ?? current.lastData
+    return now() <= from + options.silentStreamMs
+  }
+
+  /** The session stopped running (idle, error, deleted turn): its freeze mark is stale. */
+  function endTurn(current: SessionState): void {
+    current.busy = false
+    current.runningTools.clear()
+    current.frozenSeconds = undefined
+    leaveRetrying(current)
+  }
+
   function onRetryStatus(sessionID: string, status: Record<string, unknown>): void {
     const message = typeof status.message === "string" ? status.message : ""
-    if (!isNetworkError(message)) return
     const current = state(sessionID)
+    if (!isNetworkError(message)) {
+      // A 429/5xx retry is the fallback path's business; a former network retry is over.
+      leaveRetrying(current)
+      return
+    }
     current.phase = current.cycle ? current.phase : "retrying"
     const attempt = typeof status.attempt === "number" ? status.attempt : undefined
     const next = typeof status.next === "number" ? Math.max(0, Math.round((status.next - now()) / 1000)) : undefined
@@ -374,38 +509,54 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
       return
     }
     const current = state(sessionID)
+    current.touchedAt = now()
     const props = record(event.properties)
     if (event.type === "session.status") {
       const status = record(props?.status)
       if (status?.type === "idle") {
-        current.busy = false
-        current.runningTools.clear()
-        leaveRetrying(current)
+        endTurn(current)
       } else if (status?.type === "retry") {
         current.busy = true
         onRetryStatus(sessionID, status)
-      } else if (status?.type === "busy" && !current.busy) {
+      } else if (status?.type === "busy" && (!current.busy || current.phase === "retrying")) {
+        // A new turn, or OpenCode's next attempt after its retry backoff (it sets busy before each attempt).
+        if (!current.busy) {
+          current.frozenSeconds = undefined
+          current.busyAt = now()
+        }
         current.busy = true
         current.lastData = now()
         current.silentChecked = false
+        leaveRetrying(current)
       }
+      updateLinkWatch()
       return
     }
     if (event.type === "session.idle") {
-      current.busy = false
-      current.runningTools.clear()
-      leaveRetrying(current)
+      endTurn(current)
+      updateLinkWatch()
       return
     }
     if (event.type === "session.error") {
-      current.busy = false
-      current.runningTools.clear()
-      guard.notifyNetworkError(sessionID, props?.error, { gaveUp: true })
+      endTurn(current)
+      const error = record(props?.error)
+      if (typeof error?.name === "string" && /abort/i.test(error.name)) current.lastAbortAt = now()
+      else guard.notifyNetworkError(sessionID, props?.error, { gaveUp: true })
+      updateLinkWatch()
       return
     }
     if (event.type === "message.updated") {
       const info = record(props?.info)
-      if (info?.role === "assistant" && info.error) guard.notifyNetworkError(sessionID, info.error, { gaveUp: true })
+      const messageID = typeof info?.id === "string" ? info.id : undefined
+      if (info?.role === "user" && messageID && messageID !== current.lastUserMessageID) {
+        current.lastUserMessageID = messageID
+        current.lastUserAt = now()
+      }
+      if (info?.role === "assistant" && info.error) {
+        // A later update of an errored message already handled is not a new cut.
+        if (messageID && messageID === current.lastErrorMessageID) return
+        if (guard.notifyNetworkError(sessionID, info.error, { gaveUp: true }) && messageID) current.lastErrorMessageID = messageID
+      }
       return
     }
     if (event.type === "message.part.updated") {
@@ -422,6 +573,7 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
     if (event.type === "message.part.delta") markData(current, true)
   }
 
+  checkFingerprint()
   const timer = options.checkIntervalMs > 0 ? setInterval(() => void guard.tick(), options.checkIntervalMs) : undefined
   timer?.unref?.()
 
@@ -446,6 +598,7 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
       const retryAfter = retryAfterMs(error, now())
       if (current.cycle && !current.cycle.cancelled) {
         current.cycle.gaveUp = true
+        current.cycle.anchor = now()
         if (retryAfter !== undefined) current.cycle.retryAfterMs = retryAfter
         return true
       }
@@ -456,19 +609,24 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
       return true
     },
 
-    /** The session waits on the network (guard probing, or OpenCode retrying a network error): not stalled. */
+    /**
+     * The session waits on the network (guard probing, or OpenCode retrying a network error until its next attempt
+     * plus the silent-stream window): not stalled.
+     */
     isWaiting(sessionID: string): boolean {
       const current = sessions.get(sessionID)
-      return current !== undefined && (current.phase !== "online" || (current.cycle !== undefined && !current.cycle.cancelled))
+      if (!current) return false
+      return current.phase === "offline" || (current.cycle !== undefined && !current.cycle.cancelled) || retryActive(current)
     },
 
     /**
-     * Called by the stall watchdog before it recovers a stall: true when the cause is the network or a freeze and the
-     * guard took over (same model, no budget charge); false when it is a real model stall.
+     * Called by the stall watchdog before it recovers a stall: true when the cause is the network, a network change or
+     * a freeze and the guard took over (same model, no budget charge); false when it is a real model stall.
      */
     async takeOverStall(sessionID: string, opts: { stopped: boolean }): Promise<boolean> {
       const current = state(sessionID)
       if (guard.isWaiting(sessionID)) return true
+      checkFingerprint()
       const since = now()
       const verdict = await probeOnce(sessionID)
       if (verdict === "offline") {
@@ -476,14 +634,7 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
         startCycle(sessionID, opts.stopped, verdict)
         return true
       }
-      if (verdict === "online" && current.frozenSeconds !== undefined) {
-        const seconds = current.frozenSeconds
-        current.frozenSeconds = undefined
-        log("[network-guard] stall after a freeze; resuming on the same model", { sessionID, seconds })
-      changed()
-        await resumeSameModel(sessionID, current, opts.stopped, since, unfrozenText(seconds))
-        return true
-      }
+      if (verdict === "online") return resumeCut(sessionID, current, opts.stopped, since)
       return false
     },
 
@@ -493,8 +644,8 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
      */
     afterFreeze(sessionIDs: readonly string[], seconds: number): void {
       for (const sessionID of sessionIDs) {
-        const current = state(sessionID)
-        if (!current.busy) continue
+        const current = sessions.get(sessionID)
+        if (!current?.busy) continue
         current.frozenSeconds = seconds
         current.lastData = now()
         if (!current.cycle) {
@@ -504,11 +655,26 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
       changed()
     },
 
-    /** Silent-stream check: busy sessions with no data (and no running tool) for `silentStreamMs` are probed once. */
+    /**
+     * Silent-stream check: busy sessions with no data (and no running tool) for `silentStreamMs` are probed once (again
+     * after a network change). Also compares the address fingerprint and drops sessions idle for a long time.
+     */
     async tick(): Promise<void> {
+      checkFingerprint()
       const checks: Promise<void>[] = []
       for (const [sessionID, current] of sessions) {
-        if (!current.busy || current.cycle || current.silentChecked || current.phase === "retrying") continue
+        if (!current.busy && !current.cycle && current.phase === "online" && now() - current.touchedAt > IDLE_PRUNE_MS) {
+          sessions.delete(sessionID)
+          continue
+        }
+        if (current.phase === "retrying") {
+          if (retryActive(current)) continue
+          // OpenCode's next attempt never reported back: from now on its silence counts.
+          current.lastData = Math.max(current.lastData, current.retry?.nextAt ?? current.retry?.since ?? current.lastData)
+          leaveRetrying(current)
+          changed()
+        }
+        if (!current.busy || current.cycle || current.silentChecked) continue
         if (current.runningTools.size > 0) continue
         if (now() - current.lastData < options.silentStreamMs) continue
         checks.push(checkSilent(sessionID, true).catch((error) => log("[network-guard] silent probe failed", { sessionID, error: String(error) })))
@@ -521,12 +687,13 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
       const views: NetworkGuardSessionView[] = []
       for (const [sessionID, current] of sessions) {
         const frozen = current.busy && current.frozenSeconds !== undefined
-        if (current.phase === "online" && !frozen) continue
         const cycle = current.cycle && !current.cycle.cancelled ? current.cycle : undefined
-        const retry = !cycle && current.phase === "retrying" ? current.retry : undefined
+        const phase: Phase = current.phase === "retrying" && !retryActive(current) ? "online" : current.phase
+        if (phase === "online" && !frozen) continue
+        const retry = !cycle && phase === "retrying" ? current.retry : undefined
         views.push({
           sessionID,
-          phase: current.phase,
+          phase,
           ...(cycle ? { attempt: cycle.attempt, since: cycle.since } : {}),
           ...(cycle?.verdict ? { verdict: cycle.verdict } : {}),
           ...(cycle?.nextAt !== undefined ? { nextAt: cycle.nextAt } : {}),
@@ -538,6 +705,11 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
         })
       }
       return views
+    },
+
+    /** Sessions tracked (diagnostics; idle ones are pruned). */
+    trackedSessions(): number {
+      return sessions.size
     },
 
     dispose(): void {

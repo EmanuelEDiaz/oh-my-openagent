@@ -1,7 +1,13 @@
-import { describe, expect, test } from "bun:test"
+import { afterEach, describe, expect, test } from "bun:test"
 
+import { setNetworkGuard, setNetworkResilienceEnabled, stepAsideForNetwork } from "./index"
 import { findIpBinary } from "./link-monitor"
-import { probeUrl, providerBaseUrl } from "./plugin"
+import { createPluginNetworkGuard, networkFingerprint, probeUrl, providerBaseUrl } from "./plugin"
+
+afterEach(() => {
+  setNetworkGuard(undefined)
+  setNetworkResilienceEnabled(true)
+})
 
 describe("network guard wiring (fork 0.15)", () => {
   test("any HTTP response counts as reachable; a transport failure does not", async () => {
@@ -25,6 +31,32 @@ describe("network guard wiring (fork 0.15)", () => {
     expect(providerBaseUrl({ models: { m: { api: { url: "https://models.x.test" } } } })).toBe("https://models.x.test")
     expect(providerBaseUrl({ options: {} })).toBeUndefined()
     expect(providerBaseUrl(undefined)).toBeUndefined()
+  })
+
+  test("the session's own model API URL wins over the provider's", () => {
+    const provider = { api: "https://api.x.test", models: { a: { api: { url: "https://a.x.test" } }, b: { api: { url: "https://b.x.test" } } } }
+    expect(providerBaseUrl(provider, "b")).toBe("https://b.x.test")
+    expect(providerBaseUrl(provider, "missing")).toBe("https://api.x.test")
+  })
+
+  test("resilience disabled is applied even when the rest of the config is invalid", () => {
+    // given
+    setNetworkResilienceEnabled(true)
+    const config = { resilience: { enabled: false, network_probe_limit: "many" } } as never
+
+    // when
+    expect(() => createPluginNetworkGuard({} as never, config)).toThrow()
+
+    // then: the fallback paths keep network errors
+    expect(stepAsideForNetwork("ses", "fetch failed", true)).toBe(false)
+  })
+
+  test("the address fingerprint ignores loopback and does not depend on order", () => {
+    const entry = (address: string, internal = false) => ({ address, internal, family: "IPv4", netmask: "", mac: "", cidr: null }) as never
+    const a = networkFingerprint({ lo: [entry("127.0.0.1", true)], wlan0: [entry("192.168.1.5")], eth0: [entry("10.0.0.2")] })
+    const b = networkFingerprint({ eth0: [entry("10.0.0.2")], wlan0: [entry("192.168.1.5")] })
+    expect(a).toBe(b)
+    expect(networkFingerprint({ wlan0: [entry("192.168.1.6")] })).not.toBe(a)
   })
 
   test("the link monitor is Linux-only and needs iproute2", () => {

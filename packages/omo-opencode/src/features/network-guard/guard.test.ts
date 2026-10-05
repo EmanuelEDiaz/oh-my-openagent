@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test"
 
-import { createNetworkGuard, type NetworkGuardDeps, type NetworkGuardOptions } from "./guard"
+import { createNetworkGuard, networkChangedText, type NetworkGuardDeps, type NetworkGuardOptions } from "./guard"
 import { getNetworkGuard, setNetworkGuard, setNetworkResilienceEnabled, stepAsideForNetwork } from "./index"
 
 const MAIN = "ses_main"
@@ -319,7 +319,7 @@ describe("network guard (fork 0.15 A)", () => {
 
     test("a session already waiting for the network is never a stall", async () => {
       const { guard, calls } = setup([ON])
-      guard.event(event("session.status", { sessionID: MAIN, status: { type: "retry", attempt: 1, message: "ECONNRESET", next: 0 } }))
+      guard.event(event("session.status", { sessionID: MAIN, status: { type: "retry", attempt: 1, message: "ECONNRESET", next: 1_002_000 } }))
       expect(await guard.takeOverStall(MAIN, { stopped: false })).toBe(true)
       expect(calls.probes).toEqual([])
       guard.dispose()
@@ -512,12 +512,264 @@ describe("stepAsideForNetwork", () => {
     guard.dispose()
   })
 
-  test("works without a running guard (no model switch even then)", () => {
-    expect(stepAsideForNetwork(MAIN, "fetch failed", false)).toBe(true)
+  test("without a running guard (creation failed) the fallback path keeps the error", () => {
+    expect(stepAsideForNetwork(MAIN, "fetch failed", false)).toBe(false)
   })
 
   test("resilience disabled restores the old fallback behaviour", () => {
     setNetworkResilienceEnabled(false)
     expect(stepAsideForNetwork(MAIN, "fetch failed", true)).toBe(false)
+  })
+})
+
+describe("review fixes (fork 0.15)", () => {
+  const retry = (message = "Connection reset by server", next = 1_002_000) =>
+    event("session.status", { sessionID: MAIN, status: { type: "retry", attempt: 1, message, next } })
+  const delta = () => event("message.part.delta", { sessionID: MAIN, delta: "x" })
+
+  describe("OpenCode's retry never exempts a session forever", () => {
+    test("the next attempt going busy and then hanging is checked like any silent stream", async () => {
+      // given
+      const { guard, calls, advance } = setup([OFF, ON])
+      guard.event(busy())
+      guard.event(retry())
+      expect(guard.isWaiting(MAIN)).toBe(true)
+
+      // when: OpenCode's next attempt starts and hangs without a word
+      advance(2_000)
+      guard.event(busy())
+      advance(10 * 60_000)
+      await guard.tick()
+      await settle()
+
+      // then
+      expect(guard.isWaiting(MAIN)).toBe(false)
+      expect(calls.aborted).toEqual([MAIN])
+      expect(calls.continued).toHaveLength(1)
+      guard.dispose()
+    })
+
+    test("a retry that never reports back stops being a wait after its next attempt plus the silent window", async () => {
+      const { guard, calls, advance } = setup([OFF, ON])
+      guard.event(busy())
+      guard.event(retry())
+      advance(2_000 + 60_000 + 1)
+      expect(guard.isWaiting(MAIN)).toBe(false)
+      expect(guard.snapshot()).toEqual([])
+      await guard.tick()
+      await settle()
+      expect(calls.continued).toHaveLength(1)
+      guard.dispose()
+    })
+
+    test("a later retry that is not a network error leaves the network wait", () => {
+      const { guard } = setup([ON])
+      guard.event(retry())
+      guard.event(retry("Rate limit exceeded"))
+      expect(guard.isWaiting(MAIN)).toBe(false)
+      guard.dispose()
+    })
+  })
+
+  describe("a provider whose transport fails while the network works", () => {
+    test("after two continuations with no model data it hands off and charges the shared budget", async () => {
+      // given: no provider URL, the neutral site answers
+      const charged: string[] = []
+      const { guard, calls } = setup([ON], {
+        providerProbeUrl: async () => undefined,
+        chargeBudget: (sessionID) => { charged.push(sessionID); return { used: 1, max: 3, exhausted: false } },
+      })
+
+      // when: every continuation fails the same way
+      for (let i = 0; i < 4; i++) {
+        guard.event(sessionError({ name: "UnknownError", data: { message: "Connection refused" } }))
+        await settle()
+      }
+
+      // then
+      expect(calls.continued).toHaveLength(3)
+      expect(calls.handedOff).toEqual([MAIN])
+      expect(charged).toEqual([MAIN])
+      guard.dispose()
+    })
+
+    test("model data between the cuts keeps it on the same model", async () => {
+      const { guard, calls } = setup([ON], { providerProbeUrl: async () => undefined })
+      for (let i = 0; i < 4; i++) {
+        guard.event(sessionError(NETWORK_ERROR))
+        await settle()
+        guard.event(delta())
+      }
+      expect(calls.continued).toHaveLength(4)
+      expect(calls.handedOff).toEqual([])
+      guard.dispose()
+    })
+
+    test("with the budget spent the work is saved instead of switching models", async () => {
+      const { guard, calls } = setup([ON], {
+        providerProbeUrl: async () => undefined,
+        chargeBudget: () => ({ used: 3, max: 3, exhausted: true }),
+      })
+      for (let i = 0; i < 3; i++) {
+        guard.event(sessionError(NETWORK_ERROR))
+        await settle()
+      }
+      expect(calls.handedOff).toEqual([])
+      expect(calls.interrupted).toHaveLength(1)
+      expect(calls.interrupted[0]?.detail).toContain("retry budget spent (3/3)")
+      guard.dispose()
+    })
+  })
+
+  describe("a network change under a busy session", () => {
+    test("the silent stream is resumed on the same model even though the new link is already up", async () => {
+      // given: the address fingerprint changes while the session waits for the model
+      let addresses = "wlan0/192.168.1.5"
+      const { guard, calls, advance } = setup([ON], { networkFingerprint: () => addresses })
+      guard.event(busy())
+      advance(10_000)
+      addresses = "eth0/10.0.0.7"
+      await guard.tick()
+
+      // when: the stream stays silent for the silent window
+      advance(50_001)
+      await guard.tick()
+      await settle()
+
+      // then
+      expect(calls.aborted).toEqual([MAIN])
+      expect(calls.continued).toEqual([{ sessionID: MAIN, text: networkChangedText }])
+      expect(calls.handedOff).toEqual([])
+      guard.dispose()
+    })
+
+    test("the stall watchdog's late check is taken over (same model, no budget) after a change it did not see", async () => {
+      // given: the link monitor runs while the session is busy and reports the switch
+      let onChange: (() => void) | undefined
+      let addresses = "wlan0/192.168.1.5"
+      const { guard, calls, advance } = setup([ON], {
+        networkFingerprint: () => addresses,
+        watchLink: (callback) => {
+          onChange = callback
+          return { stop: () => { onChange = undefined } }
+        },
+      })
+      guard.event(busy())
+      expect(onChange).toBeDefined()
+      advance(5_000)
+      addresses = "wwan0/100.64.0.9"
+      onChange?.()
+
+      // when
+      advance(235_000)
+      const taken = await guard.takeOverStall(MAIN, { stopped: false })
+
+      // then
+      expect(taken).toBe(true)
+      expect(calls.aborted).toEqual([MAIN])
+      expect(calls.continued[0]?.text).toBe(networkChangedText)
+      guard.event(event("session.idle", { sessionID: MAIN }))
+      expect(onChange).toBeUndefined()
+      guard.dispose()
+    })
+
+    test("a monitor event with the same addresses is not a change", async () => {
+      let onChange: (() => void) | undefined
+      const { guard, advance } = setup([ON], {
+        networkFingerprint: () => "wlan0/192.168.1.5",
+        watchLink: (callback) => {
+          onChange = callback
+          return { stop: () => undefined }
+        },
+      })
+      guard.event(busy())
+      advance(5_000)
+      onChange?.()
+      advance(235_000)
+      expect(await guard.takeOverStall(MAIN, { stopped: false })).toBe(false)
+      guard.dispose()
+    })
+  })
+
+  describe("the user takes over during a wait", () => {
+    test("a message typed while offline: no \"Connection restored\" continuation", async () => {
+      // given
+      const held: Array<() => void> = []
+      const { guard, calls, advance } = setup([OFF, ON], { schedule: (fn) => { held.push(fn); return () => undefined } })
+      guard.event(sessionError(NETWORK_ERROR))
+      await settle()
+
+      // when
+      advance(1_000)
+      guard.event(event("message.updated", { info: { sessionID: MAIN, id: "msg_user", role: "user" } }))
+      held.shift()?.()
+      await settle()
+
+      // then
+      expect(calls.continued).toEqual([])
+      expect(guard.isWaiting(MAIN)).toBe(false)
+      guard.dispose()
+    })
+
+    test("Esc while offline: no continuation", async () => {
+      const held: Array<() => void> = []
+      const { guard, calls, advance } = setup([OFF, ON], { schedule: (fn) => { held.push(fn); return () => undefined } })
+      guard.event(sessionError(NETWORK_ERROR))
+      await settle()
+      advance(1_000)
+      guard.event(sessionError({ name: "MessageAbortedError", data: { message: "Aborted" } }))
+      held.shift()?.()
+      await settle()
+      expect(calls.continued).toEqual([])
+      guard.dispose()
+    })
+
+    test("the user's message failing on the network again is continued when the network returns", async () => {
+      const held: Array<() => void> = []
+      const { guard, calls, advance } = setup([OFF, ON], { schedule: (fn) => { held.push(fn); return () => undefined } })
+      guard.event(sessionError(NETWORK_ERROR))
+      await settle()
+      advance(1_000)
+      guard.event(event("message.updated", { info: { sessionID: MAIN, id: "msg_user", role: "user" } }))
+      advance(1_000)
+      guard.event(sessionError(NETWORK_ERROR))
+      held.shift()?.()
+      await settle()
+      expect(calls.continued).toHaveLength(1)
+      guard.dispose()
+    })
+  })
+
+  test("a later update of an errored assistant message already handled starts no new cycle", async () => {
+    const { guard, calls } = setup([ON])
+    const errored = { info: { sessionID: MAIN, id: "msg_a", role: "assistant", error: NETWORK_ERROR } }
+    guard.event(event("message.updated", errored))
+    await settle()
+    guard.event(event("message.updated", { info: { ...errored.info, time: { completed: 1 } } }))
+    await settle()
+    expect(calls.continued).toHaveLength(1)
+    guard.dispose()
+  })
+
+  test("idle sessions with nothing pending are dropped after 30 min", async () => {
+    const { guard, advance } = setup([ON])
+    guard.event(busy())
+    guard.event(event("session.idle", { sessionID: MAIN }))
+    guard.event(busy("ses_other"))
+    advance(30 * 60_000 + 1)
+    await guard.tick()
+    expect(guard.trackedSessions()).toBe(1)
+    guard.dispose()
+  })
+
+  test("the freeze mark ends with the turn: a later turn is not shown as frozen", async () => {
+    const { guard } = setup([ON])
+    guard.event(busy())
+    guard.afterFreeze([MAIN], 30)
+    await settle()
+    guard.event(event("session.idle", { sessionID: MAIN }))
+    guard.event(busy())
+    expect(guard.snapshot()).toEqual([])
+    guard.dispose()
   })
 })

@@ -35,6 +35,8 @@ export type StallWatchdogHookDeps = {
   readonly chargeBudget?: (sessionID: string) => { used: number; max: number; exhausted: boolean } | undefined
   /** The session waits for the network (network guard, 0.15): not stalled. */
   readonly isWaiting?: (sessionID: string) => boolean
+  /** OpenCode's retry message is a network cut and network resilience is on: its backoff is a wait (0.15). */
+  readonly isNetworkRetry?: (message: unknown) => boolean
   /**
    * Asked before a stall is recovered: true when the network or a freeze caused it and the network guard took over
    * on the same model, so no stall is counted, no budget charged and no model switched (0.15 A4).
@@ -66,6 +68,7 @@ export function createStallWatchdogHook(options: StallWatchdogHookOptions, deps:
     ...(deps.now ? { now: deps.now } : {}),
     ...(deps.hasManagedProcess ? { hasManagedProcess: deps.hasManagedProcess } : {}),
     ...(deps.isWaiting ? { isWaiting: deps.isWaiting } : {}),
+    ...(deps.isNetworkRetry ? { isNetworkRetry: deps.isNetworkRetry } : {}),
   })
   setStallWatchdog(watchdog)
 

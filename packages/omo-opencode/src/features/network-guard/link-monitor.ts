@@ -1,7 +1,8 @@
 /**
  * Linux-only network change watch for the network guard (fork roadmap 0.15): `ip -o monitor link address route`
  * (iproute2) prints a line on every link/address/route change, which wakes the probes at once instead of waiting out
- * the backoff. Runs only while a session is offline; Windows, macOS and systems without `ip` rely on the backoff.
+ * the backoff and catches a network switch under a busy session. Runs only while a session is busy or offline;
+ * Windows, macOS and systems without `ip` rely on the backoff and the address fingerprint.
  */
 import { spawn } from "node:child_process"
 import { existsSync } from "node:fs"

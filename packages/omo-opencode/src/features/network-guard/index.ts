@@ -36,12 +36,17 @@ export function setNetworkResilienceEnabled(value: boolean): void {
   enabled = value
 }
 
+export function isNetworkResilienceEnabled(): boolean {
+  return enabled
+}
+
 /**
  * For fallback paths: true when the error is a network cut, so the caller must not switch models, spend an attempt
- * or cool a model down. The guard (when running) is told and takes over. `gaveUp`: OpenCode's own retry is over.
+ * or cool a model down. The guard is told and takes over. Without a running guard (creation failed, disabled hook)
+ * nobody would wait the cut out, so the fallback path keeps the error. `gaveUp`: OpenCode's own retry is over.
  */
 export function stepAsideForNetwork(sessionID: string | undefined, error: unknown, gaveUp: boolean): boolean {
-  if (!enabled || !isNetworkError(error)) return false
-  if (sessionID) current?.notifyNetworkError(sessionID, error, { gaveUp })
+  if (!enabled || !current || !isNetworkError(error)) return false
+  if (sessionID) current.notifyNetworkError(sessionID, error, { gaveUp })
   return true
 }

@@ -4,6 +4,7 @@
  * shutdown while working the busy sessions become interruptions right away; on SIGKILL the marker stays behind and
  * the next start turns it into interruptions (`recoverOrphans`).
  */
+import { getNetworkGuard } from "../network-guard"
 import type { MemorySample } from "../resume/memory-watch"
 import type { Interruption, InterruptedTool } from "./store"
 import { isLowMemory, type LowMemoryThresholds, type WipMarker, type WipMemory, type WipSession } from "./wip-marker"
@@ -26,6 +27,11 @@ export type WipTrackerDeps = {
   readonly record?: (interruption: Interruption) => void
   readonly now?: () => number
   readonly log?: (message: string, data?: Record<string, unknown>) => void
+  /**
+   * The session waits for the network (network guard cycle): its turn ended on the error but the work is still in
+   * progress, so it stays in the marker. Defaults to the running network guard.
+   */
+  readonly isWaiting?: (sessionID: string) => boolean
 }
 
 function record(value: unknown): Record<string, unknown> | undefined {
@@ -67,6 +73,7 @@ export function toWipMemory(sample: MemorySample): WipMemory | undefined {
 
 export function createWipTracker(deps: WipTrackerDeps) {
   const now = deps.now ?? Date.now
+  const isWaiting = deps.isWaiting ?? ((sessionID: string) => getNetworkGuard()?.isWaiting(sessionID) ?? false)
   const sessions = new Map<string, SessionState>()
   const parentOf = new Map<string, string>()
   let sigterm: { at: number; lowMemory: boolean } | undefined
@@ -97,7 +104,7 @@ export function createWipTracker(deps: WipTrackerDeps) {
   function snapshot(): WipSession[] {
     const roots = new Map<string, { subtasks: string[] }>()
     for (const [sessionID, current] of sessions) {
-      if (!current.busy) continue
+      if (!current.busy && !isWaiting(sessionID)) continue
       const root = rootOf(sessionID)
       const entry = roots.get(root) ?? { subtasks: [] }
       if (root !== sessionID) entry.subtasks.push(sessionID)
@@ -248,10 +255,11 @@ export function createWipTracker(deps: WipTrackerDeps) {
             ? "OpenCode was closed (SIGTERM) while working"
             : "OpenCode was closed while working"
         for (const session of work) {
+          const waiting = !sessions.get(session.sessionID)?.busy && isWaiting(session.sessionID)
           const interruption: Interruption = {
             sessionID: session.sessionID,
-            cause: "killed",
-            detail,
+            cause: waiting ? "network" : "killed",
+            detail: waiting ? "OpenCode was closed while waiting for the network" : detail,
             at: now(),
             ...(session.openTools.length > 0 ? { tools: session.openTools } : {}),
             ...(session.subtasks.length > 0 ? { subtasks: session.subtasks } : {}),

@@ -1,4 +1,6 @@
 /** Real OpenCode wiring for the network guard (fork roadmap 0.15 A). */
+import { networkInterfaces } from "node:os"
+
 import type { OhMyOpenCodeConfig } from "../../config"
 import { ResilienceConfigSchema } from "../../config/schema/resilience"
 import { getFallbackModelsForSession } from "../../hooks/runtime-fallback/fallback-models"
@@ -10,6 +12,7 @@ import type { PluginContext } from "../../plugin/types"
 import { abortWithTimeout } from "../background-agent/abort-with-timeout"
 import { registerManagerForCleanup } from "../background-agent/process-cleanup"
 import { clearInterruption, recordInterruption } from "../interruption/store"
+import { getActiveLoopBreaker } from "../loop-breaker/plugin"
 import { createNetworkGuard, notifyNetworkGuardChange, setNetworkGuard, setNetworkResilienceEnabled, type NetworkGuard } from "./index"
 import { watchLinkChanges } from "./link-monitor"
 
@@ -27,16 +30,32 @@ export async function probeUrl(url: string, fetchImpl: typeof fetch = fetch): Pr
 
 type ProviderInfo = { id?: string; api?: string; options?: Record<string, unknown>; models?: Record<string, { api?: { url?: string } }> }
 
-/** The provider's base URL: user `options.baseURL`, else the models.dev API URL of the provider or its models. */
-export function providerBaseUrl(provider: ProviderInfo | undefined): string | undefined {
+/**
+ * The provider's base URL: user `options.baseURL`, else the models.dev API URL of the session's model, the provider or
+ * any of its models.
+ */
+export function providerBaseUrl(provider: ProviderInfo | undefined, modelID?: string): string | undefined {
   if (!provider) return undefined
   const fromOptions = provider.options?.baseURL
   if (typeof fromOptions === "string" && fromOptions.length > 0) return fromOptions
+  const fromModel = modelID ? provider.models?.[modelID]?.api?.url : undefined
+  if (typeof fromModel === "string" && fromModel.length > 0) return fromModel
   if (typeof provider.api === "string" && provider.api.length > 0) return provider.api
   for (const model of Object.values(provider.models ?? {})) {
     if (typeof model?.api?.url === "string" && model.api.url.length > 0) return model.api.url
   }
   return undefined
+}
+
+/** Local addresses of the external interfaces, sorted: a different value means the network changed. */
+export function networkFingerprint(interfaces: ReturnType<typeof networkInterfaces> = networkInterfaces()): string {
+  const addresses: string[] = []
+  for (const [name, entries] of Object.entries(interfaces)) {
+    for (const entry of entries ?? []) {
+      if (!entry.internal) addresses.push(`${name}/${entry.address}`)
+    }
+  }
+  return addresses.sort().join(",")
 }
 
 type ProvidersClient = {
@@ -45,29 +64,32 @@ type ProvidersClient = {
 }
 
 export function createPluginNetworkGuard(ctx: PluginContext, pluginConfig: OhMyOpenCodeConfig): NetworkGuard | null {
+  // Set before anything that can throw, so a failed creation never leaves the fallback paths stepping aside.
+  setNetworkResilienceEnabled(pluginConfig.resilience?.enabled !== false)
   const config = ResilienceConfigSchema.parse(pluginConfig.resilience ?? {})
-  setNetworkResilienceEnabled(config.enabled)
   if (!config.enabled) return null
 
   const providerUrls = new Map<string, string | undefined>()
   const client = ctx.client as unknown as ProvidersClient
 
-  async function lookupProviderUrl(providerID: string): Promise<string | undefined> {
-    if (providerUrls.has(providerID)) return providerUrls.get(providerID)
+  async function lookupProviderUrl(providerID: string, modelID: string | undefined): Promise<string | undefined> {
+    const key = `${providerID}/${modelID ?? ""}`
+    if (providerUrls.has(key)) return providerUrls.get(key)
     let url: string | undefined
     try {
       const configured = await client.config?.providers?.({ query: { directory: ctx.directory } })
-      url = providerBaseUrl(configured?.data?.providers?.find((provider) => provider.id === providerID))
+      url = providerBaseUrl(configured?.data?.providers?.find((provider) => provider.id === providerID), modelID)
       if (!url) {
         const listed = await client.provider?.list?.({ query: { directory: ctx.directory } })
-        url = providerBaseUrl(listed?.data?.all?.find((provider) => provider.id === providerID))
+        url = providerBaseUrl(listed?.data?.all?.find((provider) => provider.id === providerID), modelID)
       }
     } catch (error) {
       // OpenCode's server is local: if it fails, probe only the neutral site this time.
       log("[network-guard] provider lookup failed", { providerID, error: String(error) })
       return undefined
     }
-    providerUrls.set(providerID, url)
+    // Without a URL the guard still catches a failing provider: continuations that fail in a row hand off.
+    providerUrls.set(key, url)
     return url
   }
 
@@ -116,8 +138,8 @@ export function createPluginNetworkGuard(ctx: PluginContext, pluginConfig: OhMyO
       probe: (url) => probeUrl(url),
       providerProbeUrl: async (sessionID) => {
         const target = await resolveSessionTarget(ctx.client as never, sessionID)
-        const providerID = target.model ? parseModel(target.model)?.providerID : undefined
-        return providerID ? lookupProviderUrl(providerID) : undefined
+        const parsed = target.model ? parseModel(target.model) : undefined
+        return parsed?.providerID ? lookupProviderUrl(parsed.providerID, parsed.modelID) : undefined
       },
       toast,
       // Same session, same agent, and the model the session was using.
@@ -140,6 +162,8 @@ export function createPluginNetworkGuard(ctx: PluginContext, pluginConfig: OhMyO
         recordInterruption(ctx.directory, { sessionID, cause: "network", detail, at: Date.now() })
       },
       watchLink: (onChange) => watchLinkChanges(onChange, log),
+      networkFingerprint: () => networkFingerprint(),
+      chargeBudget: (sessionID) => getActiveLoopBreaker()?.charge(sessionID, "provider failing while the network works"),
       log,
       onChange: notifyNetworkGuardChange,
     },
