@@ -87,6 +87,7 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
     aparte el resultado en las difíciles.
 14. **Ficha por agente:** cada agente documenta estructura, funcionamiento y pruebas con resultados como evidencia en
     `docs/fork/agents/<agente>.md` (plantilla en `docs/fork/agents/README.md`); su paso no se cierra sin ella.
+15. **Sistemas homólogos:** antes de planificar cada funcionalidad o agente se investigan sistemas homólogos (agentes de código, librerías, artículos) y lo que pueda mejorarlo, **siempre con foco en lo gratis**; el plan cita la evidencia y qué se toma de cada uno (usuario, 05-10-2026).
 
 ## Orden de trabajo (actualizado 03-10-2026)
 1. **4.18 `@web-researcher`** — implementado y con QA; **su medición espera a que Zen funcione en el banco** (04-10-2026: Zen rechaza el plan gratuito desde el entorno aislado con "free tier can only be used from within OpenCode"; `deepseek-v4-flash-free` no disponible, `north-mini-code-free` y `laguna-s-2.1-free` retirados). El usuario eligió esperar a Zen en vez de medir con OpenRouter/Groq.
