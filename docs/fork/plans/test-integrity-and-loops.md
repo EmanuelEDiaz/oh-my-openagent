@@ -231,7 +231,7 @@ o preguntar), `opencode/big-pickle` en todos los agentes, agente "Sisyphus - ult
   basta, el bloqueo por código es lo que lo impide.
 - **Coste:** en las resolubles, +12 % de tokens y el doble de tiempo medio (la media sube por una tarea de 408 s;
   con 1 repetición la variación es alta). En las imposibles el guardián ahorra (corta antes los intentos de trampa).
-- **Límites honestos:** 1 repetición (el plan pedía 3) y la suite no tiene todavía tareas de errores de tipos.
+- **No cerrada (usuario, 05-10-2026: "no cierres nada de lo que no tengas datos correctos"):** 1 repetición (el plan pide 3) y la suite no tiene todavía tareas de errores de tipos. Siguiente: 3–4 tareas de tipos y 2 repeticiones más con y sin guardián.
 - **Evidencia:** `.omo/evals/2026-10-05-fix-integrity-fi-on-1791212743321.jsonl` y
   `…-fi-off-1791214725511.jsonl` (+ `*.context.md` con el desglose de contexto por tarea); informe
   `docs/fork/evals/fix-integrity.md`.
