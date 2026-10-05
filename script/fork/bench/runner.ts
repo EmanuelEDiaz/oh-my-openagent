@@ -79,6 +79,20 @@ async function sessionProgress(client: Client, sessionID: string): Promise<strin
   return [own, ...children].join("#")
 }
 
+const START_TIMEOUT_MS = 180_000
+
+/** Busy, or an assistant message already exists. Not starting at all is an infrastructure failure. */
+async function waitForStart(client: Client, sessionID: string, label: string): Promise<void> {
+  const deadline = Date.now() + START_TIMEOUT_MS
+  while (Date.now() < deadline) {
+    const busy = !(await isIdle(client, sessionID).catch(() => true))
+    const answered = (await messagesOf(client, sessionID).catch(() => [])).some((message) => (message as { info?: { role?: string } }).info?.role === "assistant")
+    if (busy || answered) return
+    await Bun.sleep(POLL_MS)
+  }
+  throw new Error(`${label} never started: no assistant activity within ${START_TIMEOUT_MS / 1000}s`)
+}
+
 /** Runs the task once and returns the transcript of the evaluated session (the subagent's, in subtask mode). */
 async function execute(client: Client, task: Task): Promise<Transcript> {
   const session = await client.session.create({ title: `bench ${task.id}` })
@@ -87,6 +101,9 @@ async function execute(client: Client, task: Task): Promise<Transcript> {
   if (task.mode === "primary") {
     await client.session.promptAsync({ sessionID: parentID, agent: task.agent, parts: [{ type: "text", text: task.prompt }] })
     try {
+      // The session reads idle until the agent picks the prompt up: wait for it to start before waiting for idle,
+      // or the run ends (and is aborted) before any work happens.
+      await waitForStart(client, parentID, task.id)
       await waitUntil(() => isIdle(client, parentID), () => sessionProgress(client, parentID), task.budget.timeoutMs, task.id)
     } finally {
       await client.session.abort({ sessionID: parentID }).catch(() => undefined)
