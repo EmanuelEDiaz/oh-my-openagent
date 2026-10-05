@@ -72,6 +72,7 @@ import {
 } from "./error-classifier"
 import { isEmptyNoProgressAssistantTurnInfo } from "./empty-assistant-turn"
 import { tryFallbackRetry } from "./fallback-retry-handler"
+import type { MemoryGate } from "./memory-gate"
 import { messageUpdatedInfoHasParentWakeOutput } from "./message-updated-parent-wake-output"
 import {
   type CircuitBreakerSettings,
@@ -244,6 +245,8 @@ export interface BackgroundManagerConfig {
   enableParentSessionNotifications?: boolean
   modelFallbackControllerAccessor?: ModelFallbackControllerAccessor
   log?: typeof log
+  /** Low-RAM admission gate for new subagents (fork roadmap 0.15 E); absent → no gate. */
+  memoryGate?: MemoryGate
 }
 
 export class BackgroundManager {
@@ -283,6 +286,8 @@ export class BackgroundManager {
   private enableParentSessionNotifications: boolean
   private modelFallbackControllerAccessor?: ModelFallbackControllerAccessor
   private logger: typeof log
+  private readonly memoryGate?: MemoryGate
+  private syncSubagentsRunning = 0
   private loggedSessionStatusUnavailable = false
   readonly taskHistory = new TaskHistory()
   private cachedCircuitBreakerSettings?: CircuitBreakerSettings
@@ -309,6 +314,7 @@ export class BackgroundManager {
     this.enableParentSessionNotifications = options?.enableParentSessionNotifications ?? true
     this.modelFallbackControllerAccessor = options?.modelFallbackControllerAccessor
     this.logger = options?.log ?? log
+    this.memoryGate = options?.memoryGate
     this.parentWakeNotifier = new ParentWakeNotifier(
       {
         client: this.client,
@@ -398,11 +404,23 @@ export class BackgroundManager {
   }
 
   async acquireSyncSubagentConcurrency(model: string, taskId?: string): Promise<void> {
+    if (this.memoryGate) await this.memoryGate.waitForMemory(taskId ?? `sync:${model}`)
     await this.concurrencyManager.acquire(model, taskId)
+    this.syncSubagentsRunning++
   }
 
   releaseSyncSubagentConcurrency(model: string): void {
+    this.syncSubagentsRunning = Math.max(0, this.syncSubagentsRunning - 1)
     this.concurrencyManager.release(model)
+  }
+
+  /** Subagents running right now (background + sync), for the low-RAM gate's no-deadlock rule. */
+  runningSubagentCount(): number {
+    let running = this.syncSubagentsRunning
+    for (const task of this.tasks.values()) {
+      if (task.status === "running") running++
+    }
+    return running
   }
 
   private registerRootDescendant(rootSessionID: string): number {
@@ -696,6 +714,12 @@ export class BackgroundManager {
         const item = queue.shift()
         if (!item) {
           continue
+        }
+
+        // Low RAM: the task stays queued until memory recovers (fork roadmap 0.15 E).
+        if (this.memoryGate) {
+          await this.memoryGate.waitForMemory(item.task.id, () =>
+            item.task.status === "cancelled" || item.task.status === "error" || item.task.status === "interrupt")
         }
 
         try {
