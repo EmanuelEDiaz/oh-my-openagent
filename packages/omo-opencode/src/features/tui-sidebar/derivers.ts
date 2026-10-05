@@ -3,6 +3,7 @@ import type { TuiRuntimeSnapshot } from "./snapshot-schema"
 import type {
   AgentsState,
   ConfigState,
+  ConnectionState,
   JobBoardState,
   JobRow,
   LoopState,
@@ -66,6 +67,24 @@ export function deriveJobBoard(snap: TuiRuntimeSnapshot | null): JobBoardState {
 
 export function deriveLoop(snap: TuiRuntimeSnapshot | null): LoopState {
   return snap?.loop ?? { kind: "none" }
+}
+
+/** `now`: when the mirror was read; the countdown advances with each heartbeat rewrite of the mirror. */
+export function deriveConnection(snap: TuiRuntimeSnapshot | null, now: number = Date.now()): ConnectionState {
+  const connection = snap?.connection
+  if (!connection) {
+    return { kind: "none" }
+  }
+  if (connection.state === "frozen") {
+    return { kind: "frozen" }
+  }
+
+  return {
+    kind: connection.state,
+    attempt: connection.attempt,
+    limit: connection.limit,
+    inS: connection.nextAt === null ? null : Math.max(0, Math.round((connection.nextAt - now) / 1000)),
+  }
 }
 
 function compareRosterRows(left: RosterRow, right: RosterRow): number {

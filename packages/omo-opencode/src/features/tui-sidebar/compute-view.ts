@@ -2,6 +2,7 @@ import { assertNever } from "./state-types"
 import type {
   AgentsState,
   ConfigState,
+  ConnectionState,
   JobBoardState,
   LoopLive,
   LoopState,
@@ -15,12 +16,14 @@ export type ComputeViewSections = {
   readonly agents: AgentsState
   readonly jobs: JobBoardState
   readonly loop: LoopState
+  readonly connection?: ConnectionState
 }
 
 export function computeView(sections: ComputeViewSections): SidebarView {
   if (isActive(sections)) {
     return {
       kind: "active",
+      ...(sections.connection ? { connection: sections.connection } : {}),
       loop: sections.loop,
       agents: sections.agents,
       jobs: sections.jobs,
@@ -40,6 +43,7 @@ export function viewKey(view: SidebarView): string {
     case "active":
       return stableKey([
         "active",
+        connectionKeyParts(view.connection ?? { kind: "none" }),
         loopKeyParts(view.loop),
         agentsKeyParts(view.agents),
         jobsKeyParts(view.jobs),
@@ -55,7 +59,10 @@ export function viewKey(view: SidebarView): string {
 }
 
 function isActive(sections: ComputeViewSections): boolean {
-  return sections.agents.kind === "list" || sections.jobs.kind === "list" || sections.loop.kind === "live"
+  return sections.agents.kind === "list"
+    || sections.jobs.kind === "list"
+    || sections.loop.kind === "live"
+    || (sections.connection !== undefined && sections.connection.kind !== "none")
 }
 
 function stableKey(parts: readonly unknown[]): string {
@@ -96,6 +103,19 @@ function jobsKeyParts(jobs: JobBoardState): readonly unknown[] {
       ]
     default:
       return assertNever(jobs)
+  }
+}
+
+function connectionKeyParts(connection: ConnectionState): readonly unknown[] {
+  switch (connection.kind) {
+    case "none":
+    case "frozen":
+      return ["connection", connection.kind]
+    case "offline":
+    case "provider-down":
+      return ["connection", connection.kind, connection.attempt, connection.limit, connection.inS]
+    default:
+      return assertNever(connection)
   }
 }
 

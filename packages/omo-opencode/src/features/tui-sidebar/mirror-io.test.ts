@@ -4,7 +4,7 @@ import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 
 import { MIRROR_DIR_NAME, MIRROR_SCHEMA_VERSION, STALE_MS } from "./constants"
-import { readMirror, writeMirror } from "./mirror-io"
+import { readMirror, snapshotIsActive, writeMirror } from "./mirror-io"
 import { mirrorFilePath, mirrorStorageDir } from "./mirror-path"
 import type { TuiRuntimeSnapshot } from "./snapshot-schema"
 
@@ -228,5 +228,18 @@ describe("tui-sidebar mirror IPC", () => {
     const snapshot = snapshotFor(projectDir, Date.now())
 
     expect(() => writeMirror(projectDir, snapshot)).toThrow()
+  })
+
+  it("#given only a network wait #when checking activity #then it counts as active so the heartbeat keeps the countdown fresh", () => {
+    // given
+    const idle: TuiRuntimeSnapshot = { ...snapshotFor("/tmp/project", 1), activeAgents: [], jobBoard: [] }
+    const offline: TuiRuntimeSnapshot = {
+      ...idle,
+      connection: { state: "offline", attempt: 1, limit: 12, nextAt: 2, since: 1 },
+    }
+
+    // then
+    expect(snapshotIsActive(idle)).toBe(false)
+    expect(snapshotIsActive(offline)).toBe(true)
   })
 })

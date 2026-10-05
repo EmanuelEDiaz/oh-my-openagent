@@ -3,6 +3,7 @@ import { describe, expect, it } from "bun:test"
 import {
   deriveAgents,
   deriveConfig,
+  deriveConnection,
   deriveJobBoard,
   deriveLoop,
   deriveRoster,
@@ -220,5 +221,24 @@ describe("tui sidebar section derivers", () => {
       blocked: 2,
       activeGoal: "Ship sidebar",
     })
+  })
+
+  it("#given a mirror with a network wait #when deriving connection #then it counts down from the read time", () => {
+    // given
+    const offline: TuiRuntimeSnapshot = {
+      ...snapshot({}),
+      connection: { state: "provider-down", attempt: 3, limit: 12, nextAt: 20_400, since: 1_000 },
+    }
+    const frozen: TuiRuntimeSnapshot = {
+      ...snapshot({}),
+      connection: { state: "frozen", attempt: null, limit: null, nextAt: null, since: null },
+    }
+
+    // then
+    expect(deriveConnection(null)).toEqual({ kind: "none" })
+    expect(deriveConnection(snapshot({}))).toEqual({ kind: "none" })
+    expect(deriveConnection(offline, 5_000)).toEqual({ kind: "provider-down", attempt: 3, limit: 12, inS: 15 })
+    expect(deriveConnection(offline, 30_000)).toEqual({ kind: "provider-down", attempt: 3, limit: 12, inS: 0 })
+    expect(deriveConnection(frozen)).toEqual({ kind: "frozen" })
   })
 })

@@ -7,11 +7,12 @@ import { canonicalProjectDir, mirrorFilePath } from "./mirror-path"
 import { parseSnapshot } from "./snapshot-schema"
 import type { TuiRuntimeSnapshot } from "./snapshot-schema"
 
-/** Something is in progress: a busy agent, a queued or running job, or a live loop. */
+/** Something is in progress: a busy agent, a queued or running job, a live loop, or a wait for the network. */
 export function snapshotIsActive(snapshot: TuiRuntimeSnapshot): boolean {
   return snapshot.activeAgents.some((agent) => agent.status === "busy" || agent.status === "running" || agent.status === "retry")
     || snapshot.jobBoard.some((job) => job.status === "pending" || job.status === "running")
     || snapshot.loop !== null
+    || snapshot.connection !== undefined
 }
 
 export function writeMirror(projectDir: string, snapshot: TuiRuntimeSnapshot): void {

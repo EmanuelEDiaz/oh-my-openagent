@@ -1,7 +1,7 @@
 import { z } from "zod"
 
 import { MIRROR_SCHEMA_VERSION } from "./constants"
-import type { AgentStatus, LoopLive } from "./state-types"
+import type { AgentStatus, ConnectionSnapshot, LoopLive } from "./state-types"
 import type { BackgroundTaskStatus } from "../background-agent/types"
 
 const AGENT_STATUS_VALUES = [
@@ -44,6 +44,16 @@ const LoopLiveSchema = z.object({
   activeGoal: z.string().nullable(),
 }) satisfies z.ZodType<LoopLive>
 
+const ConnectionSchema = z.object({
+  state: z.enum(["offline", "provider-down", "frozen"]),
+  attempt: z.number().int().nonnegative().nullable(),
+  limit: z.number().int().positive().nullable(),
+  nextAt: z.number().nullable(),
+  since: z.number().nullable(),
+}) satisfies z.ZodType<ConnectionSnapshot>
+
+// `connection` is optional and additive: a reader without it ignores the key (zod strips unknown keys), and a mirror
+// written without it still parses, so the schema version stays the same.
 export const TuiRuntimeSnapshotSchema = z.object({
   version: z.literal(MIRROR_SCHEMA_VERSION),
   projectDir: z.string(),
@@ -51,6 +61,7 @@ export const TuiRuntimeSnapshotSchema = z.object({
   activeAgents: z.array(AgentRowSchema),
   jobBoard: z.array(JobRowSchema),
   loop: LoopLiveSchema.nullable(),
+  connection: ConnectionSchema.optional(),
 })
 
 export type TuiRuntimeSnapshot = z.infer<typeof TuiRuntimeSnapshotSchema>

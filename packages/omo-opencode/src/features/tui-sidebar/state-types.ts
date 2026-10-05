@@ -48,6 +48,29 @@ export type LoopLive = {
 
 export type LoopState = { readonly kind: "none" } | LoopLive
 
+/** Network guard state written by the server (fork roadmap 0.15). */
+export type ConnectionSnapshot = {
+  readonly state: "offline" | "provider-down" | "frozen"
+  /** The probe (or OpenCode retry) shown: the next one while waiting, the running one while probing. */
+  readonly attempt: number | null
+  readonly limit: number | null
+  /** When the next probe runs, epoch ms. */
+  readonly nextAt: number | null
+  /** When the wait started, epoch ms. */
+  readonly since: number | null
+}
+
+export type ConnectionState =
+  | { readonly kind: "none" }
+  | {
+      readonly kind: "offline" | "provider-down"
+      readonly attempt: number | null
+      readonly limit: number | null
+      /** Whole seconds until the next probe, from the time the mirror was read. */
+      readonly inS: number | null
+    }
+  | { readonly kind: "frozen" }
+
 export type ConfigBanner =
   | { readonly kind: "none" }
   | { readonly kind: "invalid" }
@@ -55,6 +78,8 @@ export type ConfigBanner =
 export type SidebarView =
   | {
       readonly kind: "active"
+      /** Absent in views built before the network guard existed: same as `{ kind: "none" }`. */
+      readonly connection?: ConnectionState
       readonly loop: LoopState
       readonly agents: AgentsState
       readonly jobs: JobBoardState

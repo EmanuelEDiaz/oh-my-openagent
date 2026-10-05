@@ -1,5 +1,6 @@
 import { HEARTBEAT_MS, WRITE_DEBOUNCE_MS } from "./constants"
 import { log } from "../../shared/logger"
+import { onNetworkGuardChange } from "../network-guard"
 import { snapshotIsActive, writeMirror } from "./mirror-io"
 import { buildTuiRuntimeSnapshot } from "./snapshot-builder"
 import type {
@@ -18,6 +19,9 @@ export type TuiStateMirrorInput = {
   readonly getStatuses?: () => Promise<SessionStatusMap>
   readonly sessionAgentResolver?: SessionAgentResolver
   readonly reportFlushError?: (error: Error) => void
+  readonly getConnectionViews?: BuildTuiRuntimeSnapshotInput["getConnectionViews"]
+  /** Calls `listener` when the network guard state changes; returns the unsubscribe. */
+  readonly subscribeConnection?: (listener: () => void) => () => void
 }
 
 export class TuiStateMirror {
@@ -29,9 +33,12 @@ export class TuiStateMirror {
   private resolvePendingFlush: (() => void) | null = null
   private inFlightFlush: Promise<void> | null = null
   private stopped = false
+  private readonly subscribeConnection: (listener: () => void) => () => void
+  private unsubscribeConnection: (() => void) | null = null
 
   constructor(input: TuiStateMirrorInput) {
     this.snapshotInput = input
+    this.subscribeConnection = input.subscribeConnection ?? onNetworkGuardChange
     this.reportFlushError = input.reportFlushError ?? ((error) => log("[tui-sidebar] mirror flush failed", { error }))
   }
 
@@ -76,6 +83,10 @@ export class TuiStateMirror {
   /** Writes the current state once; the heartbeat then runs only while something is in progress. */
   start(): void {
     this.stopped = false
+    // A network wait starts or ends between OpenCode events (the guard probes on its own timers).
+    this.unsubscribeConnection ??= this.subscribeConnection(() => {
+      void this.flush()
+    })
     void this.flush()
   }
 
@@ -93,6 +104,8 @@ export class TuiStateMirror {
 
   stop(): void {
     this.stopped = true
+    this.unsubscribeConnection?.()
+    this.unsubscribeConnection = null
     if (this.heartbeatID !== null) {
       clearInterval(this.heartbeatID)
       this.heartbeatID = null
