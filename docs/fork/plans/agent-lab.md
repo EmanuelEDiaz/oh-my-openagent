@@ -45,5 +45,11 @@ señales de OpenCode, casi nulo cuando está plegado.**
 - HTML interactiva: https://claude.ai/artifact/WcChKoF5BysxboKW8KzcLw (04-10-2026).
 - **Pencil (pedido por el usuario):** rehacer la maqueta en Pencil cuando su MCP conecte, antes de construir la fase.
 
+## Lista de subagentes (7.2, usuario 05-10-2026)
+- En el panel lateral, lista de los subagentes que trabajan ahora: agente, tarea, herramienta actual, tiempo.
+- Tocar uno abre su sesión (como `ctrl+x ↓` en OpenCode) para ver qué hace.
+- Mismas reglas de coste: solo eventos, nada si está plegado.
+- **Revisión en Pencil antes de construir 7.1 y 7.2: pedírsela al usuario cuando llegue el momento.**
+
 ## Medición
 CPU y memoria con el panel plegado, abierto en reposo y abierto con 3–12 agentes trabajando; respuesta al clic.
