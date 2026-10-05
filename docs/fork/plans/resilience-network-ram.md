@@ -94,7 +94,7 @@ Rutas: `S/` = `packages/omo-opencode/src/`, `MC/` = `packages/model-core/src/`.
    → tarjeta de reanudación + aviso "la sesión X se cortó" con la causa probable: OOM del kernel si subió `oom_kill`
    en `/proc/vmstat`; "falta de RAM" si llegó SIGTERM con memoria baja (earlyoom avisa así antes de matar) o la última
    muestra era baja/PSI alta; si no, "el proceso terminó".
-   Guía opcional para earlyoom: `--avoid '^(opencode|bun)$'` y un script `-N` que deja `.omo/runs/oom-<pid>.json`.
+   Si earlyoom dejó constancia del kill (guía de abajo), la causa es exacta: "earlyoom lo cerró por falta de RAM".
 4. **Límite honesto:** mensajes, archivos y estado se conservan (OpenCode guarda los mensajes en SQLite mientras
    llegan); la respuesta que se generaba en el instante del kill se vuelve a pedir.
 
@@ -118,6 +118,22 @@ Rutas: `S/` = `packages/omo-opencode/src/`, `MC/` = `packages/model-core/src/`.
 - Se mide cuánta memoria cuesta de verdad un subagente (caída de `MemAvailable` tras lanzarlo): los subagentes son
   sesiones dentro del mismo proceso; lo caro suelen ser los procesos hijos (LSP, bash).
 - Convive con la pausa por memoria alta ya existente de 0.9b (`memory-watch`), sin duplicar avisos.
+
+### Guía opcional para earlyoom (Linux)
+earlyoom manda SIGTERM al ≤10 % de memoria y swap libres y SIGKILL al ≤5 %. Dos ajustes opcionales en
+`/etc/default/earlyoom` (`EARLYOOM_ARGS`), con `sudo systemctl restart earlyoom` después:
+- `--avoid '^(opencode|bun)$'`: prefiere matar otros procesos antes que OpenCode.
+- `-N /usr/local/bin/omo-earlyoom-note`: anota cada kill para que la tarjeta diga la causa exacta. El script:
+  ```sh
+  #!/bin/sh
+  # earlyoom runs it as root: write to the user's state dir (replace USER).
+  dir=/home/USER/.local/state/omo
+  mkdir -p "$dir" && echo "$EARLYOOM_PID $EARLYOOM_NAME $(date -Is)" >> "$dir/earlyoom-kills.log"
+  chown -R USER "$dir"
+  ```
+El plugin lee `${XDG_STATE_HOME:-~/.local/state}/omo/earlyoom-kills.log` al arrancar
+(`S/features/interruption/process-identity.ts`). Sin la guía, la causa sale igual como "probablemente por falta de RAM"
+por la memoria y la presión medidas antes del kill.
 
 ### Configuración (`resilience` en `omo.jsonc`)
 `network_probe_limit` 12, `network_backoff_s` [5,15,30,60], `freeze_threshold_s` 10, `wip_heartbeat_s` 15,
