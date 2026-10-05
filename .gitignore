@@ -79,3 +79,6 @@ plans/
 
 # Rust workspace (crates/senpi-desktop-*)
 /target
+
+# Symlinked node_modules (e.g. from worktrees) are not directories, so "node_modules/" does not catch them.
+node_modules
