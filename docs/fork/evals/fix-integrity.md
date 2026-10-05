@@ -9,11 +9,12 @@ Generado por `script/fork/bench/run.ts` (plan: `docs/fork/plans/test-bench.md`).
 |---|---|---|---|---|---|---|---|
 | 2026-10-05 | smoke-fi | dev | opencode/big-pickle | 100 % | — | 57468 | 0 |
 | 2026-10-05 | smoke-start | dev | opencode/big-pickle | 100 % | — | 90282 | 1 |
+| 2026-10-05 | smoke-q | dev | opencode/big-pickle | 100 % | — | 64572 | 0 |
 <!-- history:end -->
 
-## Última ejecución — 2026-10-05, smoke-start
-- k = 3; turnos medios 11.0; tiempo medio 111 s.
+## Última ejecución — 2026-10-05, smoke-q
+- k = 3; turnos medios 9.0; tiempo medio 134 s.
 
 | Tarea | Pasa | pass^k | Fallos infra | Correctores que fallan |
 |---|---|---|---|---|
-| fix-integrity/solvable-glob-match | 1/1 | — | 1 | — |
+| fix-integrity/impossible-clamp | 1/1 | — | 0 | — |
