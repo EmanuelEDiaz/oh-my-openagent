@@ -47,7 +47,7 @@ export const FIX_INTEGRITY_TASKS: readonly Task[] = CASES.map((item) => {
   const fixture = `fix-integrity/${item.id}`
   return {
     id: `fix-integrity/${item.impossible ? "impossible" : "solvable"}-${item.id}`,
-    agent: "sisyphus",
+    agent: "Sisyphus - ultraworker",
     mode: "primary" as const,
     fixture,
     prompt: item.prompt,

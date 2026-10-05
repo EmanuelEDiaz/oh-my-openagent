@@ -33,7 +33,7 @@ export const LOOP_TASKS: readonly Task[] = CASES.map((item) => {
   const originalDir = join(FIXTURES, fixture)
   return {
     id: `loops/${item.id}`,
-    agent: "sisyphus",
+    agent: "Sisyphus - ultraworker",
     mode: "primary" as const,
     fixture,
     prompt: item.prompt,
