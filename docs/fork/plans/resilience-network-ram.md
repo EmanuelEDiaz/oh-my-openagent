@@ -160,3 +160,33 @@ por la memoria y la presión medidas antes del kill.
 ## Entregables
 Código y pruebas en la rama `feat/resilience`; evidencia en `.omo/evidence/0.15/`; este plan y el roadmap actualizados;
 merge `--no-ff` a `mis-mejoras` tras la QA y la suite de integración.
+
+## Implementación (05-10-2026, rama `feat/resilience`)
+- **A/B red y congelamiento:** `MC/network-error-classifier.ts` (`isNetworkError`: cualquier código HTTP = no es red);
+  `S/features/network-guard/` (guardián, sondeo doble con variación, monitor `ip` en Linux mientras hay sesiones
+  ocupadas, huella de `os.networkInterfaces()` para detectar cambios de red sin error, toasts, línea en la barra
+  lateral); salidas tempranas en `runtime-fallback`, `model-fallback` y el reintento de subagentes; el vigilante (0.8)
+  trata como espera solo los reintentos de red y no cobra presupuesto por red, cambio de red o congelamiento.
+- **C/D/E:** `S/shared/write-file-atomically.ts` (temporal único, limpieza al arrancar) y 14 escritores migrados;
+  `S/features/interruption/` (registro de interrupciones que se fusionan, marca WIP con pid + hora de arranque +
+  `boot_id`, huérfanos, causa probable con `oom_kill`/PSI/registro de earlyoom, nota de un solo uso con comprobación de
+  ediciones a medias); `S/features/background-agent/memory-gate.ts` (cola con histéresis, PSI, espera máxima 4 min).
+- **Decisiones durante la implementación:**
+  - la continuación tras volver la red fija explícitamente el modelo que usaba la sesión (sin modelo, OpenCode podría
+    usar el del agente);
+  - proveedor que falla por transporte con la red bien: tras 2 reanudaciones sin datos del modelo pasa al respaldo y
+    cobra el presupuesto de 0.9b (evita un bucle sin fin);
+  - si el usuario escribe o aborta durante la espera, no se manda la continuación automática;
+  - cerrar OpenCode a mano mientras trabaja también deja la nota de reanudación (el trabajo quedó cortado igual);
+  - una ventana viva de OpenCode (pid vivo con la misma hora de arranque) nunca se trata como huérfana aunque esté
+    congelada; sin `/proc` (Windows/macOS), solo tras 24 h sin latido;
+  - `network-guard` se apaga con `resilience.enabled: false` (no con `disabled_hooks`);
+  - el aviso de continuación del hook `goal` pasa a marcarse como interno para que la nota no se pegue a él.
+- **Revisión independiente:** 3 fallos graves (reintento que se cuelga sin recuperación, bucle con el proveedor caído,
+  el cambio de red seguía el camino viejo), 7 medios y 6 menores; todos arreglados con una prueba que fallaba antes.
+- **Pruebas unitarias:** 369 en verde en los módulos tocados; chequeo de tipos limpio. Los 65 fallos de
+  `src/hooks/runtime-fallback` al correr la carpeta entera son previos (un `mock.module` de `hook.init.test.ts` se
+  filtra a otros archivos; fallan igual en HEAD sin 0.15).
+- **QA aislada:** `script/fork/qa/resilience.ts` (corte corto, corte largo con nota, congelamiento, kill con
+  "sigue con eso", kill con otra petición); no arranca si dejaría menos de 3 GB libres. Resultados: pendientes de correr
+  al terminar la medición de 0.9b.
