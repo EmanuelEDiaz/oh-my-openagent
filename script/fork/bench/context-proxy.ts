@@ -101,7 +101,12 @@ export function startContextProxy(upstream: string, logFile: string): { readonly
       const headers = new Headers(request.headers)
       headers.delete("host")
       headers.delete("content-length")
-      return fetch(`${base}${url.pathname.replace(/^\/proxy/, "")}${url.search}`, { method: request.method, headers, ...(body === undefined ? {} : { body }) })
+      try {
+        return await fetch(`${base}${url.pathname.replace(/^\/proxy/, "")}${url.search}`, { method: request.method, headers, ...(body === undefined ? {} : { body }) })
+      } catch (error) {
+        // A dropped upstream connection becomes a retryable 502 for OpenCode instead of an unhandled error.
+        return new Response(JSON.stringify({ error: { message: `upstream unreachable: ${error instanceof Error ? error.message : String(error)}` } }), { status: 502, headers: { "content-type": "application/json" } })
+      }
     },
   })
   return { url: `http://127.0.0.1:${server.port}/proxy`, stop: () => server.stop(true) }
