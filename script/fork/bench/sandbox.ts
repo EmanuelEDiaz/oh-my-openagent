@@ -102,11 +102,11 @@ async function freePort(): Promise<number> {
   })
 }
 
-export type Server = { readonly baseUrl: string; stop(): void }
+export type Server = { readonly baseUrl: string; readonly pid?: number; stop(): void }
 
 /** One `opencode serve` for the whole run; each task talks to it with its own workdir as `directory`. */
-export async function startServer(sandbox: Sandbox, startupTimeoutMs = 600_000): Promise<Server> {
-  const port = await freePort()
+export async function startServer(sandbox: Sandbox, startupTimeoutMs = 600_000, fixedPort?: number): Promise<Server> {
+  const port = fixedPort ?? (await freePort())
   const child: ChildProcess = spawn("opencode", ["serve", "--port", String(port), "--hostname", "127.0.0.1"], {
     cwd: join(sandbox.root, "work"),
     env: { ...process.env, ...sandbox.env },
@@ -127,7 +127,7 @@ export async function startServer(sandbox: Sandbox, startupTimeoutMs = 600_000):
   const deadline = Date.now() + startupTimeoutMs
   while (Date.now() < deadline) {
     if (child.exitCode !== null) break
-    if (await fetch(`${baseUrl}/config`).then((response) => response.ok, () => false)) return { baseUrl, stop }
+    if (await fetch(`${baseUrl}/config`).then((response) => response.ok, () => false)) return { baseUrl, ...(child.pid !== undefined ? { pid: child.pid } : {}), stop }
     await Bun.sleep(1000)
   }
   stop()
