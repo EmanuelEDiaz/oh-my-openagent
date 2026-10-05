@@ -64,7 +64,12 @@ function createSwitchableProxy(upstream: string) {
         const headers = new Headers(request.headers)
         headers.delete("host")
         headers.delete("content-length")
-        return fetch(`${upstream}${url.pathname.replace(/^\/proxy/, "")}${url.search}`, { method: request.method, headers, ...(body === undefined ? {} : { body }) })
+        try {
+          return await fetch(`${upstream}${url.pathname.replace(/^\/proxy/, "")}${url.search}`, { method: request.method, headers, ...(body === undefined ? {} : { body }) })
+        } catch (error) {
+          // A real network drop upstream: answer like a gateway instead of crashing the request.
+          return new Response(JSON.stringify({ error: { message: `upstream unreachable: ${error instanceof Error ? error.message : String(error)}` } }), { status: 502, headers: { "content-type": "application/json" } })
+        }
       },
     })
     port = server.port ?? port
