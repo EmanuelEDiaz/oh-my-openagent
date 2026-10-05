@@ -141,6 +141,15 @@ respuesta. Se reparan los nombres que llegan con caracteres de control, espacios
 con **una sola** herramienta disponible; si no coinciden con ninguna o con varias, no se toca (OpenCode avisa al modelo
 como hasta ahora). Se cuenta cuántas veces pasa en todas las transcripciones guardadas del banco (antes) y tras el
 cambio. Pruebas: nulo, espacios, mayúsculas, nombre ambiguo, nombre inexistente.
+- **Implementado** (`S/features/tool-name-repair/`, `resilience.repair_tool_names`, por defecto activo). OpenCode
+  1.18.26 solo repara mayúsculas (`session/llm.ts:296`); todo lo demás lo convierte en la herramienta `invalid` y **pierde
+  los argumentos**, así que el plugin no puede ejecutar la herramienta correcta: reescribe la salida de `invalid` con
+  una instrucción clara ("la herramienta se llama `bash`; vuelve a llamarla con los mismos argumentos") y, si el turno
+  termina justo ahí sin respuesta, manda **una** continuación interna (máx. 1 por mensaje y 2 seguidas; no en
+  subagentes, cuyo padre recoge el resultado). Nombres desconocidos o ambiguos: sin cambios.
+- **Pruebas:** 15 (nulo, espacios, mayúsculas, ancho cero, comillas, ambiguo, desconocido, continuación única y tope).
+- **Conteo antes** (29 archivos de `.omo/evals`): 1 caso reparable (`bash\x00`, el incidente) y 1 nombre desconocido
+  (`analysis`). El conteo después saldrá de las próximas ejecuciones con un dist que lo incluya (QA de 0.15 y siguientes).
 
 ### Configuración (`resilience` en `omo.jsonc`)
 `network_probe_limit` 12, `network_backoff_s` [5,15,30,60], `freeze_threshold_s` 10, `wip_heartbeat_s` 15,

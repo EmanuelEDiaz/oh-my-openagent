@@ -94,6 +94,8 @@ export function createToolExecuteAfterHandler(args: {
     }
 
     const runToolExecuteAfterHooks = async (): Promise<void> => {
+      // First, so every later hook sees the repaired retry instruction instead of OpenCode's "invalid" text.
+      await hooks.toolNameRepair?.["tool.execute.after"]?.(hookInput, output)
       await hooks.toolOutputTruncator?.["tool.execute.after"]?.(hookInput, output)
       await hooks.claudeCodeHooks?.["tool.execute.after"]?.(hookInput, output)
       await hooks.preemptiveCompaction?.["tool.execute.after"]?.(hookInput, output)
