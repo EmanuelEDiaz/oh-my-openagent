@@ -256,6 +256,16 @@ Mismo banco y modelo, 1 repetición, suite `loops` (8 tareas).
 - **Evidencia:** `.omo/evals/2026-10-05-loops-loops-on-1791216761633.jsonl`, `…-loops-off-1791217324483.jsonl`;
   informe `docs/fork/evals/loops.md`.
 
+## Validación de `loops-hard` sin freno (05-10-2026)
+7 tareas diseñadas para atrapar en bucles (`script/fork/bench/tasks/loops-hard`), big-pickle, 1 repetición, freno
+apagado: 6/7 resueltas; **ningún bucle** (0 arreglos fallidos sobre el mismo error y 0 repeticiones casi iguales en las
+7, grader `info:loops`). El modelo descubre las trampas leyendo (p. ej. lee el `pricing.js` viejo antes de editar).
+`round-half` falló por un aviso de proceso perdido (no por bucle) y `bigint-json` necesitó 2 reintentos por un permiso
+sin contestar: ambos en `plans/bench-findings-fixes.md`.
+- **Conclusión:** con big-pickle no se puede medir el freno; la medición de 0.9b necesita un modelo gratuito más débil
+  (o trampas más duras). Sigue abierta.
+- Evidencia: `.omo/evals/2026-10-05-loops-hard-lh-off-1791226922408.jsonl`.
+
 ## Criterios de aceptación
 ```gherkin
 Feature: integridad de tests y bucles
