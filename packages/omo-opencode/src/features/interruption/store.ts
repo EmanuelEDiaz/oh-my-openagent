@@ -35,10 +35,27 @@ function file(projectDir: string, sessionID: string): string {
   return join(dir(projectDir), `${sessionID.replace(/[^\w-]/g, "_")}.json`)
 }
 
-/** Records (or replaces) the interruption of a session. */
+/**
+ * Records the interruption of a session. A pending one is merged, not lost: the newest cause and time win (they decide
+ * when the note is cleared), the earlier detail is kept, and half-done tools and subtasks are joined.
+ */
 export function recordInterruption(projectDir: string, entry: Interruption): void {
   mkdirSync(dir(projectDir), { recursive: true })
-  writeFileAtomically(file(projectDir, entry.sessionID), JSON.stringify(entry, null, 2))
+  const previous = loadInterruption(projectDir, entry.sessionID)
+  writeFileAtomically(file(projectDir, entry.sessionID), JSON.stringify(previous ? merge(previous, entry) : entry, null, 2))
+}
+
+function merge(previous: Interruption, next: Interruption): Interruption {
+  const tools = [...(previous.tools ?? []), ...(next.tools ?? [])].filter(
+    (tool, index, all) => all.findIndex((other) => other.callID === tool.callID) === index,
+  )
+  const subtasks = [...new Set([...(previous.subtasks ?? []), ...(next.subtasks ?? [])])]
+  return {
+    ...next,
+    detail: previous.detail === next.detail ? next.detail : `${next.detail} (earlier: ${previous.detail})`,
+    ...(tools.length > 0 ? { tools } : {}),
+    ...(subtasks.length > 0 ? { subtasks } : {}),
+  }
 }
 
 export function loadInterruption(projectDir: string, sessionID: string): Interruption | undefined {

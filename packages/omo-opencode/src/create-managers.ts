@@ -8,6 +8,9 @@ import type { MonitorManager } from "./features/monitor"
 import { createMonitorManager } from "./features/monitor"
 import { createPluginProcessManager, type ProcessManager } from "./features/managed-process"
 import { createPluginResumeService } from "./features/resume/plugin"
+import { sampleMemory } from "./features/resume/memory-watch"
+import { createPluginResilience, type PluginResilience } from "./features/interruption/plugin"
+import { createMemoryGate } from "./features/background-agent/memory-gate"
 import type { ResumeService } from "./features/resume/service"
 import { SkillMcpManager } from "./features/skill-mcp-manager"
 import { cleanupSessionTeamRuns } from "./features/team-mode/team-runtime/session-cleanup"
@@ -62,6 +65,7 @@ export type Managers = {
   monitorManager?: MonitorManager
   processManager?: ProcessManager
   resumeService?: ResumeService
+  resilience?: PluginResilience
 }
 
 export function createManagers(args: {
@@ -114,6 +118,23 @@ export function createManagers(args: {
     : createPluginProcessManager(ctx, pluginConfig.processes)
   // Lossless resume (fork roadmap 0.8c), on unless resume.enabled is false.
   const resumeService = pluginConfig.resume?.enabled === false ? undefined : createPluginResumeService(ctx, pluginConfig.resume)
+  // Killed-process recovery and the one-shot resume note (fork roadmap 0.15 C/D), on unless resilience.enabled is false.
+  const resilience = createPluginResilience(ctx, pluginConfig.resilience)
+  const resilienceConfig = pluginConfig.resilience
+  const memoryGate = resilienceConfig?.enabled === false
+    ? undefined
+    : createMemoryGate({
+      lowMemoryMb: resilienceConfig?.low_memory_mb ?? 700,
+      lowMemoryRatio: resilienceConfig?.low_memory_ratio ?? 0.1,
+      resumeMemoryMb: resilienceConfig?.resume_memory_mb ?? 900,
+      sample: sampleMemory,
+      runningCount: () => backgroundManager?.runningSubagentCount() ?? 0,
+      isMemoryWarningActive: () => resumeService?.isMemoryHigh() ?? false,
+      toast: async (message) => {
+        await ctx.client.tui.showToast({ body: { title: "Poca memoria", message, variant: "warning", duration: 10_000 } }).catch(() => undefined)
+      },
+      log,
+    })
 
   const shutdownProcesses = async (): Promise<void> => {
     resumeService?.dispose()
@@ -219,6 +240,7 @@ export function createManagers(args: {
     },
     enableParentSessionNotifications: backgroundNotificationHookEnabled,
     modelFallbackControllerAccessor,
+    ...(memoryGate ? { memoryGate } : {}),
   })
 
   if (pluginConfig.tui?.sidebar?.enabled !== false) {
@@ -250,5 +272,6 @@ export function createManagers(args: {
     monitorManager,
     processManager,
     resumeService,
+    resilience,
   }
 }

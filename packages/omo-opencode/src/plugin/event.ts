@@ -133,6 +133,7 @@ export function createEventHandler(args: {
 
     const { event } = input;
     managers.tuiStateMirror?.onEvent(event);
+    managers.resilience?.onEvent(event);
     const props = event.properties as Record<string, unknown> | undefined;
 
     if (tmuxIntegrationEnabled && TMUX_ACTIVITY_EVENT_TYPES.has(event.type)) {

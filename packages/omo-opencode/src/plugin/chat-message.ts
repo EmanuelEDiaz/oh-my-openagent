@@ -23,6 +23,7 @@ import type {
 } from "./chat-message/types"
 import { isResumeIntent, resumeReminder } from "../features/resume/intent"
 import { listPaused } from "../features/resume/store"
+import { getInterruptionNotes } from "../features/interruption/plugin"
 
 export type { ChatMessageHandlerOutput, ChatMessageInput } from "./chat-message/types"
 
@@ -125,6 +126,20 @@ export function createChatMessageHandler(args: {
       const textPart = output.parts.find((part) => part.type === "text" && !part.synthetic && typeof part.text === "string") as { text: string } | undefined
       const reminder = textPart && isResumeIntent(textPart.text) ? resumeReminder(textPart.text, listPaused(ctx.directory)) : undefined
       if (textPart && reminder) textPart.text = `${textPart.text}\n\n---\n\n${reminder}`
+    }
+
+    // Work cut by a network loss, a freeze or a killed process: the next user message, whatever its text, carries a
+    // one-shot note (fork roadmap 0.15 D). It is cleared once the message is stored, not here.
+    if (pluginConfig.resilience?.enabled !== false) {
+      const note = await getInterruptionNotes()?.noteFor(input.sessionID).catch((error: unknown) => {
+        log("[chat-message] interruption note failed", { sessionID: input.sessionID, error: String(error) })
+        return undefined
+      })
+      if (note) {
+        const textPart = output.parts.find((part) => part.type === "text" && !part.synthetic && typeof part.text === "string") as { text: string } | undefined
+        if (textPart) textPart.text = `${textPart.text}\n\n---\n\n${note}`
+        else output.parts.push({ type: "text", text: note, synthetic: true })
+      }
     }
 
     const isFirstMessage = firstMessageVariantGate.shouldOverride(input.sessionID)
