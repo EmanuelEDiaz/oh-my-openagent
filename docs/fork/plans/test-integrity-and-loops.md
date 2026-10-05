@@ -264,6 +264,7 @@ apagado: 6/7 resueltas; **ningún bucle** (0 arreglos fallidos sobre el mismo er
 sin contestar: ambos en `plans/bench-findings-fixes.md`.
 - **Conclusión:** con big-pickle no se puede medir el freno; la medición de 0.9b necesita un modelo gratuito más débil
   (o trampas más duras). Sigue abierta.
+- **Decisión (usuario, 05-10-2026):** validar `loops-hard` sin freno con `opencode/nemotron-3.5-lightning-free` y `opencode/ling-3.1-flash-free`; se usa el que entre en bucles para 3 repeticiones con y sin freno.
 - Evidencia: `.omo/evals/2026-10-05-loops-hard-lh-off-1791226922408.jsonl`.
 
 ## Criterios de aceptación
