@@ -528,6 +528,19 @@ export function answerHasLive(label: string, fetchValues: () => Promise<readonly
   }
 }
 
+/** Passes when any of the graders passes (e.g. "reported the contradiction" or "asked the user"). */
+export function anyOf(label: string, graders: readonly Grader[]): Grader {
+  const name = `anyOf:${label}`
+  return {
+    name,
+    grade: async (context) => {
+      const results = await Promise.all(graders.map((grader) => grader.grade(context)))
+      const hit = results.find((entry) => entry.pass)
+      return result(name, hit !== undefined, hit ? `via ${hit.name}` : results.map((entry) => entry.name).join(" / "))
+    },
+  }
+}
+
 /** Every grader a task is scored with: the automatic ones plus its own. */
 export function gradersFor(task: Task): Grader[] {
   return [...(task.mode === "subtask" ? [ranAs(task.agent)] : []), withinBudget(task.budget), ...task.expect]

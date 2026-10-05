@@ -81,6 +81,17 @@ async function sessionProgress(client: Client, sessionID: string): Promise<strin
 
 const START_TIMEOUT_MS = 180_000
 
+/** Nobody answers in a bench run: a question would wait forever, so it gets this reply (and the transcript keeps it). */
+export const NO_USER_ANSWER = "No user is available in this run: decide yourself and explain your decision in your final answer."
+
+export async function answerQuestions(client: Pick<Client, "question">): Promise<void> {
+  const pending = ((await client.question.list({}).catch(() => ({ data: [] }))).data ?? []) as Array<{ id: string; questions?: unknown[] }>
+  for (const question of pending) {
+    const count = Math.max(1, question.questions?.length ?? 1)
+    await client.question.reply({ requestID: question.id, answers: Array.from({ length: count }, () => [NO_USER_ANSWER]) }).catch(() => undefined)
+  }
+}
+
 /** Busy, or an assistant message already exists. Not starting at all is an infrastructure failure. */
 async function waitForStart(client: Client, sessionID: string, label: string): Promise<void> {
   const deadline = Date.now() + START_TIMEOUT_MS
@@ -104,7 +115,10 @@ async function execute(client: Client, task: Task): Promise<Transcript> {
       // The session reads idle until the agent picks the prompt up: wait for it to start before waiting for idle,
       // or the run ends (and is aborted) before any work happens.
       await waitForStart(client, parentID, task.id)
-      await waitUntil(() => isIdle(client, parentID), () => sessionProgress(client, parentID), task.budget.timeoutMs, task.id)
+      await waitUntil(async () => {
+        await answerQuestions(client)
+        return isIdle(client, parentID)
+      }, () => sessionProgress(client, parentID), task.budget.timeoutMs, task.id)
     } finally {
       await client.session.abort({ sessionID: parentID }).catch(() => undefined)
     }
@@ -117,7 +131,10 @@ async function execute(client: Client, task: Task): Promise<Transcript> {
     parts: [{ type: "subtask", agent: task.agent, description: task.id, prompt: task.prompt }],
   })
   try {
-    await waitUntil(() => finishedSubtask(client, parentID), () => sessionProgress(client, parentID), task.budget.timeoutMs, task.id)
+    await waitUntil(async () => {
+      await answerQuestions(client)
+      return finishedSubtask(client, parentID)
+    }, () => sessionProgress(client, parentID), task.budget.timeoutMs, task.id)
   } finally {
     // Stop the parent's follow-up turn: only the subagent is evaluated, and the parent must not keep working.
     await client.session.abort({ sessionID: parentID }).catch(() => undefined)

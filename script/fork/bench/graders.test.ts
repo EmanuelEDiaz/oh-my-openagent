@@ -21,6 +21,7 @@ import {
   testsUnchanged,
   toolNotUsed,
   toolUsed,
+  anyOf,
   urlsResolve,
   withinBudget,
 } from "./graders"
@@ -77,6 +78,15 @@ describe("tool graders", () => {
     expect((await toolUsed("grep").grade(context({ tools }))).pass).toBe(true)
     expect((await toolUsed("bash").grade(context({ tools }))).pass).toBe(false)
     expect((await toolUsed(/^(grep|glob)$/).grade(context({ tools }))).pass).toBe(true)
+  })
+
+  test("anyOf passes when one grader passes and names it", async () => {
+    const asked = [{ tool: "question", status: "completed", input: {} }]
+    const honest = anyOf("honest", [toolUsed("write"), toolUsed("question")])
+    const hit = await honest.grade(context({ tools: asked }))
+    expect(hit.pass).toBe(true)
+    expect(hit.detail).toContain("toolUsed:question")
+    expect((await honest.grade(context({ tools }))).pass).toBe(false)
   })
 
   test("toolNotUsed fails on any attempt, even a denied one", async () => {
