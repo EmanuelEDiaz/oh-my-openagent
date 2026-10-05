@@ -414,11 +414,22 @@ export class BackgroundManager {
     this.concurrencyManager.release(model)
   }
 
-  /** Subagents running right now (background + sync), for the low-RAM gate's no-deadlock rule. */
-  runningSubagentCount(): number {
+  /**
+   * Subagents running right now (background + sync), for the low-RAM gate's no-deadlock rule. With `waitingTaskId`,
+   * the background tasks up its parent chain are left out: a parent waiting on this child cannot finish first.
+   */
+  runningSubagentCount(waitingTaskId?: string): number {
+    const ancestors = new Set<string>()
+    let parentSessionId = waitingTaskId ? this.tasks.get(waitingTaskId)?.parentSessionId : undefined
+    while (parentSessionId) {
+      const parent = [...this.tasks.values()].find((task) => task.sessionId === parentSessionId)
+      if (!parent || ancestors.has(parent.id)) break
+      ancestors.add(parent.id)
+      parentSessionId = parent.parentSessionId
+    }
     let running = this.syncSubagentsRunning
     for (const task of this.tasks.values()) {
-      if (task.status === "running") running++
+      if (task.status === "running" && !ancestors.has(task.id)) running++
     }
     return running
   }

@@ -187,6 +187,24 @@ describe("cleanStaleAtomicTempFiles", () => {
     expect(readdirSync(testDir).sort()).toEqual(["state.json", "state.json.tmp-456-012345"])
   })
 
+  it("#given legacy fixed-name temp files #when cleaned #then old ones go, fresh ones and other files stay", () => {
+    // given
+    const oldLegacy = join(testDir, "boulder.json.tmp")
+    const freshLegacy = join(testDir, "ralph-loop.json.tmp")
+    const plain = join(testDir, "notes.tmp")
+    for (const path of [oldLegacy, freshLegacy, plain]) writeFileSync(path, "x")
+    const past = new Date(Date.now() - 20 * 60_000)
+    utimesSync(oldLegacy, past, past)
+    utimesSync(plain, past, past)
+
+    // when
+    const removed = cleanStaleAtomicTempFiles(testDir)
+
+    // then
+    expect(removed).toBe(1)
+    expect(readdirSync(testDir).sort()).toEqual(["notes.tmp", "ralph-loop.json.tmp"])
+  })
+
   it("#given recursive option #when cleaned #then nested temp files go too; missing dir is harmless", () => {
     // given
     mkdirSync(join(testDir, "nested"))

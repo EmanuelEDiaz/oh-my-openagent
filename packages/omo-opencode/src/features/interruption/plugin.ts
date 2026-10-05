@@ -8,7 +8,7 @@ import type { PluginContext } from "../../plugin/types"
 import { isPidAlive, readBootId, readEarlyoomKills, readOomKills, readProcStartTime } from "./process-identity"
 import { createInterruptionNotes, type InterruptionNotes, type SessionMessage } from "./resume-note"
 import { recordInterruption } from "./store"
-import { deleteWipMarker, recoverOrphans, writeWipMarker, type RecoveredOrphan } from "./wip-marker"
+import { deleteWipMarker, recoverOrphans, staleHeartbeatMs, writeWipMarker, type RecoveredOrphan } from "./wip-marker"
 import { createWipTracker, type WipTracker } from "./wip-tracker"
 
 const ORPHAN_TOAST_DELAY_MS = 3000
@@ -20,6 +20,10 @@ let sigtermListenerInstalled = false
 /** The one-shot note service of the running plugin (read by the chat.message handler). */
 export function getInterruptionNotes(): InterruptionNotes | undefined {
   return activeNotes
+}
+
+export function _setInterruptionNotesForTesting(notes: InterruptionNotes | undefined): void {
+  activeNotes = notes
 }
 
 export type PluginResilience = {
@@ -62,6 +66,7 @@ export function createPluginResilience(ctx: PluginContext, config: Partial<Resil
   const startedAt = procStart ?? Date.now()
   const startSource = procStart !== undefined ? "proc" as const : "plugin" as const
   const bootId = readBootId()
+  const heartbeatS = config?.wip_heartbeat_s ?? 15
 
   const oomKills = readOomKills()
   let recovered: RecoveredOrphan[] = []
@@ -73,6 +78,7 @@ export function createPluginResilience(ctx: PluginContext, config: Partial<Resil
       ...(bootId ? { bootId } : {}),
       isAlive: (pid) => isPidAlive(pid),
       startTimeOf: (pid) => readProcStartTime(pid),
+      staleHeartbeatMs: staleHeartbeatMs(heartbeatS),
       ...(oomKills !== undefined ? { currentOomKills: oomKills } : {}),
       earlyoomKills: readEarlyoomKills(),
       thresholds,
@@ -91,7 +97,7 @@ export function createPluginResilience(ctx: PluginContext, config: Partial<Resil
     startedAt,
     startSource,
     ...(bootId ? { bootId } : {}),
-    heartbeatMs: (config?.wip_heartbeat_s ?? 15) * 1000,
+    heartbeatMs: heartbeatS * 1000,
     thresholds,
     sampleMemory,
     readOomKills: () => readOomKills(),

@@ -18,6 +18,8 @@ import { tolerantFsyncSync } from "./tolerant-fsync"
 
 /** Temporary files are `<path>.tmp-<pid>-<random>`: unique per writer, so two writers never collide (fork 0.15). */
 const STALE_TEMP_NAME = /\.tmp-\d+-[0-9a-f]+$/
+/** The previous fixed temp name, `<name>.<ext>.tmp`: leftovers of writers killed before the unique names existed. */
+const LEGACY_TEMP_NAME = /^.+\.[^.]+\.tmp$/
 const WINDOWS_RENAME_RETRIES = 4
 const WINDOWS_RENAME_RETRY_MS = 25
 
@@ -94,7 +96,8 @@ export function writeFileAtomically(
 }
 
 /**
- * Removes temporary files left behind by writers killed between write and rename (`<name>.tmp-<pid>-<random>`).
+ * Removes temporary files left behind by writers killed between write and rename (`<name>.tmp-<pid>-<random>`, and
+ * the legacy fixed `<name>.<ext>.tmp`).
  * Only files older than `maxAgeMs` go, so a writer still running in another process is never disturbed.
  * Returns how many were removed; never throws.
  */
@@ -117,7 +120,7 @@ export function cleanStaleAtomicTempFiles(
       if (options.recursive) removed += cleanStaleAtomicTempFiles(path, options)
       continue
     }
-    if (!STALE_TEMP_NAME.test(entry.name)) continue
+    if (!STALE_TEMP_NAME.test(entry.name) && !LEGACY_TEMP_NAME.test(entry.name)) continue
     try {
       if (now - statSync(path).mtimeMs < maxAgeMs) continue
       rmSync(path, { force: true })

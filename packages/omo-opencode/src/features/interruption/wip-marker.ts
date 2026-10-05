@@ -8,6 +8,7 @@ import { mkdirSync, readdirSync, readFileSync, unlinkSync } from "node:fs"
 import { join } from "node:path"
 
 import { cleanStaleAtomicTempFiles, writeFileAtomically } from "../../shared/write-file-atomically"
+import { wasKilledByEarlyoom, type EarlyoomKill } from "./process-identity"
 import { recordInterruption, type Interruption, type InterruptedTool } from "./store"
 
 export type WipSession = {
@@ -39,6 +40,13 @@ export type LowMemoryThresholds = { readonly lowMemoryMb: number; readonly lowMe
 /** PSI `full avg10` above this (percent of time every task waited on memory) counts as memory starvation. */
 const PSI_FULL_STARVED = 10
 export const STALE_HEARTBEAT_MS = 2 * 60_000
+/** Unverifiable identity (no /proc start time): a live pid this silent is taken as reused, not as a frozen window. */
+export const UNVERIFIED_ALIVE_MAX_MS = 24 * 60 * 60_000
+
+/** Heartbeat age after which a marker counts as silent: 8 missed beats, never under 2 min. */
+export function staleHeartbeatMs(heartbeatS: number): number {
+  return Math.max(STALE_HEARTBEAT_MS, 8 * heartbeatS * 1000)
+}
 
 export function wipDir(projectDir: string): string {
   return join(projectDir, ".omo", "runs", "wip")
@@ -101,6 +109,8 @@ export type OrphanCheck = {
   readonly isAlive: (pid: number) => boolean
   /** Kernel start time of a live pid (Linux); undefined when unknown. */
   readonly startTimeOf: (pid: number) => number | undefined
+  /** Heartbeat age that counts as silent; defaults to {@link STALE_HEARTBEAT_MS} (see {@link staleHeartbeatMs}). */
+  readonly staleHeartbeatMs?: number
 }
 
 /** Why a marker belongs to dead work, or undefined when its process is (probably) still running it. */
@@ -111,11 +121,20 @@ export function orphanReason(marker: WipMarker, check: OrphanCheck): string | un
     return marker.startSource === "proc" && check.ownStartedAt !== undefined && marker.startedAt === check.ownStartedAt ? undefined : "pid reused"
   }
   if (!check.isAlive(marker.pid)) return "process gone"
-  if (marker.startSource === "proc") {
-    const current = check.startTimeOf(marker.pid)
-    if (current !== undefined && current !== marker.startedAt) return "pid reused"
+  const current = marker.startSource === "proc" ? check.startTimeOf(marker.pid) : undefined
+  if (current !== undefined) {
+    // Verified identity: the same process is alive, however old its heartbeat (a window frozen by lack of RAM, or a
+    // sibling window busy elsewhere). Its marker is its own; another window must never record it as killed.
+    return current === marker.startedAt ? undefined : "pid reused"
   }
-  if (check.now - marker.heartbeat > STALE_HEARTBEAT_MS) return "heartbeat stale"
+  // Identity unknown (Windows, macOS, or no /proc): only liveness and the heartbeat remain. A silent heartbeat with
+  // the pid alive is either a frozen window or a pid reused by another program. Trade-off: a false "killed" deletes a
+  // live window's marker and tells the user work was cut while it still runs, which is worse than keeping a dead
+  // marker a while longer — and pid reuse within a day is rarer than a frozen window. So a live pid is an orphan only
+  // once it has been silent for a day.
+  const silentMs = check.now - marker.heartbeat
+  const staleMs = check.staleHeartbeatMs ?? STALE_HEARTBEAT_MS
+  if (silentMs > Math.max(staleMs, UNVERIFIED_ALIVE_MAX_MS)) return "heartbeat stale"
   return undefined
 }
 
@@ -145,7 +164,7 @@ export type RecoveredOrphan = { readonly marker: WipMarker; readonly reason: str
  */
 export function recoverOrphans(
   projectDir: string,
-  check: OrphanCheck & { readonly currentOomKills?: number; readonly thresholds: LowMemoryThresholds; readonly earlyoomKills?: ReadonlySet<number> },
+  check: OrphanCheck & { readonly currentOomKills?: number; readonly thresholds: LowMemoryThresholds; readonly earlyoomKills?: readonly EarlyoomKill[] },
 ): RecoveredOrphan[] {
   // Project state we own: boulder.json and ralph-loop state in .omo/, markers under run-continuation/ and runs/.
   cleanStaleAtomicTempFiles(join(projectDir, ".omo"), { now: check.now })
@@ -160,7 +179,7 @@ export function recoverOrphans(
       ...(check.currentOomKills !== undefined ? { currentOomKills: check.currentOomKills } : {}),
       sameBoot,
       thresholds: check.thresholds,
-      earlyoomKilled: sameBoot && (check.earlyoomKills?.has(marker.pid) ?? false),
+      earlyoomKilled: sameBoot && wasKilledByEarlyoom(check.earlyoomKills ?? [], marker),
     })
     const interruptions: Interruption[] = []
     for (const session of marker.sessions) {

@@ -128,7 +128,7 @@ export function createManagers(args: {
       lowMemoryRatio: resilienceConfig?.low_memory_ratio ?? 0.1,
       resumeMemoryMb: resilienceConfig?.resume_memory_mb ?? 900,
       sample: sampleMemory,
-      runningCount: () => backgroundManager?.runningSubagentCount() ?? 0,
+      runningCount: (label) => backgroundManager?.runningSubagentCount(label) ?? 0,
       isMemoryWarningActive: () => resumeService?.isMemoryHigh() ?? false,
       toast: async (message) => {
         await ctx.client.tui.showToast({ body: { title: "Poca memoria", message, variant: "warning", duration: 10_000 } }).catch(() => undefined)

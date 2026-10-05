@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { createMemoryGate, WAITING_FOR_MEMORY_TOAST } from "./memory-gate"
+import { createMemoryGate, maxWaitToast, WAITING_FOR_MEMORY_TOAST } from "./memory-gate"
 
 const MB = 1024 ** 2
 
@@ -67,6 +67,54 @@ describe("low-RAM subagent gate (fork 0.15 E)", () => {
     const { gate, toasts } = setup({ available: [500, 1000], warning: true })
     await gate.waitForMemory("bg_1")
     expect(toasts).toEqual([])
+  })
+
+  test("memory held by other programs cannot hold the queue forever: after the maximum wait one starts, with a toast", async () => {
+    const toasts: string[] = []
+    let clock = 0
+    const gate = createMemoryGate({
+      lowMemoryMb: 700, lowMemoryRatio: 0.1, resumeMemoryMb: 900, maxWaitMs: 4 * 60_000,
+      sample: () => ({ rss: 0, systemUsedRatio: 0, availableBytes: 300 * MB, totalBytes: 4000 * MB }),
+      runningCount: () => 2,
+      toast: (message) => { toasts.push(message) },
+      sleep: async () => {
+        clock += 5000
+        if (clock > 10 * 60_000) throw new Error("gate never admitted")
+      },
+      now: () => clock,
+    })
+    await gate.waitForMemory("bg_1")
+    expect(clock).toBe(4 * 60_000)
+    expect(toasts).toEqual([WAITING_FOR_MEMORY_TOAST, maxWaitToast(4)])
+  })
+
+  test("asks for the running count without the waiting task's ancestors", async () => {
+    const asked: string[] = []
+    const gate = createMemoryGate({
+      lowMemoryMb: 700, lowMemoryRatio: 0.1, resumeMemoryMb: 900,
+      sample: () => ({ rss: 0, systemUsedRatio: 0, availableBytes: 300 * MB, totalBytes: 4000 * MB }),
+      runningCount: (label) => {
+        asked.push(label)
+        return 0
+      },
+      toast: () => undefined,
+    })
+    await gate.waitForMemory("bg_child")
+    expect(asked).toEqual(["bg_child"])
+  })
+
+  test("PSI some avg10 above 20 is low even with free memory, and it ends only below 10 (hysteresis)", async () => {
+    const psi = [35, 15, 12, 8]
+    let sleeps = 0
+    const gate = createMemoryGate({
+      lowMemoryMb: 700, lowMemoryRatio: 0.1, resumeMemoryMb: 900,
+      sample: () => ({ rss: 0, systemUsedRatio: 0, availableBytes: 3000 * MB, totalBytes: 4000 * MB, psiSomeAvg10: psi.length > 1 ? psi.shift()! : psi[0]! }),
+      runningCount: () => 1,
+      toast: () => undefined,
+      sleep: async () => { sleeps++ },
+    })
+    await gate.waitForMemory("bg_1")
+    expect(sleeps).toBe(3)
   })
 
   test("a sample without available memory never blocks", async () => {

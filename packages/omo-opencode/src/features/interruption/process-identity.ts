@@ -44,21 +44,42 @@ export function readOomKills(read: ProcReader = readProc): number | undefined {
 }
 
 /**
- * Pids killed by earlyoom, from the log its optional `-N` hook writes (one "<pid> <name>" line per kill; see
- * docs/fork/plans/resilience-network-ram.md, "Guía opcional para earlyoom"). Missing log → empty set.
+ * Kills recorded by earlyoom, from the log its optional `-N` hook writes (one "<pid> <name> <date -Is>" line per kill;
+ * see docs/fork/plans/resilience-network-ram.md, "Guía opcional para earlyoom"). Missing log → empty list.
  */
 export function earlyoomLogPath(env: NodeJS.ProcessEnv = process.env): string | undefined {
   const base = env.XDG_STATE_HOME || (env.HOME ? `${env.HOME}/.local/state` : undefined)
   return base ? `${base}/omo/earlyoom-kills.log` : undefined
 }
 
-export function readEarlyoomKills(path = earlyoomLogPath(), read: ProcReader = readProc): ReadonlySet<number> {
-  if (!path) return new Set()
+export type EarlyoomKill = { readonly pid: number; readonly at: number }
+
+/** Lines without a readable timestamp are dropped: a kill that cannot be dated cannot be told from an old one. */
+export function readEarlyoomKills(path = earlyoomLogPath(), read: ProcReader = readProc): readonly EarlyoomKill[] {
+  if (!path) return []
   try {
-    return new Set(read(path).split("\n").map((line) => Number(line.trim().split(/\s+/)[0])).filter((pid) => Number.isInteger(pid) && pid > 0))
+    return read(path).split("\n").flatMap((line) => {
+      const fields = line.trim().split(/\s+/)
+      const pid = Number(fields[0])
+      // The name may contain spaces, so the timestamp is the last field.
+      const at = fields.length >= 3 ? Date.parse(fields[fields.length - 1]!) : Number.NaN
+      return Number.isInteger(pid) && pid > 0 && Number.isFinite(at) ? [{ pid, at }] : []
+    })
   } catch {
-    return new Set()
+    return []
   }
+}
+
+/**
+ * Whether earlyoom killed the process of this marker: same pid, killed after its last heartbeat (the process was alive
+ * then, so an older kill of that pid number belonged to a previous process) and not long after it (a much later kill
+ * hit a process that reused the pid; earlyoom acts as soon as memory runs out, which is also what stops the
+ * heartbeat). `date -Is` drops the milliseconds, hence the one-second slack. Callers check the boot themselves.
+ */
+export const EARLYOOM_KILL_WINDOW_MS = 30 * 60_000
+
+export function wasKilledByEarlyoom(kills: readonly EarlyoomKill[], marker: { readonly pid: number; readonly heartbeat: number }): boolean {
+  return kills.some((kill) => kill.pid === marker.pid && kill.at >= marker.heartbeat - 1000 && kill.at <= marker.heartbeat + EARLYOOM_KILL_WINDOW_MS)
 }
 
 /** `process.kill(pid, 0)`: ESRCH means gone; EPERM means it exists but belongs to someone else. */

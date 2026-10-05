@@ -35,7 +35,28 @@ function readText(path: string): string | undefined {
   }
 }
 
-/** Compares an edit/write tool input with the file as it is now. */
+/**
+ * One replacement against the file as it is now. The new text is looked for first: an insertion's new text contains
+ * the old one, so "old text present" alone does not mean "not applied". Occurrences of the old text inside the new
+ * text are ignored for the same reason.
+ */
+function checkReplacement(current: string, oldString: string, newString: string): EditCheck {
+  const hasNew = newString.length > 0 && current.includes(newString)
+  const outsideNew = hasNew ? current.split(newString).join("\u0000") : current
+  const hasOld = oldString.length > 0 && outsideNew.includes(oldString)
+  if (hasNew) return hasOld ? "differs" : "applied"
+  if (hasOld) return "not-applied"
+  return newString.length === 0 && oldString.length > 0 ? "applied" : "differs"
+}
+
+/** Several checks of one tool call: all applied, all not applied, or a mix the model must read. */
+function combine(checks: readonly EditCheck[]): EditCheck {
+  if (checks.length === 0) return "unknown"
+  const first = checks[0]!
+  return checks.every((check) => check === first) ? first : "differs"
+}
+
+/** Compares an edit/multiedit/write tool input with the file as it is now. */
 export function checkFileTool(
   tool: string,
   input: unknown,
@@ -53,15 +74,62 @@ export function checkFileTool(
     if (current === undefined) return { file: rawPath, check: "not-applied" }
     return { file: rawPath, check: current === content ? "applied" : "differs" }
   }
-  const oldString = str(args?.oldString) ?? str(args?.old_string)
-  const newString = str(args?.newString) ?? str(args?.new_string)
+  const edits = tool === "multiedit" && Array.isArray(args?.edits) ? args.edits.map(record) : [args]
+  const pairs = edits.map((edit) => ({ oldString: str(edit?.oldString) ?? str(edit?.old_string), newString: str(edit?.newString) ?? str(edit?.new_string) }))
   if (current === undefined) return { file: rawPath, check: "missing" }
-  if (oldString === undefined || newString === undefined) return { file: rawPath, check: "unknown" }
-  const hasOld = oldString.length > 0 && current.includes(oldString)
-  const hasNew = newString.length > 0 ? current.includes(newString) : !hasOld
-  if (hasNew && !hasOld) return { file: rawPath, check: "applied" }
-  if (hasOld && !hasNew) return { file: rawPath, check: "not-applied" }
-  return { file: rawPath, check: "differs" }
+  if (pairs.length === 0 || pairs.some((pair) => pair.oldString === undefined || pair.newString === undefined)) return { file: rawPath, check: "unknown" }
+  return { file: rawPath, check: combine(pairs.map((pair) => checkReplacement(current, pair.oldString!, pair.newString!))) }
+}
+
+type PatchFile = { kind: "add" | "update" | "delete"; path: string; added: string[]; removed: string[]; moved: boolean }
+
+/** `apply_patch` text ("*** Update File: x" sections with +/- lines), or undefined when it cannot be read. */
+function parsePatch(patch: string): PatchFile[] | undefined {
+  const files: PatchFile[] = []
+  for (const line of patch.split("\n")) {
+    const header = /^\*\*\* (Add File|Update File|Delete File): (.+)$/.exec(line)
+    if (header?.[1] && header[2]) {
+      files.push({ kind: header[1] === "Add File" ? "add" : header[1] === "Delete File" ? "delete" : "update", path: header[2].trim(), added: [], removed: [], moved: false })
+      continue
+    }
+    const current = files.at(-1)
+    if (!current) continue
+    if (line.startsWith("*** Move to:")) current.moved = true
+    else if (line.startsWith("***") || line.startsWith("@@")) continue
+    else if (line.startsWith("+")) current.added.push(line.slice(1))
+    else if (line.startsWith("-")) current.removed.push(line.slice(1))
+  }
+  return files.length > 0 ? files : undefined
+}
+
+function checkPatchFile(entry: PatchFile, current: string | undefined): EditCheck {
+  if (entry.moved) return "unknown"
+  if (entry.kind === "delete") return current === undefined ? "applied" : "not-applied"
+  if (current === undefined) return entry.kind === "add" ? "not-applied" : "missing"
+  const lines = new Set(current.split("\n").map((line) => line.trimEnd()))
+  // Lines both removed and added (moved or unchanged within the hunk) tell nothing; blank lines neither.
+  const added = entry.added.map((line) => line.trimEnd()).filter((line) => line.trim() && !entry.removed.some((removed) => removed.trimEnd() === line))
+  const removed = entry.removed.map((line) => line.trimEnd()).filter((line) => line.trim() && !entry.added.some((add) => add.trimEnd() === line))
+  if (added.length === 0 && removed.length === 0) return "unknown"
+  const addedPresent = added.every((line) => lines.has(line))
+  const addedAbsent = added.every((line) => !lines.has(line))
+  const removedPresent = removed.every((line) => lines.has(line))
+  const removedAbsent = removed.every((line) => !lines.has(line))
+  if (addedPresent && removedAbsent) return "applied"
+  if (addedAbsent && removedPresent) return "not-applied"
+  return "differs"
+}
+
+/** Every file of an `apply_patch` call checked on its own; undefined when the patch text is missing or unreadable. */
+export function checkPatchTool(
+  input: unknown,
+  projectDir: string,
+  read: (path: string) => string | undefined = readText,
+): { file: string; check: EditCheck }[] | undefined {
+  const args = record(input)
+  const patch = str(args?.patchText) ?? str(args?.patch) ?? str(args?.input)
+  const files = patch ? parsePatch(patch) : undefined
+  return files?.map((entry) => ({ file: entry.path, check: checkPatchFile(entry, read(isAbsolute(entry.path) ? entry.path : join(projectDir, entry.path))) }))
 }
 
 const CHECK_TEXT: Record<EditCheck, string> = {
@@ -137,9 +205,13 @@ export function buildResumeNote(input: {
   if (halfDone.size > 0) {
     lines.push("Half-done when it was cut:")
     for (const tool of halfDone.values()) {
-      if (tool.tool === "edit" || tool.tool === "write") {
+      if (tool.tool === "edit" || tool.tool === "multiedit" || tool.tool === "write") {
         const { file, check } = checkFileTool(tool.tool, tool.input, projectDir, input.readFile)
         lines.push(`- ${tool.tool} ${file ?? tool.summary ?? ""}: ${CHECK_TEXT[check]}.`.replace(/\s+:/, ":"))
+      } else if (tool.tool === "apply_patch") {
+        const files = checkPatchTool(tool.input, projectDir, input.readFile)
+        if (!files) lines.push(`- apply_patch ${tool.summary ?? ""}: ${CHECK_TEXT.unknown}.`.replace(/\s+:/, ":"))
+        for (const entry of files ?? []) lines.push(`- apply_patch ${entry.file}: ${CHECK_TEXT[entry.check]}.`)
       } else if (tool.tool === "bash") {
         lines.push(`- bash \`${tool.summary ?? summarizeToolInput("bash", tool.input)}\`: never re-run it blindly. First verify whether it already took effect (git status, ls, a quick test), then decide.`)
       } else {

@@ -3,8 +3,10 @@ import type { OhMyOpenCodeConfig } from "../config"
 import { updateSessionAgent } from "../features/claude-code-session-state"
 import { detectSlashCommand, extractPromptText } from "../hooks/auto-slash-command/detector"
 import {
+  isRealUserTextPart,
   isRuntimeFallbackRetryTextParts,
   isSyntheticOrInternalOnlyTextParts,
+  isTextPartLike,
   log,
 } from "../shared"
 import { applyUltraworkModelOverrideOnMessage } from "./ultrawork-model-override"
@@ -129,15 +131,18 @@ export function createChatMessageHandler(args: {
     }
 
     // Work cut by a network loss, a freeze or a killed process: the next user message, whatever its text, carries a
-    // one-shot note (fork roadmap 0.15 D). It is cleared once the message is stored, not here.
-    if (pluginConfig.resilience?.enabled !== false) {
+    // one-shot note (fork roadmap 0.15 D). It is cleared once the message is stored, not here. It rides only on the
+    // user's own text: an internal or synthetic part (continuations, hook reminders) is never its carrier. A message
+    // with no text at all (an attachment alone) gets it as its own part.
+    const userTextPart = output.parts.find(isRealUserTextPart) as { text: string } | undefined
+    const hasText = output.parts.some(isTextPartLike)
+    if (pluginConfig.resilience?.enabled !== false && (userTextPart || !hasText)) {
       const note = await getInterruptionNotes()?.noteFor(input.sessionID).catch((error: unknown) => {
         log("[chat-message] interruption note failed", { sessionID: input.sessionID, error: String(error) })
         return undefined
       })
       if (note) {
-        const textPart = output.parts.find((part) => part.type === "text" && !part.synthetic && typeof part.text === "string") as { text: string } | undefined
-        if (textPart) textPart.text = `${textPart.text}\n\n---\n\n${note}`
+        if (userTextPart) userTextPart.text = `${userTextPart.text}\n\n---\n\n${note}`
         else output.parts.push({ type: "text", text: note, synthetic: true })
       }
     }

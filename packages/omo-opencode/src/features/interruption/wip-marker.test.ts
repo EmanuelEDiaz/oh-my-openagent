@@ -4,7 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 import { loadInterruption } from "./store"
-import { isLowMemory, orphanReason, probableCause, readWipMarkers, recoverOrphans, wipDir, writeWipMarker, type OrphanCheck, type WipMarker } from "./wip-marker"
+import { isLowMemory, orphanReason, probableCause, readWipMarkers, recoverOrphans, staleHeartbeatMs, wipDir, writeWipMarker, type OrphanCheck, type WipMarker } from "./wip-marker"
 
 const dirs: string[] = []
 const project = () => {
@@ -42,11 +42,30 @@ describe("orphan detection (fork 0.15)", () => {
     expect(orphanReason(marker(), check())).toBeUndefined()
   })
 
-  test("dead pid, reused pid, another boot or a stale heartbeat are orphans", () => {
+  test("dead pid, reused pid or another boot are orphans", () => {
     expect(orphanReason(marker(), check({ isAlive: () => false }))).toBe("process gone")
     expect(orphanReason(marker(), check({ startTimeOf: () => 999 }))).toBe("pid reused")
     expect(orphanReason(marker(), check({ bootId: "boot-b" }))).toBe("the system restarted")
-    expect(orphanReason(marker({ heartbeat: NOW - 3 * 60_000 }), check())).toBe("heartbeat stale")
+  })
+
+  test("a live sibling window with the same start time is never an orphan, however old its heartbeat", () => {
+    // Window A frozen by lack of RAM: window B starting now must not record A's work as killed.
+    expect(orphanReason(marker({ heartbeat: NOW - 3 * 60_000 }), check())).toBeUndefined()
+    expect(orphanReason(marker({ heartbeat: NOW - 48 * 60 * 60_000 }), check())).toBeUndefined()
+  })
+
+  test("unknown start time and a live pid: kept while silent, an orphan only after a day", () => {
+    const windows = marker({ startSource: "plugin", startedAt: NOW - 50_000, heartbeat: NOW - 30 * 60_000 })
+    const noProc = check({ startTimeOf: () => undefined, staleHeartbeatMs: staleHeartbeatMs(15) })
+    expect(orphanReason(windows, noProc)).toBeUndefined()
+    expect(orphanReason({ ...windows, heartbeat: NOW - 25 * 60 * 60_000 }, noProc)).toBe("heartbeat stale")
+    // A proc marker whose start time can no longer be read falls back to the same rule.
+    expect(orphanReason(marker({ heartbeat: NOW - 30 * 60_000 }), noProc)).toBeUndefined()
+  })
+
+  test("the stale threshold follows wip_heartbeat_s, never under 2 min", () => {
+    expect(staleHeartbeatMs(15)).toBe(2 * 60_000)
+    expect(staleHeartbeatMs(60)).toBe(8 * 60_000)
   })
 
   test("our own pid is ours only with the same start time", () => {
@@ -104,6 +123,17 @@ describe("recoverOrphans", () => {
     expect(interruption.subtasks).toEqual(["ses_child"])
     expect(readWipMarkers(dir).map((entry) => entry.pid)).toEqual([5555])
     expect(loadInterruption(dir, "ses_other")).toBeUndefined()
+  })
+
+  test("an earlyoom kill counts only after the marker's last heartbeat (an older kill hit a previous owner of the pid)", () => {
+    const dir = project()
+    writeWipMarker(dir, marker({ memory: { availableMb: 3000, totalMb: 8000 } }))
+    const old = recoverOrphans(dir, { ...check({ isAlive: () => false }), currentOomKills: 2, thresholds, earlyoomKills: [{ pid: 4242, at: NOW - 60 * 60_000 }] })
+    expect(old[0]!.cause.kind).toBe("ended")
+
+    writeWipMarker(dir, marker({ memory: { availableMb: 3000, totalMb: 8000 } }))
+    const fresh = recoverOrphans(dir, { ...check({ isAlive: () => false }), currentOomKills: 2, thresholds, earlyoomKills: [{ pid: 4242, at: NOW - 5_000 }] })
+    expect(fresh[0]!.cause.es).toContain("earlyoom")
   })
 
   test("removes unreadable markers and stale temp files of killed writers", () => {
