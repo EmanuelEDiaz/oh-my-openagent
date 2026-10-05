@@ -1,0 +1,6 @@
+{
+  "$schema": "https://example.com/app-config.schema.json",
+  "name": "billing",
+  "timeout": 30,
+  "retries": 5
+}

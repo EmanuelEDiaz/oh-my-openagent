@@ -6,6 +6,7 @@ import { applyDisabledProviders } from "../shared/disabled-providers"
 import { log } from "../shared/logger"
 import { loadOmoOpenCodeConfigChain, type OmoOpenCodeConfigView } from "../plugin-config/omo-config-chain"
 import { mergeConfigs } from "../plugin-config/config-merger"
+import { protectGuards } from "./guard-protection"
 import { findUnknownKeyPaths } from "../plugin-config/unknown-key-diagnostics"
 import { OhMyOpenCodeConfigSchema, type OhMyOpenCodeConfig } from "./schema"
 
@@ -193,14 +194,17 @@ export function validatePluginConfig(
   const firstFailingView = views.find((view) => view.messages.length > 0)
   const firstView = views[0]
   const userConfig = parseConfig(chain.protectedUserView)
-  const config = applyDisabledProviders(materializeAgentModelChains(
-    protectUserFields(mergeViews(views), userConfig),
-  ))
+  const guarded = protectGuards(protectUserFields(mergeViews(views), userConfig), userConfig)
+  if (guarded.ignored.length > 0) {
+    log("[config] guard settings from project config ignored; guards are switched off only in the user config", { ignored: guarded.ignored })
+  }
+  const config = applyDisabledProviders(materializeAgentModelChains(guarded.config))
   warnLegacyUlwExecuteKey(chain.views)
 
+  const guardMessages = guarded.ignored.map((entry) => `project config tried to change a guard (${entry}); ignored — guards are switched off only in ~/.omo/omo.jsonc`)
   return {
     valid: messages.length === 0,
-    messages,
+    messages: [...messages, ...guardMessages],
     path: chainMessages.length > 0 ? chain.diagnostics[0]?.path ?? null : firstFailingView?.path ?? firstView?.path ?? null,
     config: migrateRalphLoopConfig(migrateLegacyUlwExecuteKey(config)),
   }

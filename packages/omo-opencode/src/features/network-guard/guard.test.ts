@@ -689,6 +689,28 @@ describe("review fixes (fork 0.15)", () => {
       expect(await guard.takeOverStall(MAIN, { stopped: false })).toBe(false)
       guard.dispose()
     })
+
+    test("monitor noise with nobody waiting wakes and probes nothing", async () => {
+      let onChange: (() => void) | undefined
+      const logs: string[] = []
+      const { guard, calls, advance } = setup([ON], {
+        log: (message) => { logs.push(message) },
+        networkFingerprint: () => "wlan0/192.168.1.5",
+        watchLink: (callback) => {
+          onChange = callback
+          return { stop: () => undefined }
+        },
+      })
+      guard.event(busy())
+      advance(5_000)
+      onChange?.()
+      advance(5_000)
+      onChange?.()
+      await settle()
+      expect(calls.probes).toEqual([])
+      expect(logs.filter((message) => message.includes("probing now"))).toEqual([])
+      guard.dispose()
+    })
   })
 
   describe("the user takes over during a wait", () => {

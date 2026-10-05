@@ -1,0 +1,6 @@
+{
+  "USD": { "symbol": "$", "minor_units": 2 },
+  "EUR": { "symbol": "€", "minor_units": 2 },
+  "JPY": { "symbol": "¥", "minor_units": 0 },
+  "KWD": { "symbol": "KD ", "minor_units": 3 }
+}

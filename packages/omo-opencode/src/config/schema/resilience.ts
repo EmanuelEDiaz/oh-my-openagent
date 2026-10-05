@@ -22,6 +22,8 @@ export const ResilienceConfigSchema = z.object({
   low_memory_ratio: z.number().min(0).max(1).default(0.1),
   /** … and are admitted again from this available memory (MB) */
   resume_memory_mb: z.number().int().min(0).default(900),
+  /** Repair tool names with stray characters (NUL, spaces, zero-width, case) that match exactly one available tool */
+  repair_tool_names: z.boolean().default(true),
 })
 
 export type ResilienceConfig = z.infer<typeof ResilienceConfigSchema>

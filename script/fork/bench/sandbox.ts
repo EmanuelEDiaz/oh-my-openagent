@@ -51,7 +51,7 @@ export const FREE_DEFAULT_MODEL = process.env.OMO_BENCH_DEFAULT_MODEL ?? "openco
 
 export function createSandbox(root: string, pluginEntry: string): Sandbox {
   assertSafeSandboxRoot(root)
-  const dirs = ["home/.omo", "config/opencode", "data/opencode", "state", "cache/opencode", "work"]
+  const dirs = ["home/.omo", "config/opencode", "data/opencode", "state", "cache/opencode", "work", "tmp"]
   for (const dir of dirs) mkdirSync(join(root, dir), { recursive: true })
   const realConfig = join(process.env.XDG_CONFIG_HOME ?? join(REAL_HOME, ".config"), "opencode")
   // Installed plugin dependencies: without them the first start installs everything and takes minutes.
@@ -74,6 +74,8 @@ export function createSandbox(root: string, pluginEntry: string): Sandbox {
       XDG_DATA_HOME: join(root, "data"),
       XDG_STATE_HOME: join(root, "state"),
       XDG_CACHE_HOME: join(root, "cache"),
+      // The plugin logs to $TMPDIR/oh-my-opencode.log: without this the sandbox would write into the user's real log.
+      TMPDIR: join(root, "tmp"),
     },
   }
 }
@@ -162,6 +164,8 @@ export async function isHealthy(server: Server, timeoutMs = 10_000): Promise<boo
 export function saveServerLogs(sandbox: Sandbox, to: string): void {
   const logs = join(sandbox.root, "data/opencode/log")
   if (existsSync(logs)) cpSync(logs, to, { recursive: true })
+  const pluginLog = join(sandbox.root, "tmp/oh-my-opencode.log")
+  if (existsSync(pluginLog)) cpSync(pluginLog, join(to, "oh-my-opencode.log"))
 }
 
 /**

@@ -224,7 +224,7 @@ export function buildResumeNote(input: {
   }
   lines.push(
     "Rule: if the user's message asks to continue or is ambiguous, resume from the last completed step. If it asks for something else, do that and mention the cut work in one line.",
-    "Tell the user they can revert the file changes of a step with OpenCode's /undo (it restores the snapshot taken before the step).",
+    "Only if the cut work changed files, you may tell the user that OpenCode's /undo reverts a step's file changes (it undoes; it does not resume anything).",
     "</omo-interrupted-work>",
   )
   return lines.join("\n")

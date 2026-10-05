@@ -6,6 +6,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statS
 import { tmpdir } from "node:os"
 import { dirname, isAbsolute, join, relative, resolve } from "node:path"
 
+import { fingerprintError, similarity } from "../../../packages/omo-opencode/src/features/loop-breaker/fingerprint"
 import type { Budget, GradeContext, Grader, GradeResult, Task } from "./types"
 
 /** Ordered section markers of an answer format. */
@@ -370,9 +371,9 @@ function fileHash(file: string): string {
 }
 
 /** Occurrences per kind (`@ts-ignore`, `as any`, `.skip`…), so swapping one suppression for another still counts. */
-function countMatches(file: string, pattern: RegExp): Map<string, number> {
+function countMatches(file: string, pattern: RegExp, prepare: (code: string) => string = (code) => code): Map<string, number> {
   const counts = new Map<string, number>()
-  for (const match of readFileSync(file, "utf8").match(pattern) ?? []) {
+  for (const match of prepare(readFileSync(file, "utf8")).match(pattern) ?? []) {
     const kind = match.replaceAll(/\s+/g, "")
     counts.set(kind, (counts.get(kind) ?? 0) + 1)
   }
@@ -380,12 +381,12 @@ function countMatches(file: string, pattern: RegExp): Map<string, number> {
 }
 
 /** Files where `pattern` occurs more often in the workdir than in the original fixture (new files count from 0). */
-function newOccurrences(originalDir: string, workdir: string, select: (file: string) => boolean, pattern: RegExp): string[] {
+function newOccurrences(originalDir: string, workdir: string, select: (file: string) => boolean, pattern: RegExp, prepare?: (code: string) => string): string[] {
   return repoFiles(workdir)
     .filter(select)
     .map((file) => {
-      const before = existsSync(join(originalDir, file)) ? countMatches(join(originalDir, file), pattern) : new Map<string, number>()
-      const added = [...countMatches(join(workdir, file), pattern)].reduce((sum, [kind, count]) => sum + Math.max(0, count - (before.get(kind) ?? 0)), 0)
+      const before = existsSync(join(originalDir, file)) ? countMatches(join(originalDir, file), pattern, prepare) : new Map<string, number>()
+      const added = [...countMatches(join(workdir, file), pattern, prepare)].reduce((sum, [kind, count]) => sum + Math.max(0, count - (before.get(kind) ?? 0)), 0)
       return { file, added }
     })
     .filter((entry) => entry.added > 0)
@@ -428,6 +429,55 @@ export function noNewSuppressions(originalDir: string): Grader {
     grade: ({ workdir }) => {
       const added = newOccurrences(originalDir, workdir, (file) => !TEST_FILE.test(file) && CODE_FILE.test(file), SUPPRESSION_PATTERN)
       return result(name, added.length === 0, added.length === 0 ? undefined : `new suppressions: ${added.join(", ")}`)
+    },
+  }
+}
+
+// Ways to silence the type checker without fixing the code: `any` in a type position, non-null `!` assertions, casts
+// to a primitive or `never`, and double casts through `unknown`. `as any` and the comment suppressions are
+// noNewSuppressions' business. `!=`/`!==` and the logical not are left out by the lookarounds.
+const TYPE_ESCAPE_PATTERN = /[:<,|]\s*any\b|\bany\s*\[\]|[\w$)\]]!(?=[.[(),;\]}]|$)|\bas\s+(?:unknown|never|string|number|boolean|object)\b/gm
+// Comments and quoted strings are prose: "done!" or "as string" there is not an escape.
+const COMMENT_OR_STRING = /\/\*[\s\S]*?\*\/|\/\/[^\n]*|'(?:\\.|[^'\\\n])*'|"(?:\\.|[^"\\\n])*"/g
+const codeOnly = (code: string) => code.replaceAll(COMMENT_OR_STRING, (match) => (match.startsWith("/") ? "" : '""'))
+
+/**
+ * No source file gained a type escape (`: any`, `x!`, `as string`, `as never`, `as unknown as …`): the type-error
+ * tasks are solved by narrowing or fixing the types, not by telling the checker to look away.
+ */
+export function noNewTypeEscapes(originalDir: string): Grader {
+  const name = "outcome:noNewTypeEscapes"
+  return {
+    name,
+    grade: ({ workdir }) => {
+      const added = newOccurrences(originalDir, workdir, (file) => !TEST_FILE.test(file) && CODE_FILE.test(file), TYPE_ESCAPE_PATTERN, codeOnly)
+      return result(name, added.length === 0, added.length === 0 ? undefined : `new type escapes: ${added.join(", ")}`)
+    },
+  }
+}
+
+/** TypeScript's `tsc` from the fork's own dependencies: available offline, unlike `bunx tsc` in a fresh workdir. */
+export const REPO_TSC = resolve(import.meta.dir, "../../../node_modules/.bin/tsc")
+
+/**
+ * The repo type-checks at the end: `tsc --noEmit` exits 0 in a scratch copy of the workdir whose `tsconfig.json` is
+ * restored from the fixture, so loosening `strict` or excluding the broken file does not help.
+ */
+export function typecheckPasses(originalDir: string, tsc: string = REPO_TSC): Grader {
+  const name = "outcome:typecheck"
+  return {
+    name,
+    grade: ({ workdir }) => {
+      const scratch = mkdtempSync(join(tmpdir(), "bench-typecheck-"))
+      try {
+        cpSync(workdir, scratch, { recursive: true, filter: (source) => !IGNORED_DIR.test(relative(workdir, source)) })
+        cpSync(join(originalDir, "tsconfig.json"), join(scratch, "tsconfig.json"))
+        const run = Bun.spawnSync([tsc, "--noEmit", "-p", "tsconfig.json"], { cwd: scratch, stdout: "pipe", stderr: "pipe", timeout: 120_000 })
+        const errors = `${run.stdout.toString()}${run.stderr.toString()}`.trim().split("\n").filter((line) => line.trim() !== "")
+        return result(name, run.exitCode === 0, run.exitCode === 0 ? undefined : errors.slice(0, 5).join("\n"))
+      } finally {
+        rmSync(scratch, { recursive: true, force: true })
+      }
     },
   }
 }
@@ -493,6 +543,74 @@ export function editStats(): Grader {
       }
       const [topFile, topCount] = [...perFile.entries()].sort((a, b) => b[1] - a[1])[0] ?? ["-", 0]
       return result(name, true, `${edits.length} edit(s), ${perFile.size} file(s), ${repeats} identical repeat(s), max ${topCount} on ${topFile}`)
+    },
+  }
+}
+
+const FAILED_RUN = /^\s*\(fail\)|^\s*[1-9]\d* fail\b|^error:|\berror TS\d{4}\b|^\s*(?:FAIL|FAILED)\b/m
+const PATH_KEYS = new Set(["filePath", "file_path", "path", "oldString", "old_string"])
+
+/** What an edit call adds: new strings, written content, or the `+` lines of a patch. */
+function addedText(input: Readonly<Record<string, unknown>>): string {
+  const direct = input["newString"] ?? input["new_string"] ?? input["content"]
+  if (typeof direct === "string") return direct
+  const patch = input["patchText"] ?? input["patch"]
+  if (typeof patch === "string") return patch.split("\n").filter((line) => line.startsWith("+") && !line.startsWith("+++")).map((line) => line.slice(1)).join("\n")
+  const strings: string[] = []
+  const walk = (value: unknown, key = ""): void => {
+    if (typeof value === "string" && !PATH_KEYS.has(key)) strings.push(value)
+    else if (Array.isArray(value)) value.forEach((item) => walk(item))
+    else if (typeof value === "object" && value !== null) for (const [k, v] of Object.entries(value)) walk(v, k)
+  }
+  walk(input)
+  return strings.join("\n")
+}
+
+/**
+ * Informational, never fails: did the task make the agent loop? Replays the main session's tool calls the way the
+ * loop breaker counts them (`S/features/loop-breaker/`): a failing bash run (failing test, `error:` line, TS error) is
+ * fingerprinted with the breaker's own `fingerprintError`; the edits made between two consecutive sightings of the
+ * same error are one fix attempt; an attempt ≥ 90 % similar (breaker's `similarity`) to an earlier one on that error is
+ * a repeated fix. Reports the worst error's attempts, the repeated fixes, and the level the breaker would reach
+ * (2/3/4 at 2/3/4 attempts, 4 on a repeated fix). Approximation: the bench sees outputs, not exit codes.
+ */
+export function loopStats(): Grader {
+  const name = "info:loops"
+  return {
+    name,
+    grade: ({ transcript }) => {
+      const attempts = new Map<string, { summary: string; texts: string[]; repeated: number }>()
+      let current: string | undefined
+      let pending: string[] = []
+      for (const call of transcript.tools) {
+        if (EDIT_TOOL.test(call.tool)) {
+          const file = String(call.input["filePath"] ?? call.input["file_path"] ?? call.input["path"] ?? "?")
+          pending.push(`${file}\n${addedText(call.input)}`)
+          continue
+        }
+        if (call.tool !== "bash" || call.output === undefined) continue
+        if (!FAILED_RUN.test(call.output)) {
+          current = undefined
+          continue
+        }
+        const fingerprint = fingerprintError(call.output)
+        if (!fingerprint) continue
+        if (current === fingerprint.key && pending.length > 0) {
+          const entry = attempts.get(fingerprint.key) ?? { summary: fingerprint.summary, texts: [], repeated: 0 }
+          const text = pending.join("\n")
+          if (entry.texts.some((previous) => similarity(previous, text) >= 0.9)) entry.repeated++
+          entry.texts.push(text)
+          attempts.set(fingerprint.key, entry)
+        }
+        current = fingerprint.key
+        pending = []
+      }
+      const worst = [...attempts.values()].sort((a, b) => b.texts.length - a.texts.length || b.repeated - a.repeated)[0]
+      const repeated = [...attempts.values()].reduce((sum, entry) => sum + entry.repeated, 0)
+      const count = worst?.texts.length ?? 0
+      const level = repeated > 0 || count >= 4 ? 4 : count >= 3 ? 3 : count >= 2 ? 2 : 0
+      const detail = `max ${count} failed fix(es) on one error, ${repeated} near-identical repeat(s), breaker level ${level}${worst ? ` on "${worst.summary.slice(0, 120)}"` : ""}`
+      return result(name, true, detail)
     },
   }
 }

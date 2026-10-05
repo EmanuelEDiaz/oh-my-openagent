@@ -135,6 +135,22 @@ El plugin lee `${XDG_STATE_HOME:-~/.local/state}/omo/earlyoom-kills.log` al arra
 (`S/features/interruption/process-identity.ts`). Sin la guía, la causa sale igual como "probablemente por falta de RAM"
 por la memoria y la presión medidas antes del kill.
 
+### F. Nombres de herramienta rotos (añadido 05-10-2026, usuario)
+En el banco, big-pickle pidió la herramienta `bash\x00`; OpenCode la rechazó como inválida y el turno acabó sin
+respuesta. Se reparan los nombres que llegan con caracteres de control, espacios o mayúsculas cuando, limpios, coinciden
+con **una sola** herramienta disponible; si no coinciden con ninguna o con varias, no se toca (OpenCode avisa al modelo
+como hasta ahora). Se cuenta cuántas veces pasa en todas las transcripciones guardadas del banco (antes) y tras el
+cambio. Pruebas: nulo, espacios, mayúsculas, nombre ambiguo, nombre inexistente.
+- **Implementado** (`S/features/tool-name-repair/`, `resilience.repair_tool_names`, por defecto activo). OpenCode
+  1.18.26 solo repara mayúsculas (`session/llm.ts:296`); todo lo demás lo convierte en la herramienta `invalid` y **pierde
+  los argumentos**, así que el plugin no puede ejecutar la herramienta correcta: reescribe la salida de `invalid` con
+  una instrucción clara ("la herramienta se llama `bash`; vuelve a llamarla con los mismos argumentos") y, si el turno
+  termina justo ahí sin respuesta, manda **una** continuación interna (máx. 1 por mensaje y 2 seguidas; no en
+  subagentes, cuyo padre recoge el resultado). Nombres desconocidos o ambiguos: sin cambios.
+- **Pruebas:** 15 (nulo, espacios, mayúsculas, ancho cero, comillas, ambiguo, desconocido, continuación única y tope).
+- **Conteo antes** (29 archivos de `.omo/evals`): 1 caso reparable (`bash\x00`, el incidente) y 1 nombre desconocido
+  (`analysis`). El conteo después saldrá de las próximas ejecuciones con un dist que lo incluya (QA de 0.15 y siguientes).
+
 ### Configuración (`resilience` en `omo.jsonc`)
 `network_probe_limit` 12, `network_backoff_s` [5,15,30,60], `freeze_threshold_s` 10, `wip_heartbeat_s` 15,
 `low_memory_mb` 700, `resume_memory_mb` 900, `neutral_probe_url`, `low_memory_ratio` 0.10, `enabled` true. Windows y Linux (sin `/proc/meminfo` → `os.freemem()`).
@@ -188,5 +204,29 @@ merge `--no-ff` a `mis-mejoras` tras la QA y la suite de integración.
   `src/hooks/runtime-fallback` al correr la carpeta entera son previos (un `mock.module` de `hook.init.test.ts` se
   filtra a otros archivos; fallan igual en HEAD sin 0.15).
 - **QA aislada:** `script/fork/qa/resilience.ts` (corte corto, corte largo con nota, congelamiento, kill con
-  "sigue con eso", kill con otra petición); no arranca si dejaría menos de 3 GB libres. Resultados: pendientes de correr
-  al terminar la medición de 0.9b.
+  "sigue con eso", kill con otra petición, proyecto que intenta apagar el guardián); no arranca si dejaría menos de
+  3 GB libres.
+
+## QA aislada — resultados (05-10-2026, OpenCode 1.18.26, `opencode/big-pickle`, dist de `fix/guards-user-only`)
+| Escenario | Resultado | Evidencia en el registro del plugin |
+|---|---|---|
+| Corte de red de 45 s | **pasa**: mismo modelo, tarea resuelta, 0 cobros, sin nota pendiente | el guardián ve los 5 reintentos de OpenCode, no interviene; el 5.º conecta |
+| Corte largo (límite 3 sondeos) | **pasa**: interrupción "network", nota pegada a "continúa", mismo modelo, tarea resuelta, nota borrada, 0 cobros | OpenCode se rinde → 3 sondeos → trabajo guardado → nota entregada |
+| Congelamiento `SIGSTOP` 60 s | **pasa** (repetición): mismo modelo, tarea resuelta, 0 cobros | `process frozen for 55 s` |
+| `SIGKILL` + "sigue con eso" | **pasa** (repetición): 3/3 mensajes conservados, interrupción "killed", nota pegada a ese mensaje, tarea resuelta, nota borrada | `recovered killed work … process gone` → `note delivered` |
+| `SIGKILL` + otra petición | **pasa**: responde lo nuevo, avisa del trabajo cortado en una línea, no lo retoma solo | — |
+| Proyecto que apaga el guardián | **pasa** (repetición): test intacto, intento ignorado (el modelo no intentó editar) | `guard settings from project config ignored … test-integrity-guard` |
+| **Cambio de red real** (el usuario cambió de red durante el último escenario) | **pasa**: la conexión con Zen murió sin error; el guardián detectó el cambio de direcciones y retomó la sesión **con el mismo modelo** | `network changed` → `silent after a freeze or a network change; resuming on the same model` → `continuation dispatched … opencode/big-pickle` |
+
+- **Fallos del guion (no del plugin) encontrados y corregidos:** el cobro de presupuesto se buscaba como palabra en todo
+  `loops.json` (la ruta `work/freeze/` dio un falso fallo); el escenario de kill miraba el último mensaje de usuario (un
+  aviso del vigilante); el del guardián dependía de que el modelo intentara editar. Ahora: cobros reales, mensaje exacto
+  y registro del plugin. El proxy de la prueba responde 502 si la red de verdad se cae.
+- **Arreglos del plugin salidos de la QA:** el ruido del monitor de red (`network change; probing now` cada ~2 min sin
+  cambios) ya no despierta ni registra nada salvo que haya una sesión esperando; la nota ya no sugiere `/undo` para
+  reanudar; el entorno aislado tiene su propio `TMPDIR` (el registro del plugin ya no cae en el `/tmp` real del usuario).
+- **Evidencia:** `.omo/evidence/0.15/qa-1791220140495.jsonl` (primera tanda), `qa-1791221874481.jsonl` (repetición),
+  `server-logs/` (registros de OpenCode y del plugin de la repetición); registros de la primera tanda en el
+  `/tmp/oh-my-opencode.log` real (antes del arreglo de `TMPDIR`).
+- **Conteo después de la reparación de nombres de herramienta:** 0 nombres rotos en estas ejecuciones (45 + 26
+  peticiones); el dato sigue acumulándose con las próximas.

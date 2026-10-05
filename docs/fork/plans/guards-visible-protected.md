@@ -9,6 +9,13 @@ Parte del roadmap (fila 0.18). Estado: **investigación hecha (05-10-2026)**; pl
 podría apagar el guardián de tests escribiendo un `omo.jsonc` de proyecto.** Claude Code lo evita: los hooks
 gestionados no se pueden apagar desde un nivel inferior.
 
+**Cerrado antes de 0.18 (usuario, 05-10-2026), rama `fix/guards-user-only`:** `S/config/guard-protection.ts` — los
+hooks guardianes en `disabled_hooks` y las secciones de los guardianes (`test_integrity`, `edit_diagnostics`,
+`loop_breaker`, `retry_budget`, `resilience`, `stall`, `zen_free_gate`, `knowledge.evidence_gate`) se toman **solo de la
+configuración del usuario**; lo que intente el proyecto se ignora, se registra en el log y aparece en `doctor`. El banco
+apaga guardianes en el `omo.jsonc` de usuario del entorno aislado, así que sigue funcionando. Queda para 0.18 que el
+agente tampoco pueda escribir el `~/.omo/omo.jsonc` del usuario (protección por ruta y huella).
+
 ## Sistemas homólogos
 - **Claude Code:** rutas protegidas (`.git`, `.claude`, `.husky`…) siempre preguntan; editar sus ajustes siempre
   pregunta para que el modelo no cambie sus hooks; hook `ConfigChange` que puede bloquear cambios de ajustes.

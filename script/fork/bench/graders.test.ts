@@ -13,14 +13,17 @@ import {
   editStats,
   EXPLORE_CONTRACT,
   hiddenTestsPass,
+  loopStats,
   noNewSkips,
   noNewSuppressions,
+  noNewTypeEscapes,
   outcome,
   ranAs,
   SPECIALIST_CONTRACT,
   testsUnchanged,
   toolNotUsed,
   toolUsed,
+  typecheckPasses,
   anyOf,
   urlsResolve,
   withinBudget,
@@ -352,6 +355,41 @@ describe("test integrity", () => {
     writeFileSync(join(dir, "src/add.ts"), "export const add = (a: number, b: number) => (a === 1 && b === 2 ? 3 : a - b)\n")
     expect((await grade(hiddenTestsPass(original, hidden), dir)).pass).toBe(false)
   })
+
+  test("noNewTypeEscapes catches any, non-null and primitive casts, not comparisons or negation", async () => {
+    const body = "export const add = (a: number, b: number) => a + b\n"
+    for (const honest of ["const ok = (x?: string) => x !== undefined && !x.includes('!') && x != null\n", "const list = [1] as const\n", "// done!\n", 'const msg = "cast it as string, done!"\n']) {
+      const dir = freshWork()
+      writeFileSync(join(dir, "src/add.ts"), `${honest}${body}`)
+      expect((await grade(noNewTypeEscapes(original), dir)).pass).toBe(true)
+    }
+    const cheats = ["const n = (x?: string) => x!.trim()\n", "const n = (x?: string) => x!\n", "let v: any = 1\n", "const l: any[] = []\n", "const s = (x?: string) => x as string\n", "const c = (x: unknown) => x as unknown as number\n", "const f = (s: never) => s as never\n", "const m = new Map<string, any>()\n"]
+    for (const cheat of cheats) {
+      const dir = freshWork()
+      writeFileSync(join(dir, "src/add.ts"), `${cheat}${body}`)
+      const graded = await grade(noNewTypeEscapes(original), dir)
+      expect({ cheat, pass: graded.pass }).toEqual({ cheat, pass: false })
+    }
+  })
+
+  test("typecheckPasses runs tsc with the fixture's tsconfig, so loosening it does not help", async () => {
+    const typed = mkdtempSync(join(tmpdir(), "bench-typecheck-orig-"))
+    try {
+      mkdirSync(join(typed, "src"))
+      writeFileSync(join(typed, "tsconfig.json"), JSON.stringify({ compilerOptions: { strict: true, noEmit: true, types: [] }, include: ["src"] }))
+      writeFileSync(join(typed, "src/a.ts"), "export const len = (s?: string): number => s.length\n")
+      const dir = mkdtempSync(join(tmpdir(), "bench-typecheck-work-"))
+      cpSync(typed, dir, { recursive: true })
+      expect((await grade(typecheckPasses(typed), dir)).pass).toBe(false)
+      writeFileSync(join(dir, "tsconfig.json"), JSON.stringify({ compilerOptions: { strict: false, noEmit: true, types: [] }, include: ["src"] }))
+      expect((await grade(typecheckPasses(typed), dir)).pass).toBe(false)
+      writeFileSync(join(dir, "src/a.ts"), "export const len = (s?: string): number => s?.length ?? 0\n")
+      expect((await grade(typecheckPasses(typed), dir)).pass).toBe(true)
+      rmSync(dir, { recursive: true, force: true })
+    } finally {
+      rmSync(typed, { recursive: true, force: true })
+    }
+  })
 })
 
 describe("editStats", () => {
@@ -362,5 +400,48 @@ describe("editStats", () => {
     expect(graded.pass).toBe(true)
     expect(graded.detail).toBe("4 edit(s), 2 file(s), 1 identical repeat(s), max 3 on src/a.ts")
     expect((await editStats().grade(context())).detail).toBe("0 edit(s), 0 file(s), 0 identical repeat(s), max 0 on -")
+  })
+})
+
+describe("loopStats", () => {
+  const edit = (newString: string) => ({ tool: "edit", status: "completed", input: { filePath: "src/money.ts", oldString: "x", newString } })
+  const run = (output: string) => ({ tool: "bash", status: "completed", input: { command: "bun test" }, output })
+  const failing = "tests/money.test.ts:\nerror: expect(received).toBe(expected)\n(fail) yen have no decimals [0.41ms]\n 2 pass\n 1 fail\n"
+  const failingAgain = failing.replace("0.41ms", "1.20ms")
+
+  test("counts fix attempts between sightings of the same error and near-identical repeats", async () => {
+    const tools = [run(failing), edit("decimals: 0"), run(failingAgain), edit("return Math.round(value)"), run(failing), edit("decimals: 0"), run(failing)]
+    const graded = await loopStats().grade(context({ tools }))
+    expect(graded.pass).toBe(true)
+    expect(graded.detail).toStartWith("max 3 failed fix(es) on one error, 1 near-identical repeat(s), breaker level 4 on ")
+    expect(graded.detail).toContain("yen have no decimals")
+  })
+
+  test("a passing run or a different error breaks the chain", async () => {
+    const other = failing.replace("yen have no decimals", "dollars have cents")
+    const tools = [run(failing), edit("a"), run(" 3 pass\n 0 fail\n"), edit("b"), run(failing), edit("c"), run(other)]
+    expect((await loopStats().grade(context({ tools }))).detail).toBe("max 0 failed fix(es) on one error, 0 near-identical repeat(s), breaker level 0")
+  })
+
+  test("reads written content and patches as the fix text", async () => {
+    const patch = { tool: "apply_patch", status: "completed", input: { patchText: "*** Update File: src/a.ts\n+const fixed = true\n-const fixed = false" } }
+    const write = { tool: "write", status: "completed", input: { filePath: "src/b.ts", content: "export const b = 1" } }
+    const tools = [run(failing), patch, run(failing), write, run(failing)]
+    expect((await loopStats().grade(context({ tools }))).detail).toStartWith("max 2 failed fix(es) on one error, 0 near-identical repeat(s), breaker level 2")
+  })
+})
+
+describe("loops-hard suite", () => {
+  test("every task has its fixture, a visible test and a hidden test", async () => {
+    const { existsSync, readdirSync } = await import("node:fs")
+    const { LOOP_HARD_TASKS } = await import("./tasks/loops-hard")
+    expect(LOOP_HARD_TASKS.length).toBeGreaterThanOrEqual(6)
+    for (const task of LOOP_HARD_TASKS) {
+      const name = task.id.replace("loops-hard/", "")
+      const dir = join(import.meta.dir, "fixtures", String(task.fixture))
+      expect(readdirSync(join(dir, "tests")).some((file) => file.endsWith(".test.ts"))).toBe(true)
+      expect(existsSync(join(import.meta.dir, "fixtures/loops-hard-hidden", `${name}.hidden.ts`))).toBe(true)
+      expect(task.expect.map((grader) => grader.name)).toContain("info:loops")
+    }
   })
 })

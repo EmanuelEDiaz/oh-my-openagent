@@ -227,24 +227,30 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
     log("[network-guard] network changed")
   }
 
-  /** Compares the address fingerprint with the last one; a difference is a network change. */
-  function checkFingerprint(): void {
-    if (!deps.networkFingerprint) return
+  /** Compares the address fingerprint with the last one; a difference is a network change. Returns whether it changed. */
+  function checkFingerprint(): boolean {
+    if (!deps.networkFingerprint) return false
     let next: string
     try {
       next = deps.networkFingerprint()
     } catch (error) {
       log("[network-guard] network fingerprint failed", { error: String(error) })
-      return
+      return false
     }
-    if (fingerprint !== undefined && next !== fingerprint) noteNetworkChange()
+    const changed = fingerprint !== undefined && next !== fingerprint
+    if (changed) noteNetworkChange()
     fingerprint = next
+    return changed
   }
 
   function onLinkChange(): void {
     // With a fingerprint, only a real address change counts (route and lifetime updates are frequent noise).
-    if (deps.networkFingerprint) checkFingerprint()
+    let changed = true
+    if (deps.networkFingerprint) changed = checkFingerprint()
     else noteNetworkChange()
+    // Noise wakes nobody, unless a session is already waiting: the link may be back with the same addresses.
+    const waiting = [...sessions.values()].some((current) => current.cycle !== undefined && !current.cycle.cancelled)
+    if (!changed && !waiting) return
     if (now() - lastProbeAt < LINK_WAKE_MIN_GAP_MS) return
     log("[network-guard] network change; probing now")
     for (const wake of [...wakers]) wake()

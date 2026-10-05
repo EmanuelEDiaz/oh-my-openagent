@@ -38,6 +38,7 @@ import { createKnowledgeIndexerHook } from "../../hooks/knowledge-indexer"
 import { createDecisionInjectorHook } from "../../hooks/decision-injector"
 import { createEvidenceGateHook } from "../../hooks/evidence-gate"
 import { createCitationCheckHook } from "../../hooks/citation-check"
+import { createPluginToolNameRepair } from "../../features/tool-name-repair/plugin"
 
 export type ToolGuardHooks = {
   commentChecker: ReturnType<typeof createCommentCheckerHooks> | null
@@ -67,6 +68,7 @@ export type ToolGuardHooks = {
   teamToolGating: ReturnType<typeof createTeamToolGating> | null
   notepadWriteGuard: ReturnType<typeof createNotepadWriteGuardHook> | null
   planFormatValidator: ReturnType<typeof createPlanFormatValidatorHook> | null
+  toolNameRepair: ReturnType<typeof createPluginToolNameRepair>
 }
 
 export function createToolGuardHooks(args: {
@@ -217,6 +219,9 @@ export function createToolGuardHooks(args: {
     ? safeHook("notepad-write-guard", () => createNotepadWriteGuardHook())
     : null
 
+  // Broken tool names (fork roadmap 0.15 F), on unless resilience.enabled or resilience.repair_tool_names is false.
+  const toolNameRepair = safeCreateHook("tool-name-repair", () => createPluginToolNameRepair(ctx, pluginConfig), { enabled: safeHookEnabled })
+
   return {
     commentChecker,
     toolOutputTruncator,
@@ -245,5 +250,6 @@ export function createToolGuardHooks(args: {
     teamToolGating,
     notepadWriteGuard,
     planFormatValidator,
+    toolNameRepair,
   }
 }

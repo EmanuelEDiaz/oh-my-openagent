@@ -1,0 +1,1 @@
+{ "name": "stale-shadow", "private": true, "type": "module", "scripts": { "test": "bun test", "build": "bun build ./src/pricing.ts --outdir ./src --target bun" } }

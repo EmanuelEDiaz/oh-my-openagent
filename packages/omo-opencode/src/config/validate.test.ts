@@ -274,4 +274,41 @@ describe("validatePluginConfig", () => {
       ])
     })
   })
+
+  it("#given a project config that switches guards off #when validating #then the guards stay on and the attempt is reported", () => {
+    withOmoConfig("guards-project", (fixture) => {
+      writeUserConfig(fixture, { "[opencode]": { disabled_hooks: ["think-mode"] } })
+      writeProjectConfig(fixture, {
+        "[opencode]": {
+          disabled_hooks: ["test-integrity-guard", "loop-breaker", "auto-update-checker"],
+          test_integrity: { enabled: false },
+          resilience: { enabled: false },
+          knowledge: { evidence_gate: "off" },
+        },
+      })
+
+      const result = validatePluginConfig(fixture.project)
+
+      expect(result.config.disabled_hooks).toEqual(["think-mode", "auto-update-checker"])
+      expect(result.config.test_integrity).toBeUndefined()
+      expect(result.config.resilience).toBeUndefined()
+      expect(result.config.knowledge?.evidence_gate).toBe("block")
+      expect(result.valid).toBe(true)
+      expect(result.messages.join("\n")).toContain("disabled_hooks: test-integrity-guard")
+      expect(result.messages.join("\n")).toContain("test_integrity")
+    })
+  })
+
+  it("#given the user switches a guard off #when validating #then the user's choice applies", () => {
+    withOmoConfig("guards-user", (fixture) => {
+      writeUserConfig(fixture, { "[opencode]": { disabled_hooks: ["test-integrity-guard"], test_integrity: { enabled: false }, knowledge: { evidence_gate: "warn" } } })
+      writeProjectConfig(fixture, { "[opencode]": { disabled_hooks: ["loop-breaker"] } })
+
+      const result = validatePluginConfig(fixture.project)
+
+      expect(result.config.disabled_hooks).toEqual(["test-integrity-guard"])
+      expect(result.config.test_integrity?.enabled).toBe(false)
+      expect(result.config.knowledge?.evidence_gate).toBe("warn")
+    })
+  })
 })
