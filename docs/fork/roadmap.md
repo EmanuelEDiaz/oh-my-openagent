@@ -89,6 +89,24 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
     `docs/fork/agents/<agente>.md` (plantilla en `docs/fork/agents/README.md`); su paso no se cierra sin ella.
 15. **Sistemas homólogos:** antes de planificar cada funcionalidad o agente se investigan sistemas homólogos (agentes de código, librerías, artículos) y lo que pueda mejorarlo, **siempre con foco en lo gratis**; el plan cita la evidencia y qué se toma de cada uno (usuario, 05-10-2026).
 
+## Punto de reanudación (06-10-2026, pruebas paradas a petición del usuario)
+**Hecho y en `mis-mejoras`:** 4.18 `@web-researcher`, puerta Zen, arreglo de la barra lateral, 0.9b (freno de bucles,
+código y QA), 0.15 completo (red, congelamiento, kill, poca RAM, nombres de herramienta; QA 6/6 + cambio de red real),
+guardianes solo apagables desde la configuración del usuario, arreglos de la validación de `loops-hard` (avisos de
+proceso, `headerTimeout`, comandos de solo lectura con `echo`, banco).
+**Abierto, retomar en este orden:**
+1. **0.9b medición:** correr `loops-hard` sin freno con `ling-3.1-flash-free` (`.omo/evals/lh-models.sh`, solo el
+   segundo modelo). Ni big-pickle ni nemotron entran en bucle; si ling tampoco, proponer al usuario medir el freno de
+   forma determinista con el modelo guionizado de 0.16.
+2. **0.9a medición:** 2 repeticiones más con y sin guardián de las 16 tareas de `fix-integrity` (incluidas las 4 de
+   tipos), con `dist-qa/` (misma versión que la 1.ª repetición; no borrar `dist-qa/` hasta entonces).
+3. **0.16:** el plan detallado está en `plans/integration-suite-and-commit-gate.md` (borrador) → presentarlo para
+   aprobación.
+4. Después: 0.18 → 0.17a → 0.13 → 0.17b → 0.14 → 0.10–0.12 → Fase 4…
+**Reglas activas:** dejar ≥3 GB libres para el otro agente (las cadenas del banco esperan memoria solas); limpiar al
+terminar (monitores, entornos aislados, procesos, temporales); documentar cada cierre en plan + hoja de ruta con las
+pruebas que lo validan; no cerrar nada sin datos correctos.
+
 ## Orden de trabajo (actualizado 03-10-2026)
 1. **4.18 `@web-researcher`** — hecho y medido (fáciles 15/15, difíciles 8/10 frente a 2/10 de `@librarian`; ficha `docs/fork/agents/web-researcher.md`); pendiente de fusionar con 0.9b.
 2. **Medición de 0.9a** — **parcial, no cerrada** (usuario: nada se cierra sin datos correctos): 1 repetición con guardián 8/8 + 4/4 honestas, sin guardián 8/8 + 1/4. Faltan 2 repeticiones más (pass^3) y tareas de errores de tipos; resultados en `plans/test-integrity-and-loops.md`.
