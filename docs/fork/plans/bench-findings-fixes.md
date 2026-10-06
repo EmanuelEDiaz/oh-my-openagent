@@ -1,6 +1,6 @@
 # Arreglos de la validación de `loops-hard` (05-10-2026)
 
-Estado: **implementado y con QA aislada 5/5 (05-10-2026)**; fusionado en `mis-mejoras`. Comandos encadenados de solo lectura: aprobado, en curso, rama `fix/bench-findings`. `S/` = `packages/omo-opencode/src/`.
+Estado: **implementado y con QA aislada 5/5 (05-10-2026)**; fusionado en `mis-mejoras`. comandos encadenados: resuelto añadiendo `echo` (la causa real), rama `fix/bench-findings`. `S/` = `packages/omo-opencode/src/`.
 
 ## Hallazgos y causa real (investigación del código y de los registros del entorno aislado)
 1. **"El agente se para" (`round-half`)** — no fue una parada prematura. El agente lanzó los tests con `process_start`,
@@ -65,7 +65,7 @@ pedir permiso y sigue pidiéndolo para `rm`; repetir la validación de `loops-ha
 - **C — comandos de solo lectura** (`S/agents/specialists/catalog.ts`, conjunto `READ_ONLY_SHELL` tras `"*": "ask"`):
   permitidos `ls*`, `pwd`, `cat`, `head`, `tail`, `wc`, `grep`, `rg`, `find`, `git status/log/diff/show`; vuelven a
   "preguntar" `find` con `-exec`/`-execdir`/`-ok`/`-delete`/`-fprint` y **cualquier comando con `;`, `&`, `|`, `>`, `<`,
-  comillas invertidas, `$(` o salto de línea** (OpenCode compara la cadena entera, así que `ls && rm x` no debe colarse).
+  comillas invertidas, `$(` o salto de línea**. *(Corrección 05-10-2026: la razón dada aquí era falsa. OpenCode 1.18.26 NO compara la cadena entera: `tool/shell.ts` separa con tree-sitter cada comando de la cadena —tuberías, `;`, `&&` y sustituciones incluidas— y comprueba cada uno; la redirección va pegada a su comando. Así que `ls && rm x` ya pedía permiso por `rm x`; las reglas de separadores quedan solo como segunda línea de defensa y las de `>`/`<` sí actúan.)*
   Las reglas de ejecutar tests y las denegaciones destructivas van después y siguen ganando. Aplicado a `test-writer` y
   `debugger` (en el `debugger` sustituye sus reglas de lectura de git; `git bisect*` sigue). El `verifier` (también en
   "preguntar") no se tocó: fuera del plan. Prueba de orden de reglas que reproduce el "gana la última": antes fallaba
@@ -90,10 +90,13 @@ pedir permiso y sigue pidiéndolo para `rm`; repetir la validación de `loops-ha
 - **Límite honesto de esta QA:** en `round-half` el agente no usó `process_start` y en `bigint-json` no delegó en
   `test-writer`, así que esas dos ejecuciones no ejercitan los arreglos A y C; los cubren sus pruebas unitarias (que
   fallaban antes) y tendrán un escenario determinista con el modelo guionizado de 0.16.
-- **Hallazgo nuevo (`env-bool`):** `test-writer` pidió permiso para un comando encadenado de solo lectura
-  (`bun test … | tail; echo …; git status --porcelain; git diff --stat`). Por diseño un comando con `|`/`;` pregunta
-  (OpenCode compara la cadena entera), pero los modelos encadenan así a menudo y en uso real saltaría un aviso de
-  permiso. **Aprobado (usuario, 05-10-2026), en curso en su propia rama:** en el hook de permisos del plugin (si OpenCode 1.18.26 lo permite; se comprueba primero), aprobar un comando encadenado solo si
-  **cada trozo** está en la lista de solo lectura o de ejecutar tests y no hay redirección a archivos ni sustitución.
+- **Hallazgo nuevo (`env-bool`) y corrección:** `test-writer` pidió permiso con el comando encadenado
+  `bun test … | tail; echo …; git status --porcelain; echo …; git diff --stat`. Atribuí el aviso a la cadena; **era
+  falso**: el registro de OpenCode muestra 6 comprobaciones separadas y solo los dos `echo` pidieron permiso (no estaban
+  en la lista). Además OpenCode 1.18.26 **no llama nunca** al hook `permission.ask` de los plugins (está declarado en
+  `packages/plugin/src/index.ts:261` pero ningún `plugin.trigger` lo usa), así que el analizador de cadenas aprobado no
+  tenía dónde engancharse ni hacía falta. **Arreglo real:** `echo` y `echo *` en la lista de solo lectura (`echo x > f` y
+  `echo $(rm x)` siguen preguntando). La prueba de orden de reglas ahora comprueba **cada trozo** como OpenCode e incluye
+  el comando exacto del banco; antes del cambio fallaba, ahora 9/9.
 - **Evidencia:** `.omo/evidence/0.15/qa-1791235625263.jsonl` (header-hold) y `.omo/evals/*-fix-{round-half,bigint-json,
   csv-crlf,env-bool}-*.jsonl`; registro de la cadena `.omo/evals/fix-qa.log`.

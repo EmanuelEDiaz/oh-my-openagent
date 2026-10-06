@@ -135,15 +135,26 @@ describe("specialists catalog", () => {
   })
 
   test("test-writer and debugger run read-only commands and tests without asking; everything else still asks", () => {
+    // OpenCode checks each command of a chain on its own (tree-sitter); the strictest answer wins.
+    const pieces = (command: string): string[] => {
+      const inner = [...command.matchAll(/\$\(([^)]*)\)|`([^`]*)`/g)].map((match) => (match[1] ?? match[2] ?? "").trim())
+      const outer = command.replace(/\$\([^)]*\)|`[^`]*`/g, "x").split(/\s*(?:&&|\|\||;|\n|\|(?!&))\s*/)
+      return [...outer, ...inner].map((piece) => piece.trim()).filter(Boolean)
+    }
+    const rank = { allow: 0, ask: 1, deny: 2 } as const
     for (const name of ["test-writer", "debugger"]) {
-      const action = (command: string) => `${name}: ${command} => ${bashAction(name, command)}`
+      const chainAction = (command: string) =>
+        pieces(command).map((piece) => bashAction(name, piece) as keyof typeof rank).reduce((worst, next) => (rank[next] > rank[worst] ? next : worst), "allow" as keyof typeof rank)
+      const action = (command: string) => `${name}: ${command} => ${chainAction(command)}`
       for (const command of ["ls", "ls -la src", "pwd", "cat src/a.ts", "head -n 20 a.ts", "tail a.log", "wc -l a.ts",
         "grep -rn foo src", "rg foo", "find src -name '*.ts'", "git status", "git log --oneline -5", "git diff HEAD",
-        "git show HEAD:a.ts", "bun test src/a.test.ts", "bun test src/a.test.ts 2>&1 | tail -20"]) {
+        "git show HEAD:a.ts", "bun test src/a.test.ts", "bun test src/a.test.ts 2>&1 | tail -20", "echo done",
+        // The exact chained command that asked in the bench (env-bool): only its `echo` pieces were missing.
+        'bun test tests/readBool.test.ts 2>&1 | tail -8; echo "---- git status ----"; git status --porcelain; echo "---- diff stat ----"; git diff --stat']) {
         expect(action(command)).toBe(`${name}: ${command} => allow`)
       }
       for (const command of ["find . -name x -exec rm {} \\;", "find . -name x -delete", "ls && rm a.ts", "cat a; rm a",
-        "cat a | sh", "cat a > b.ts", "ls $(rm a)", "ls `rm a`", "ls\nrm a", "rm a.ts", "sed -i s/a/b/ a.ts", "curl x"]) {
+        "cat a | sh", "cat a > b.ts", "echo x > a.ts", "echo $(rm a)", "ls $(rm a)", "ls `rm a`", "ls\nrm a", "rm a.ts", "sed -i s/a/b/ a.ts", "curl x"]) {
         expect(action(command)).toBe(`${name}: ${command} => ask`)
       }
       for (const command of ["rm -rf src", "git push origin main", "npm install left-pad", "git reset --hard HEAD"]) {
