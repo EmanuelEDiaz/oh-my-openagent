@@ -28,14 +28,17 @@ const DESTRUCTIVE = {
 
 /**
  * Read-only inspection for specialists whose bash otherwise asks, so a subagent never blocks on a permission prompt to
- * look around (fork bench finding, 05-10-2026). OpenCode 1.18.26 matches the WHOLE command string and applies the LAST
- * matching rule, so the trailing "ask" rules send back to a prompt any `find` action and any chained, piped,
- * substituted or redirected command ("ls && rm x" must not ride on "ls*"). Spread it right after `"*": "ask"`: later
- * test-runner allows and destructive denies still win for their own commands.
+ * look around (fork bench finding, 05-10-2026). OpenCode 1.18.26 (`tool/shell.ts`) parses the command with tree-sitter
+ * and checks EVERY command in it separately (pipes, `;`, `&&`, substitutions included), applying the LAST matching
+ * rule; a redirection stays attached to its command. So "ls && rm x" asks for "rm x", and the trailing "ask" rules
+ * catch `find` actions and redirections ("cat a > b"); the separator rules are only a second line of defence. Spread
+ * it right after `"*": "ask"`: later test-runner allows and destructive denies still win for their own commands.
  */
 const READ_ONLY_SHELL = {
   "ls*": "allow",
   "pwd": "allow",
+  "echo": "allow",
+  "echo *": "allow",
   "cat *": "allow",
   "head *": "allow",
   "tail *": "allow",
