@@ -9,6 +9,11 @@ export const StallConfigSchema = z.object({
    * hanging. A value set in opencode.json always wins. `false` leaves providers untouched.
    */
   chunk_timeout_ms: z.union([z.number().int().min(10_000), z.literal(false)]).default(90_000),
+  /**
+   * Default `headerTimeout` (wait for the response headers, before any chunk) for providers that set none, including
+   * `opencode`; openai keeps OpenCode's own 300 s. A value set in opencode.json always wins. `false` leaves it unset.
+   */
+  header_timeout_ms: z.union([z.number().int().min(10_000), z.literal(false)]).default(120_000),
   /** A busy session with no new output, no running tool and no managed process for this long is stalled */
   inactivity_ms: z.number().int().min(60_000).default(240_000),
   /** How often busy sessions are checked */

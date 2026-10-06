@@ -154,6 +154,15 @@ Repite cada tarea N veces y da `pass@1` y `pass^3`. No debe tocar nunca la confi
 - Pruebas: `runner.test.ts` (respuesta a preguntas, fallo de la lista sin romper la ejecución), `graders.test.ts`
   (`anyOf`); 72 en verde.
 
+## Correcciones (05-10-2026, tras validar `loops-hard`)
+- Fin de tarea en modo principal: 5 s libre seguidos, sin preguntas/permisos en ese intervalo y sin procesos sin avisar
+  ni avisos pendientes del plugin (antes contaba el primer instante libre y abortaba trabajo pendiente).
+- Permisos pendientes contestados solos ("once") y contados (`info:permissions`): un subagente esperando permiso se veía
+  como un cuelgue de 240 s.
+- Corte por falta de avance a **420 s** (antes 240 s, igual que el vigilante de 0.8: nunca se veía si el plugin
+  recuperaba) y `info:recoveries` con las recuperaciones del vigilante por tarea.
+- Detalle y pruebas: `plans/bench-findings-fixes.md`.
+
 ## Criterios de aceptación
 ```gherkin
 Feature: banco de pruebas

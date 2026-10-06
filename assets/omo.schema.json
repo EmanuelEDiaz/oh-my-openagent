@@ -11959,6 +11959,20 @@
                 }
               ]
             },
+            "header_timeout_ms": {
+              "default": 120000,
+              "anyOf": [
+                {
+                  "type": "integer",
+                  "minimum": 10000,
+                  "maximum": 9007199254740991
+                },
+                {
+                  "type": "boolean",
+                  "const": false
+                }
+              ]
+            },
             "inactivity_ms": {
               "default": 240000,
               "type": "integer",
@@ -11981,6 +11995,7 @@
           "required": [
             "enabled",
             "chunk_timeout_ms",
+            "header_timeout_ms",
             "inactivity_ms",
             "check_interval_ms",
             "max_stalls_per_task"
@@ -12153,6 +12168,94 @@
             "nudge_after",
             "research_after",
             "block_after"
+          ],
+          "additionalProperties": false
+        },
+        "resilience": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            },
+            "network_probe_limit": {
+              "default": 12,
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100
+            },
+            "network_backoff_s": {
+              "default": [
+                5,
+                15,
+                30,
+                60
+              ],
+              "minItems": 1,
+              "type": "array",
+              "items": {
+                "type": "number",
+                "exclusiveMinimum": 0
+              }
+            },
+            "neutral_probe_url": {
+              "default": "https://www.gstatic.com/generate_204",
+              "type": "string",
+              "format": "uri"
+            },
+            "silent_stream_s": {
+              "default": 60,
+              "type": "integer",
+              "minimum": 10,
+              "maximum": 9007199254740991
+            },
+            "freeze_threshold_s": {
+              "default": 10,
+              "type": "integer",
+              "minimum": 2,
+              "maximum": 9007199254740991
+            },
+            "wip_heartbeat_s": {
+              "default": 15,
+              "type": "integer",
+              "minimum": 5,
+              "maximum": 9007199254740991
+            },
+            "low_memory_mb": {
+              "default": 700,
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "low_memory_ratio": {
+              "default": 0.1,
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "resume_memory_mb": {
+              "default": 900,
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "repair_tool_names": {
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "enabled",
+            "network_probe_limit",
+            "network_backoff_s",
+            "neutral_probe_url",
+            "silent_stream_s",
+            "freeze_threshold_s",
+            "wip_heartbeat_s",
+            "low_memory_mb",
+            "low_memory_ratio",
+            "resume_memory_mb",
+            "repair_tool_names"
           ],
           "additionalProperties": false
         },
@@ -30211,6 +30314,20 @@
                       }
                     ]
                   },
+                  "header_timeout_ms": {
+                    "default": 120000,
+                    "anyOf": [
+                      {
+                        "type": "integer",
+                        "minimum": 10000,
+                        "maximum": 9007199254740991
+                      },
+                      {
+                        "type": "boolean",
+                        "const": false
+                      }
+                    ]
+                  },
                   "inactivity_ms": {
                     "default": 240000,
                     "type": "integer",
@@ -30233,6 +30350,7 @@
                 "required": [
                   "enabled",
                   "chunk_timeout_ms",
+                  "header_timeout_ms",
                   "inactivity_ms",
                   "check_interval_ms",
                   "max_stalls_per_task"
@@ -30405,6 +30523,94 @@
                   "nudge_after",
                   "research_after",
                   "block_after"
+                ],
+                "additionalProperties": false
+              },
+              "resilience": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "default": true,
+                    "type": "boolean"
+                  },
+                  "network_probe_limit": {
+                    "default": 12,
+                    "type": "integer",
+                    "minimum": 1,
+                    "maximum": 100
+                  },
+                  "network_backoff_s": {
+                    "default": [
+                      5,
+                      15,
+                      30,
+                      60
+                    ],
+                    "minItems": 1,
+                    "type": "array",
+                    "items": {
+                      "type": "number",
+                      "exclusiveMinimum": 0
+                    }
+                  },
+                  "neutral_probe_url": {
+                    "default": "https://www.gstatic.com/generate_204",
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "silent_stream_s": {
+                    "default": 60,
+                    "type": "integer",
+                    "minimum": 10,
+                    "maximum": 9007199254740991
+                  },
+                  "freeze_threshold_s": {
+                    "default": 10,
+                    "type": "integer",
+                    "minimum": 2,
+                    "maximum": 9007199254740991
+                  },
+                  "wip_heartbeat_s": {
+                    "default": 15,
+                    "type": "integer",
+                    "minimum": 5,
+                    "maximum": 9007199254740991
+                  },
+                  "low_memory_mb": {
+                    "default": 700,
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "low_memory_ratio": {
+                    "default": 0.1,
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 1
+                  },
+                  "resume_memory_mb": {
+                    "default": 900,
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 9007199254740991
+                  },
+                  "repair_tool_names": {
+                    "default": true,
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "enabled",
+                  "network_probe_limit",
+                  "network_backoff_s",
+                  "neutral_probe_url",
+                  "silent_stream_s",
+                  "freeze_threshold_s",
+                  "wip_heartbeat_s",
+                  "low_memory_mb",
+                  "low_memory_ratio",
+                  "resume_memory_mb",
+                  "repair_tool_names"
                 ],
                 "additionalProperties": false
               },

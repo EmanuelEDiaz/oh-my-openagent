@@ -44,6 +44,8 @@ function option(name: string, fallback?: string): string | undefined {
 function createSwitchableProxy(upstream: string) {
   let server: ReturnType<typeof Bun.serve> | undefined
   let port = 0
+  // Model requests held this many ms before any byte is sent (a provider that accepts and never answers).
+  let holdMs = 0
   const requests: Array<{ at: number; path: string; model?: string }> = []
   const start = () => {
     server = Bun.serve({
@@ -61,6 +63,7 @@ function createSwitchableProxy(upstream: string) {
             requests.push({ at: Date.now(), path: url.pathname })
           }
         }
+        if (holdMs > 0 && body) await Bun.sleep(holdMs)
         const headers = new Headers(request.headers)
         headers.delete("host")
         headers.delete("content-length")
@@ -90,6 +93,9 @@ function createSwitchableProxy(upstream: string) {
     up: () => {
       if (!server) start()
     },
+    hold: (ms: number) => {
+      holdMs = ms
+    },
   }
 }
 
@@ -98,6 +104,14 @@ function routeZen(sandbox: Sandbox, url: string): void {
   const path = join(sandbox.root, "config/opencode/opencode.json")
   const config = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>
   config["provider"] = { opencode: { options: { baseURL: url } } }
+  writeFileSync(path, JSON.stringify(config, null, 2))
+}
+
+function setSection(sandbox: Sandbox, key: string, value: Record<string, unknown>): void {
+  const path = join(sandbox.root, "home/.omo/omo.jsonc")
+  const config = (existsSync(path) ? parseJsonc<Record<string, unknown>>(readFileSync(path, "utf8")) : {}) ?? {}
+  const scope = ((config["[opencode]"] as Record<string, unknown> | undefined) ?? (config["[opencode]"] = {})) as Record<string, unknown>
+  scope[key] = { ...((scope[key] as Record<string, unknown> | undefined) ?? {}), ...value }
   writeFileSync(path, JSON.stringify(config, null, 2))
 }
 
@@ -311,6 +325,30 @@ const SCENARIOS: Scenario[] = [
   },
 ]
 
+// A provider that accepts the request and never sends headers: the plugin's default headerTimeout (shortened here to
+// 15 s) must fail the request so OpenCode retries, instead of hanging until the 4 min watchdog.
+const HEADER_SCENARIO: Scenario = {
+  id: "header-hold",
+  async run(context) {
+    const { workdir, client, sessionID } = await startTask(context, "header-hold")
+    await waitFor(async () => (await completedTools(client, sessionID)) >= 1, 300_000, "first tool")
+    const started = Date.now()
+    context.proxy.hold(60_000)
+    await Bun.sleep(40_000)
+    context.proxy.hold(0)
+    await waitSettled(client, sessionID, 900_000)
+    const list = await messages(client, sessionID)
+    const log = readFileSync(join(context.sandbox.root, "data/opencode/log", readdirSync(join(context.sandbox.root, "data/opencode/log")).sort().at(-1) ?? ""), "utf8")
+    return [
+      check("header timeout raised and retried", /HeaderTimeout|header timeout|timed out waiting for response headers/i.test(log)),
+      check("same model throughout", modelsUsed(list).length === 1, modelsUsed(list).join(", ")),
+      check("task finished (tests pass)", testsPass(workdir)),
+      check("recovered well before the 4 min watchdog", Date.now() - started < 900_000),
+    ]
+  },
+}
+SCENARIOS.push(HEADER_SCENARIO)
+
 // Guards are switched off only in the user config (fix/guards-user-only): a project omo.jsonc that disables the test
 // guard must change nothing, and the agent's edit to an existing test is refused.
 const GUARD_SCENARIO: Scenario = {
@@ -375,6 +413,7 @@ async function main(): Promise<void> {
   routeZen(sandbox, proxy.url)
   // Short limits so "the work is left for resumption" happens within minutes; the neutral probe dies with the proxy.
   setResilience(sandbox, { network_probe_limit: 3, network_backoff_s: [5, 10], neutral_probe_url: proxy.neutral, silent_stream_s: 30 })
+  setSection(sandbox, "stall", { header_timeout_ms: 15_000 })
 
   let server = await startServer(sandbox)
   const port = Number(new URL(server.baseUrl).port)

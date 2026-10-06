@@ -178,4 +178,32 @@ describe("createEventHandler monitor wiring", () => {
 		expect(clearedSessions).toEqual([sessionID])
 		expect(getSessionPromptParams(sessionID)).toBeUndefined()
 	})
+
+	it("#given a process manager #when session.idle arrives #then it flushes the session's pending process notices", async () => {
+		//#given
+		const onSessionIdle = mock(async (_sessionID: string) => {})
+		const sessionID = "ses_process_idle"
+		const eventHandler = createEventHandler({
+			ctx: cast<EventHandlerArgs["ctx"]>({}),
+			pluginConfig: cast<EventHandlerArgs["pluginConfig"]>({}),
+			firstMessageVariantGate: {
+				markSessionCreated: () => {},
+				clear: () => {},
+			},
+			managers: createEventHandlerManagers({
+				processManager: { onSessionIdle },
+			}),
+			hooks: createEventHandlerHooks({}),
+		})
+
+		//#when
+		await eventHandler(asEventHandlerInput({
+			event: { type: "session.idle", properties: { sessionID } },
+		}))
+
+		//#then
+		expect(onSessionIdle).toHaveBeenCalledTimes(1)
+		expect(onSessionIdle).toHaveBeenCalledWith(sessionID)
+	})
 })
+

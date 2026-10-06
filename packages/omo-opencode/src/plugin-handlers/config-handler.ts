@@ -100,7 +100,12 @@ export function createConfigHandler(deps: ConfigHandlerDeps) {
     setAdditionalAllowedMcpEnvVars(pluginConfig.mcp_env_allowlist ?? [])
     applyOpenGatewayProviderConfig(config);
     if (pluginConfig.stall?.enabled !== false) {
-      applyChunkTimeoutDefaults(config, readConnectedProvidersCache() ?? [], pluginConfig.stall?.chunk_timeout_ms ?? 90_000)
+      applyChunkTimeoutDefaults(
+        config,
+        readConnectedProvidersCache() ?? [],
+        pluginConfig.stall?.chunk_timeout_ms ?? 90_000,
+        pluginConfig.stall?.header_timeout_ms ?? 120_000,
+      )
     }
     applyProviderConfig({
       config,

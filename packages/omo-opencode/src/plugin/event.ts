@@ -77,6 +77,9 @@ export function createEventHandler(args: {
 
   const dispatchIdleOnlyHooks = async (input: EventInput): Promise<void> => {
     managers.tmuxSessionManager?.onEvent?.(input.event);
+    const idleSessionID = getEventSessionID(input);
+    // Managed-process notices dropped while the session was busy are delivered now (once per process).
+    if (idleSessionID) await managers.processManager?.onSessionIdle(idleSessionID).catch(() => undefined);
     await runEventHookSafely("teamIdleWakeHint", teamHandlers.teamIdleWakeHint, input);
     await runEventHookSafely("teamMemberStatusHandler", teamHandlers.teamMemberStatusHandler, input);
   };
