@@ -1,6 +1,6 @@
 # Arreglos de la validación de `loops-hard` (05-10-2026)
 
-Estado: **implementado y con QA aislada 5/5 (05-10-2026)**; una propuesta nueva pendiente (comandos encadenados de solo lectura), rama `fix/bench-findings`. `S/` = `packages/omo-opencode/src/`.
+Estado: **implementado y con QA aislada 5/5 (05-10-2026)**; fusionado en `mis-mejoras`. Comandos encadenados de solo lectura: aprobado, en curso, rama `fix/bench-findings`. `S/` = `packages/omo-opencode/src/`.
 
 ## Hallazgos y causa real (investigación del código y de los registros del entorno aislado)
 1. **"El agente se para" (`round-half`)** — no fue una parada prematura. El agente lanzó los tests con `process_start`,
@@ -93,7 +93,7 @@ pedir permiso y sigue pidiéndolo para `rm`; repetir la validación de `loops-ha
 - **Hallazgo nuevo (`env-bool`):** `test-writer` pidió permiso para un comando encadenado de solo lectura
   (`bun test … | tail; echo …; git status --porcelain; git diff --stat`). Por diseño un comando con `|`/`;` pregunta
   (OpenCode compara la cadena entera), pero los modelos encadenan así a menudo y en uso real saltaría un aviso de
-  permiso. Propuesta pendiente de aprobación: en el hook de permisos del plugin, aprobar un comando encadenado solo si
+  permiso. **Aprobado (usuario, 05-10-2026), en curso en su propia rama:** en el hook de permisos del plugin (si OpenCode 1.18.26 lo permite; se comprueba primero), aprobar un comando encadenado solo si
   **cada trozo** está en la lista de solo lectura o de ejecutar tests y no hay redirección a archivos ni sustitución.
 - **Evidencia:** `.omo/evidence/0.15/qa-1791235625263.jsonl` (header-hold) y `.omo/evals/*-fix-{round-half,bigint-json,
   csv-crlf,env-bool}-*.jsonl`; registro de la cadena `.omo/evals/fix-qa.log`.
