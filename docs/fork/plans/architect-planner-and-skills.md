@@ -57,7 +57,8 @@ Estado: **investigación hecha (07-10-2026)**; propuesta pendiente de aprobació
   ELIMINADO); **el impacto lo calcula el código** desde la matriz (historias, tareas, pruebas, ADR y tareas hechas que
   hay que reabrir); `@explainer` muestra las opciones del cambio; el usuario aprueba; se revalida la matriz. La
   fidelidad al plan (4.16) se mide contra los IDs.
-### (b) Especialistas con skills bajo demanda
+### (b) Todos los agentes con skills bajo demanda (regla 16)
+Aplica a los agentes de tab (en 0.13) y a cada especialista (en su paso de la Fase 4), siempre medido antes y después.
 Prompt base corto (identidad, permisos, formato de salida, reglas NUNCA; ≤ ~300 palabras) + skills que el especialista
 carga con la herramienta `skill` cuando los necesita: Prometheus (referencias EARS / 25010 / cambios solo en planes
 completos), `@explainer` (reglas de diagramas), `@plan-attacker` (pre-mortem), `test-writer`/`verifier` (TDD,
