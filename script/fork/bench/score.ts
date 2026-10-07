@@ -11,6 +11,8 @@ const INFRA_PATTERNS = [
   /free tier/i,
   /usage limit|quota/i,
   /overloaded/i,
+  // Zen's own gateway when a free model's endpoint is down (seen with ling-3.1-flash-free, 07-10-2026).
+  /Upstream request failed|Endpoint is unavailable|service unavailable/i,
   /timed out|stalled|never started|no assistant message in the session|MessageAbortedError/i,
   /ECONNREFUSED|ECONNRESET|ETIMEDOUT|fetch failed|socket hang up/i,
   /ProviderAuthError/i,

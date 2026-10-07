@@ -268,7 +268,14 @@ sin contestar: ambos en `plans/bench-findings-fixes.md`.
   fallido sobre un mismo error; investiga con scripts de depuración en vez de repetir). `wrapper-rethrow` falló por un
   arreglo incompleto a la primera, no por bucle. Evidencia:
   `.omo/evals/2026-10-06-loops-hard-lh-off-nemotron-3-5-lightning-free-1791246715798.jsonl`.
-- **`ling-3.1-flash-free`: sin correr** (parado a petición del usuario el 06-10-2026 antes de empezar).
+- **Validación con `ling-3.1-flash-free` (07-10-2026): datos no válidos.** 5 de 7 tareas se cortaron porque el
+  proveedor detrás de Zen no respondía ("Upstream request failed: Endpoint is unavailable": 102 de 139 peticiones,
+  73 %); las 2 que terminaron (`stale-shadow`, `wrapper-rethrow`) se resolvieron sin bucles. El banco contaba ese error
+  como fallo de la tarea: corregido (ahora es fallo de infraestructura y se reintenta; prueba que fallaba antes).
+  Evidencia: `.omo/evals/2026-10-07-loops-hard-lh-off-ling-3-1-flash-free-1791402446722.jsonl`.
+- **Conclusión hasta ahora:** big-pickle, nemotron y (en lo que pudo correr) ling no entran en bucle con `loops-hard`.
+  Pendiente de decisión del usuario: repetir con ling cuando su servicio esté estable, o medir el freno de forma
+  determinista con el modelo guionizado de 0.16.
 - **Decisión (usuario, 05-10-2026):** validar `loops-hard` sin freno con `opencode/nemotron-3.5-lightning-free` y `opencode/ling-3.1-flash-free`; se usa el que entre en bucles para 3 repeticiones con y sin freno.
 - Evidencia: `.omo/evals/2026-10-05-loops-hard-lh-off-1791226922408.jsonl`.
 

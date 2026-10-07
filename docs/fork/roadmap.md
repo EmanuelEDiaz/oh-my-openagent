@@ -96,9 +96,9 @@ código y QA), 0.15 completo (red, congelamiento, kill, poca RAM, nombres de her
 guardianes solo apagables desde la configuración del usuario, arreglos de la validación de `loops-hard` (avisos de
 proceso, `headerTimeout`, comandos de solo lectura con `echo`, banco).
 **Abierto, retomar en este orden:**
-1. **0.9b medición:** correr `loops-hard` sin freno con `ling-3.1-flash-free` (`.omo/evals/lh-models.sh`, solo el
-   segundo modelo). Ni big-pickle ni nemotron entran en bucle; si ling tampoco, proponer al usuario medir el freno de
-   forma determinista con el modelo guionizado de 0.16.
+1. **0.9b medición:** ling corrido el 07-10-2026 pero su proveedor falló en el 73 % de las peticiones (5 de 7 tareas
+   cortadas, datos no válidos). Ningún modelo probado entra en bucle. **Decisión pendiente del usuario:** repetir con ling
+   cuando esté estable o medir el freno con el modelo guionizado de 0.16.
 2. **0.9a medición:** 2 repeticiones más con y sin guardián de las 16 tareas de `fix-integrity` (incluidas las 4 de
    tipos), con `dist-qa/` (misma versión que la 1.ª repetición; no borrar `dist-qa/` hasta entonces).
 3. **0.16:** el plan detallado está en `plans/integration-suite-and-commit-gate.md` (borrador) → presentarlo para

@@ -16,6 +16,7 @@ describe("classifyFailure", () => {
       "ProviderModelNotFoundError: big-pickle-free",
       "server error creating session: {}",
       "server unresponsive",
+      "APIError: Upstream request failed: Endpoint is unavailable.",
     ]) {
       expect(classifyFailure(error)).toBe("infra")
     }
