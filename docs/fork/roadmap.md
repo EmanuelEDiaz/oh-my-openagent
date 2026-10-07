@@ -90,6 +90,18 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
 15. **Sistemas homólogos:** antes de planificar cada funcionalidad o agente se investigan sistemas homólogos (agentes de código, librerías, artículos) y lo que pueda mejorarlo, **siempre con foco en lo gratis**; el plan cita la evidencia y qué se toma de cada uno (usuario, 05-10-2026).
 16. **Todos los agentes con prompt corto + skills bajo demanda** (usuario, 07-10-2026): cada agente del plugin (los de tab y todos los "@") tiene un prompt base corto con lo que nunca puede faltar (reglas NUNCA, permisos, formato de salida) y carga con la herramienta `skill` las instrucciones de cada función solo cuando la va a hacer (los `skills:` de la configuración se cargan siempre: no sirven para ahorrar). El código decide qué skill toca en cada caso y comprueba que se cargó. Cada agente se mide antes y después (mismo acierto con menos contexto, y que los skills de verdad se cargan); no se pasa nada a skills sin esa medición.
 
+## Incidentes del uso real (07-10-2026) — **prioridad inmediata, antes que todo lo demás** (usuario: "ninguno de los tres casos puede pasar… arréglalas ahora mismo")
+1. **Un "hola" a Sisyphus costó 81,7k tokens (41 %)** con big-pickle → se adelanta 0.13 (recortes seguros ya, medidos).
+2. **Modelo gratuito listado pero muerto:** `opencode/ling-3.0-flash-fin-free` (no marcado como obsoleto) devolvió
+   404 "Cannot find any route matching [POST] …/zen/v1/chat/completions"; el plugin no pasó al modelo de respaldo ni lo
+   marcó como roto.
+3. **`/omo-models` no cambió el modelo de Sisyphus en la sesión** (el selector lo muestra cambiado a
+   `ling-3.1-flash-free` pero la sesión siguió igual); el usuario tuvo que usar `/models`.
+4. (De paso) el título de sesión usa `opencode/gpt-5.4-nano`, **de pago** (0.14); varios agentes siguen configurados con
+   modelos retirados (`deepseek-v4-flash-free`, `mimo-v2.5-free`).
+Investigación en curso (registros reales de la sesión `ses_ee7fddc21ffee0KX6v5DYfkf7Z`); arreglo, pruebas y QA antes de
+seguir con el resto.
+
 ## Punto de reanudación (06-10-2026, pruebas paradas a petición del usuario)
 **Hecho y en `mis-mejoras`:** 4.18 `@web-researcher`, puerta Zen, arreglo de la barra lateral, 0.9b (freno de bucles,
 código y QA), 0.15 completo (red, congelamiento, kill, poca RAM, nombres de herramienta; QA 6/6 + cambio de red real),
