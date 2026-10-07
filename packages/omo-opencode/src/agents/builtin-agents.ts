@@ -29,6 +29,7 @@ import { collectPendingBuiltinAgents } from "./builtin-agents/general-agents"
 import { maybeCreateSisyphusConfig } from "./builtin-agents/sisyphus-agent"
 import { maybeCreateHephaestusConfig } from "./builtin-agents/hephaestus-agent"
 import { maybeCreateAtlasConfig } from "./builtin-agents/atlas-agent"
+import { withoutBrokenModels } from "../shared/broken-models-cache"
 import { resetAgentRegistrationReport } from "../shared/agent-registration-report"
 
 type AgentSource = AgentFactory | AgentConfig
@@ -92,9 +93,11 @@ export async function createBuiltinAgents(
   // IMPORTANT: Do NOT call OpenCode client APIs during plugin initialization.
   // This function is called from config handler, and calling client API causes deadlock.
   // See: https://github.com/code-yeongyu/oh-my-openagent/issues/1301
-  const availableModels = await fetchAvailableModels(undefined, {
+  // Models a provider lists but did not serve in the last 24 h are treated as missing, so configured chains and
+  // substitutions step over them (fork plan real-use-incidents A2, A4).
+  const availableModels = withoutBrokenModels(await fetchAvailableModels(undefined, {
     connectedProviders: mergedConnectedProviders.length > 0 ? mergedConnectedProviders : undefined,
-  })
+  }))
   const isFirstRunNoCache =
     availableModels.size === 0 && mergedConnectedProviders.length === 0
 

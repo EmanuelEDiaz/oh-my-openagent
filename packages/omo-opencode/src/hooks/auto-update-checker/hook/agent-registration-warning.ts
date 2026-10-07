@@ -29,8 +29,10 @@ export function formatAgentRegistrationWarning(issues: readonly AgentRegistratio
     .filter((issue) => issue.status === "replaced")
     .sort((left, right) => byPriority(left.agent, right.agent))
     .map((issue) => `${issue.agent} (${issue.from} → ${issue.to ?? "session model"})`)
-  if (degraded.length === 0 && skipped.length === 0 && replaced.length === 0) return undefined
-  const lines: string[] = []
+  const notices = issues.filter((issue) => issue.status === "notice").map((issue) => issue.detail)
+  if (degraded.length === 0 && skipped.length === 0 && replaced.length === 0 && notices.length === 0) return undefined
+  const lines: string[] = [...notices]
+  if (degraded.length === 0 && skipped.length === 0 && replaced.length === 0) return lines.join("\n")
   if (replaced.length > 0) lines.push(`Retired by their provider: ${list(replaced)}.`)
   if (degraded.length > 0) lines.push(`No configured model for: ${list(degraded)} — they use your session model.`)
   for (const issue of skipped) lines.push(`${issue.agent} is off: ${issue.detail}.`)

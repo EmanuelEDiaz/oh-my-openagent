@@ -107,7 +107,9 @@ export function createSessionHooks(args: {
     ? createModelFallbackTitleUpdater(ctx)
     : undefined
 
-  const isModelFallbackConfigEnabled = pluginConfig.model_fallback ?? false
+  // On by default (fork plan real-use-incidents A3). It only acts when runtime_fallback is off (see
+  // event-model-fallback.ts shouldHandleModelFallback and chat-message.ts), so one fallback path is ever active.
+  const isModelFallbackConfigEnabled = pluginConfig.model_fallback ?? true
   const modelFallback = isModelFallbackConfigEnabled && isHookEnabled("model-fallback")
     ? safeHook("model-fallback", () =>
       createModelFallbackHook({

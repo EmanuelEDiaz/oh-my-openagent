@@ -1,4 +1,5 @@
 import type { OhMyOpenCodeConfig } from "../config"
+import { isRuntimeFallbackConfigEnabled } from "../shared/runtime-fallback-enabled"
 
 import { updateSessionAgent } from "../features/claude-code-session-state"
 import { detectSlashCommand, extractPromptText } from "../hooks/auto-slash-command/detector"
@@ -14,6 +15,8 @@ import type { PluginContext } from "./types"
 import { handleGoalMessage } from "./chat-message/loop-commands"
 import { notifyWhenModelCacheIsMissing } from "./chat-message/model-cache-warning"
 import { recordSessionModel, getStoredMainSessionModel } from "./chat-message/session-model"
+import { createLiveAgentModel, defaultLiveAgentModelDeps } from "./chat-message/live-agent-model"
+import type { LiveAgentModel } from "./chat-message/live-agent-model"
 import { runUlwExecuteHookIfApplicable } from "./chat-message/ulw-execute-message"
 import { consumeNativeGoalCommandMarker } from "./command-execute-before"
 import { stopContinuation } from "./stop-continuation"
@@ -51,9 +54,7 @@ function isRuntimeFallbackEnabled(
   return (
     hooks.runtimeFallback !== null &&
     hooks.runtimeFallback !== undefined &&
-    (typeof pluginConfig.runtime_fallback === "boolean"
-      ? pluginConfig.runtime_fallback
-      : (pluginConfig.runtime_fallback?.enabled ?? false))
+    isRuntimeFallbackConfigEnabled(pluginConfig)
   )
 }
 
@@ -87,6 +88,7 @@ export function createChatMessageHandler(args: {
   pluginConfig: OhMyOpenCodeConfig
   firstMessageVariantGate: FirstMessageVariantGate
   hooks: ChatMessageHooks
+  liveAgentModel?: LiveAgentModel
 }): (
   input: ChatMessageInput,
   output: ChatMessageHandlerOutput
@@ -94,6 +96,8 @@ export function createChatMessageHandler(args: {
   const { ctx, pluginConfig, firstMessageVariantGate, hooks } = args
   const pluginContext = ctx as PluginContextWithTui
   const runtimeFallbackEnabled = isRuntimeFallbackEnabled(hooks, pluginConfig)
+  const liveAgentModel = args.liveAgentModel
+    ?? createLiveAgentModel(defaultLiveAgentModelDeps(typeof ctx.directory === "string" ? ctx.directory : undefined))
 
   return async (
     input: ChatMessageInput,
@@ -160,6 +164,9 @@ export function createChatMessageHandler(args: {
     if (storedMainSessionModel) {
       output.message.model = storedMainSessionModel
     }
+
+    // /omo-models saved a new chain for this agent: apply it from this message on, no restart (real-use incidents A1).
+    liveAgentModel.apply(input, output)
 
     await runChatMessageHooks({
       input,

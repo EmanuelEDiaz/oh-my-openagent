@@ -56,7 +56,7 @@ describe("skill tool - async native skill description refresh", () => {
     rmSync(testDir, { recursive: true, force: true })
   })
 
-  it("updates opt-in description after async native skills resolve", async () => {
+  it("does not repeat async native skills, which OpenCode already lists in <available_skills>", async () => {
     //#given
     let allCallCount = 0
     const tool = createFreshSkillTool({
@@ -88,11 +88,11 @@ describe("skill tool - async native skill description refresh", () => {
     expect(tool.description).not.toContain("async-native-skill")
 
     //#when
-    await waitForRefresh(() => tool.description.includes("async-native-skill"))
+    await waitForRefresh(() => tool.description.includes("not repeated here"))
 
     //#then
     expect(allCallCount).toBeGreaterThanOrEqual(1)
     expect(tool.description).toContain("seeded-skill")
-    expect(tool.description).toContain("async-native-skill")
+    expect(tool.description).not.toContain("async-native-skill")
   })
 })

@@ -9,7 +9,8 @@ import type { ModelInfo } from "../../cli/config-models/model-catalog"
 import { createExternalDataStore } from "./external-data"
 import type { ExternalData, ExternalDataStore, ReliabilityFacts } from "./external-data"
 import { collectFacts, detailRows, previewLine, wrapText } from "./model-facts"
-import { buildModelOptions } from "./model-options"
+import { listBrokenModels } from "../../shared/broken-models-cache"
+import { buildModelOptions, NOT_SERVED_LABEL } from "./model-options"
 import type { ProviderModelView, ProviderView } from "./model-options"
 
 export const MAX_CHAIN = 4
@@ -55,6 +56,8 @@ export type OmoModelsDeps = {
   readonly io: OmoModelsConfigIo
   readonly catalog: () => ReadonlyMap<string, ModelInfo>
   readonly external: ExternalDataStore
+  /** Models marked "not served" in the last 24 h; defaults to the shared broken-models cache. */
+  readonly notServed?: () => ReadonlySet<string>
 }
 
 export const DEFAULT_CONFIG_IO: OmoModelsConfigIo = {
@@ -77,15 +80,25 @@ function currentChain(section: OpenCodeSection, agent: string): string[] {
   return readAgentChain(section.agents[agent]).map((entry) => (typeof entry === "string" ? entry : entry.model))
 }
 
-export function buildAgentOptions(section: OpenCodeSection, available: ReadonlySet<string>): SelectOption<string>[] {
+function chainFooter(chain: readonly string[], available: ReadonlySet<string>, notServed: ReadonlySet<string>): string {
+  const unusable = chain.filter((model) => !available.has(model) || notServed.has(model))
+  if (chain.length > 0 && unusable.length === chain.length) return "broken"
+  if (chain.some((model) => notServed.has(model))) return NOT_SERVED_LABEL
+  return unusable.length > 0 ? "model gone" : ""
+}
+
+export function buildAgentOptions(
+  section: OpenCodeSection,
+  available: ReadonlySet<string>,
+  notServed: ReadonlySet<string> = new Set(),
+): SelectOption<string>[] {
   return CONFIGURABLE_AGENTS.map((agent) => {
     const chain = currentChain(section, agent)
-    const missing = chain.filter((model) => !available.has(model))
     return {
       title: agent,
       value: agent,
       description: chain.length === 0 ? `${getAgentProfile(agent).summary} · omo default` : chain.join(" > "),
-      footer: chain.length > 0 && missing.length === chain.length ? "broken" : missing.length > 0 ? "model gone" : "",
+      footer: chainFooter(chain, available, notServed),
     }
   })
 }
@@ -100,6 +113,14 @@ function findModel(providers: readonly ProviderView[], id: string): { provider: 
   return undefined
 }
 
+/** /omo-models changes apply live (fork plan real-use-incidents A1); a chain with one model has nothing to fall back to. */
+export function savedToast(agent: string, chain: readonly string[]): { message: string; variant: "success" | "warning" } {
+  const applied = `${agent}: ${chain.join(" > ")}. Applies from your next message.`
+  return chain.length === 1
+    ? { message: `${applied} No fallback: if ${chain[0]} fails, ${agent} has no other model to switch to.`, variant: "warning" }
+    : { message: applied, variant: "success" }
+}
+
 export function openOmoModels(api: OmoModelsTuiApi, deps: OmoModelsDeps = defaultDeps()): void {
   let section: OpenCodeSection
   try {
@@ -110,6 +131,7 @@ export function openOmoModels(api: OmoModelsTuiApi, deps: OmoModelsDeps = defaul
   }
 
   const catalog = deps.catalog()
+  const notServed = (deps.notServed ?? listBrokenModels)()
   let external: ExternalData | undefined
   void deps.external.load().then((data) => {
     external = data
@@ -121,6 +143,7 @@ export function openOmoModels(api: OmoModelsTuiApi, deps: OmoModelsDeps = defaul
     disabledProviders: section.disabledProviders,
     exclude,
     describe: (provider, model) => previewLine(factsFor(provider, model)),
+    notServed,
   })
   const available = new Set(modelOptions([]).map((option) => option.value))
   let screen = 0
@@ -129,7 +152,7 @@ export function openOmoModels(api: OmoModelsTuiApi, deps: OmoModelsDeps = defaul
     api.ui.dialog.clear()
     try {
       deps.io.save(agent, chain, section)
-      api.ui.toast?.({ message: `${agent}: ${chain.join(" > ")}. Restart OpenCode to apply.`, variant: "success" })
+      api.ui.toast?.(savedToast(agent, chain))
     } catch (error) {
       api.ui.toast?.({ message: `Could not save: ${error instanceof Error ? error.message : String(error)}`, variant: "error" })
     }
@@ -198,7 +221,9 @@ export function openOmoModels(api: OmoModelsTuiApi, deps: OmoModelsDeps = defaul
     const done: SelectOption<string>[] = primary
       ? []
       : [{ title: "✓ Done, save", value: DONE, description: chain.join(" > "), category: "Chain" }]
-    const current = primary ? currentChain(section, agent).find((model) => available.has(model)) : undefined
+    const current = primary
+      ? currentChain(section, agent).find((model) => available.has(model) && !notServed.has(model))
+      : undefined
 
     api.ui.dialog.replace(() =>
       api.ui.DialogSelect<string>({
@@ -218,7 +243,7 @@ export function openOmoModels(api: OmoModelsTuiApi, deps: OmoModelsDeps = defaul
     api.ui.DialogSelect<string>({
       title: "Choose models for an omo agent",
       placeholder: "Search agents...",
-      options: buildAgentOptions(section, available),
+      options: buildAgentOptions(section, available, notServed),
       onSelect: (option) => pickModel(option.value, []),
     }),
   )

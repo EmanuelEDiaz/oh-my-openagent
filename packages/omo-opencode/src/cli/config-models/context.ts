@@ -89,7 +89,13 @@ export function unconnectedOllamaModels(state: ModelsState): OllamaModel[] {
   return state.ollama.models.filter((model) => !available.has(ollamaModelId(model)))
 }
 
+/** Unset means on: runtime_fallback is enabled by default (fork plan real-use-incidents A3). */
 export function isRuntimeFallbackEnabled(value: unknown): boolean {
+  return value === undefined || isRuntimeFallbackExplicitlyOn(value)
+}
+
+/** Written as on in the file (what --enable-runtime-fallback guarantees, independent of the default). */
+export function isRuntimeFallbackExplicitlyOn(value: unknown): boolean {
   if (value === true) return true
   return isRecord(value) && value["enabled"] !== false
 }

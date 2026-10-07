@@ -19,6 +19,7 @@ import { resolveRuntimeModelSettings } from "./runtime-model-settings"
 import { resolveMessageEventSessionID, resolveSessionEventID } from "../../shared/event-session-id"
 import { normalizeModelToCanonicalString } from "./normalize-model"
 import { stepAsideForNetwork } from "../../features/network-guard"
+import { recordIfModelNotServed } from "./model-not-served"
 
 function isRuntimeFallbackRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null
@@ -273,6 +274,7 @@ export function createEventHandler(deps: HookDeps, helpers: AutoRetryHelpers) {
     const fallbackModels = getFallbackModelsForSession(sessionID, resolvedAgent, pluginConfig)
 
     if (fallbackModels.length === 0) {
+      recordIfModelNotServed(error, resolveEventModel(props) ?? state?.currentModel)
       log(`[${HOOK_NAME}] No fallback models configured`, { sessionID, agent })
       return
     }
@@ -297,12 +299,15 @@ export function createEventHandler(deps: HookDeps, helpers: AutoRetryHelpers) {
       sessionLastAccess.set(sessionID, Date.now())
     }
 
+    const notServed = recordIfModelNotServed(error, resolveEventModel(props) ?? state.currentModel)
+
     await dispatchFallbackRetry(deps, helpers, {
       sessionID,
       state,
       fallbackModels,
       resolvedAgent,
       source: "session.error",
+      notServed,
     })
   }
 

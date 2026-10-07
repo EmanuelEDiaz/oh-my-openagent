@@ -27,6 +27,16 @@ import {
 
 export function createSkillTool(options: SkillLoadOptions): ToolDefinition {
   let cachedDescription: string | null = null
+  // Skills OpenCode lists itself in <available_skills>; the description does not repeat them.
+  let nativeSkillNames: ReadonlySet<string> = new Set()
+  const rememberNativeSkills = (nativeAll: readonly { name: string }[]): void => {
+    nativeSkillNames = new Set(nativeAll.map((skill) => skill.name))
+  }
+  const formatDescription = (skillInfos: Parameters<typeof formatCombinedDescription>[0], commands: CommandInfo[]): string =>
+    formatCombinedDescription(skillInfos, commands, {
+      includeSkills: options.includeSkillsInDescription,
+      excludeSkillNames: nativeSkillNames,
+    })
 
   const getBaseSkills = async (context?: ToolContext): Promise<LoadedSkill[]> => {
     if (shouldInvalidateSkillCacheForSession(context?.sessionID)) {
@@ -51,6 +61,7 @@ export function createSkillTool(options: SkillLoadOptions): ToolDefinition {
     if (options.nativeSkills) {
       try {
         const nativeAll = await options.nativeSkills.all()
+        rememberNativeSkills(nativeAll)
         mergeNativeSkills(skills, nativeAll, options.disabledSkills)
       } catch (error) {
         if (!(error instanceof Error)) throw error
@@ -82,9 +93,7 @@ export function createSkillTool(options: SkillLoadOptions): ToolDefinition {
     // check already enforces the restriction at call time.
     const publicSkills = skills.filter((s) => !s.definition.agent)
     const skillInfos = publicSkills.map(loadedSkillToInfo)
-    cachedDescription = formatCombinedDescription(skillInfos, commands, {
-      includeSkills: options.includeSkillsInDescription,
-    })
+    cachedDescription = formatDescription(skillInfos, commands)
     return cachedDescription
   }
 
@@ -100,6 +109,7 @@ export function createSkillTool(options: SkillLoadOptions): ToolDefinition {
         if (isPromiseLike(nativeAll)) {
           needsAsyncRefresh = true
         } else {
+          rememberNativeSkills(nativeAll)
           mergeNativeSkillInfos(skillInfos, nativeAll, options.disabledSkills)
         }
       } catch (error) {
@@ -107,16 +117,12 @@ export function createSkillTool(options: SkillLoadOptions): ToolDefinition {
       }
     }
 
-    cachedDescription = formatCombinedDescription(skillInfos, commandsForDescription, {
-      includeSkills: options.includeSkillsInDescription,
-    })
+    cachedDescription = formatDescription(skillInfos, commandsForDescription)
     if (needsAsyncRefresh) {
       void buildDescription(true)
     }
   } else if (options.commands !== undefined) {
-    cachedDescription = formatCombinedDescription([], options.commands, {
-      includeSkills: options.includeSkillsInDescription,
-    })
+    cachedDescription = formatDescription([], options.commands)
   }
 
   return tool({
@@ -145,9 +151,7 @@ export function createSkillTool(options: SkillLoadOptions): ToolDefinition {
         matchedSkill = matchSkillByName(skills, requestedName)
       }
 
-      cachedDescription = formatCombinedDescription(skills.map(loadedSkillToInfo), commands, {
-        includeSkills: options.includeSkillsInDescription,
-      })
+      cachedDescription = formatDescription(skills.map(loadedSkillToInfo), commands)
 
       if (matchedSkill) {
         await ctx?.ask({

@@ -7,6 +7,7 @@ import type { FallbackState, FallbackResult } from "./types"
 import { HOOK_NAME } from "./constants"
 import { log } from "../../shared/logger"
 import type { RuntimeFallbackConfig } from "../../config"
+import { listBrokenModels, brokenModelKey } from "../../shared/broken-models-cache"
 
 export const stringifyRuntimeModel = stringifyRuntimeFallbackModel
 export const stringifyRuntimeModelWithVariant = stringifyRuntimeFallbackModelWithVariant
@@ -40,8 +41,14 @@ export function findNextAvailableFallback(
   fallbackModels: string[],
   cooldownSeconds: number
 ): string | undefined {
+  const broken = listBrokenModels()
   for (let i = state.fallbackIndex + 1; i < fallbackModels.length; i++) {
     const candidate = fallbackModels[i]
+    const candidateKey = candidate ? brokenModelKey(candidate) : undefined
+    if (candidateKey && broken.has(candidateKey)) {
+      log(`[${HOOK_NAME}] Skipping fallback model not served by its provider`, { model: candidate, index: i })
+      continue
+    }
     if (areRuntimeFallbackModelsEquivalent(candidate, state.currentModel)) {
       log(`[${HOOK_NAME}] Skipping equivalent fallback model`, {
         model: candidate,

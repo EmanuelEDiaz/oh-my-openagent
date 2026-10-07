@@ -1,5 +1,6 @@
+// @ts-nocheck
 import { describe, expect, it } from "bun:test"
-import { formatCombinedDescription } from "./description-formatter"
+import { formatCombinedDescription } from "./zz-headtmp-formatter"
 import type { CommandInfo } from "../slashcommand/types"
 import type { SkillInfo } from "./types"
 import {

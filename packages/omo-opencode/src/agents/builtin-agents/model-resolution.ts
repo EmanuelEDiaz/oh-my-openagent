@@ -2,6 +2,7 @@ import { isKnownMissingModel } from "@oh-my-opencode/model-core"
 
 import { normalizeFallbackModels, resolveModelPipeline } from "../../shared"
 import { recordAgentRegistrationIssue, recordConfiguredModel } from "../../shared/agent-registration-report"
+import { isModelBroken } from "../../shared/broken-models-cache"
 import { isPaidModel } from "../../shared/free-model-preference"
 import { log } from "../../shared/logger"
 import { transformModelForProvider } from "../../shared/provider-model-id-transform"
@@ -106,11 +107,12 @@ export function settleConfiguredModel<TConfig extends { model?: string }>(input:
     return resolution ? keepFallbackOverRetiredModel(config, resolution, overrideModel) : config
   }
   const replacement = resolution && resolution.model !== overrideModel ? resolution.model : undefined
+  const why = isModelBroken(overrideModel) ? "is listed but not served by its provider" : "is no longer offered by its provider"
   log("[agent-registration] Configured model no longer offered, replaced", { agent, configuredModel: overrideModel, replacement })
   recordAgentRegistrationIssue({
     agent,
     status: "replaced",
-    detail: `${overrideModel} is no longer offered by its provider; uses ${replacement ?? "the session model"} (change it with /omo-models)`,
+    detail: `${overrideModel} ${why}; uses ${replacement ?? "the session model"} (change it with /omo-models)`,
     from: overrideModel,
     ...(replacement ? { to: replacement } : {}),
   })

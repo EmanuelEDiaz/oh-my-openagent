@@ -5,11 +5,6 @@ import type { CommandInfo } from "../slashcommand/types"
 
 interface CombinedDescriptionOptions {
   includeSkills?: boolean
-  /**
-   * Skills OpenCode itself already lists to the model in the system prompt's <available_skills> (its native skill
-   * discovery). Listing them here again cost every request their descriptions twice (incidents of 07-10-2026).
-   */
-  excludeSkillNames?: ReadonlySet<string>
 }
 
 function formatSkillCommand(skill: SkillInfo): string {
@@ -77,17 +72,12 @@ export function formatCombinedDescription(
   commands?: CommandInfo[],
   options: CombinedDescriptionOptions = {}
 ): string {
-  const allSkills = options.includeSkills ? deduplicatePathAliasedSkills(skills ?? []) : []
-  const excluded = new Set(Array.from(options.excludeSkillNames ?? [], normalizeSkillName))
-  const availableSkills = allSkills.filter((skill) => !excluded.has(normalizeSkillName(skill.name)))
-  const availableCommands = deduplicateCommandsForPathAliasedSkills(commands ?? [], allSkills)
-  const nativeListNote = availableSkills.length < allSkills.length
-    ? "\nSkills already in <available_skills> (system prompt) are not repeated here; load them with this tool too."
-    : ""
+  const availableSkills = options.includeSkills ? deduplicatePathAliasedSkills(skills ?? []) : []
+  const availableCommands = deduplicateCommandsForPathAliasedSkills(commands ?? [], availableSkills)
 
   if (availableSkills.length === 0 && availableCommands.length === 0) {
     if ((skills?.length ?? 0) > 0) {
-      return `${TOOL_DESCRIPTION_PREFIX}${nativeListNote}`
+      return TOOL_DESCRIPTION_PREFIX
     }
 
     return TOOL_DESCRIPTION_NO_SKILLS
@@ -102,7 +92,7 @@ export function formatCombinedDescription(
     return TOOL_DESCRIPTION_PREFIX
   }
 
-  return `${TOOL_DESCRIPTION_PREFIX}${nativeListNote}
+  return `${TOOL_DESCRIPTION_PREFIX}
 <available_items>
 Priority: project > user > opencode > builtin/plugin${options.includeSkills ? " | Skills listed before commands" : ""}
 Invoke via: skill(name="item-name") - omit leading slash for commands.

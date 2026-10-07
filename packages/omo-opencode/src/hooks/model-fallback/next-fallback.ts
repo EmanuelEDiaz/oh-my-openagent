@@ -3,6 +3,7 @@ import { readConnectedProvidersCache, readProviderModelsCache } from "../../shar
 import { selectFallbackProvider } from "../../shared/model-error-classifier"
 import { transformModelForProvider } from "../../shared/provider-model-id-transform"
 import { log } from "../../shared/logger"
+import { listBrokenModels } from "../../shared/broken-models-cache"
 import type { ModelFallbackState } from "./hook"
 
 function canonicalizeModelID(modelID: string): string {
@@ -44,6 +45,7 @@ export function getNextReachableFallback(
   thinking?: { type: "enabled" | "disabled"; budgetTokens?: number }
 } | null {
   const isReachable = createReachabilityChecker(state)
+  const broken = listBrokenModels()
 
   while (state.attemptCount < state.fallbackChain.length) {
     const attemptCount = state.attemptCount
@@ -57,6 +59,11 @@ export function getNextReachableFallback(
 
     const providerID = selectFallbackProvider(fallback.providers, state.providerID)
     const modelID = transformModelForProvider(providerID, fallback.model)
+    if (broken.has(`${providerID}/${modelID}`)) {
+      log("[model-fallback] Skipping fallback not served by its provider for session: " + sessionID + ", model: " + providerID + "/" + modelID)
+      continue
+    }
+
     const isNoOpFallback =
       providerID.toLowerCase() === state.providerID.toLowerCase()
       && canonicalizeModelID(modelID) === canonicalizeModelID(state.modelID)

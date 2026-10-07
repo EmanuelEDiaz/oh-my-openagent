@@ -6,7 +6,8 @@
  */
 export type AgentRegistrationIssue = {
   readonly agent: string
-  readonly status: "degraded" | "skipped" | "replaced"
+  /** "notice": a model setting outside the agents worth a startup warning (e.g. a paid `small_model`, plan A5). */
+  readonly status: "degraded" | "skipped" | "replaced" | "notice"
   readonly detail: string
   readonly from?: string
   readonly to?: string

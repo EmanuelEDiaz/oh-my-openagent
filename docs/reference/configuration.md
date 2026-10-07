@@ -839,7 +839,11 @@ Process hygiene is unconditional and has no config keys: a parent-liveness watch
 
 ### Runtime Fallback
 
-Auto-switches to backup models on API errors.
+Auto-switches to backup models on API errors. **On by default**: a model that is listed but not served (e.g. a 404
+"Cannot find any route"), out of quota or retired switches to the next model of the chain, and is remembered as
+"not served" for 24 h (`~/.cache/oh-my-opencode/broken-models.json`) so `/omo-models`, agent registration and later
+fallbacks skip it. Network cuts never switch models: the network guard waits and continues on the same model.
+`model_fallback` (also on by default) is the standby path and only acts when `runtime_fallback` is off.
 
 **Simple configuration** (enable/disable with defaults):
 
@@ -868,7 +872,7 @@ Auto-switches to backup models on API errors.
 
 | Option                  | Default             | Description                                                                                                                    |
 | ----------------------- | ------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `enabled`               | `false`             | Enable runtime fallback                                                                                                        |
+| `enabled`               | `true`              | Enable runtime fallback                                                                                                        |
 | `retry_on_errors`       | `[429,500,502,503,504]` | HTTP codes that trigger fallback. Also handles classified provider key errors.                                              |
 | `max_fallback_attempts` | `3`                 | Max fallback attempts per session (1–20)                                                                                       |
 | `cooldown_seconds`      | `60`                | Seconds before retrying a failed model                                                                                         |

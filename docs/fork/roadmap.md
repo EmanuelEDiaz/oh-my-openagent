@@ -111,7 +111,17 @@ retirado → siguiente gratuito con aviso; los cortes de red siguen esperando en
 `planning-log`; 98k → 49k caracteres, ~12k tokens menos por petición; copia `opencode.json.bak.2026-10-07-context`);
 herramientas `ctx_*` de context-mode ocultas a los orquestadores. Arreglos en `plans/real-use-incidents.md`.
 
-## Punto de reanudación (06-10-2026, pruebas paradas a petición del usuario)
+## Punto de reanudación (07-10-2026, parado a petición del usuario)
+**Retomar primero:** los incidentes del uso real (sección anterior; plan `plans/real-use-incidents.md`). Rama
+`fix/user-session-incidents` con un commit **WIP sin verificar** (dos agentes parados a mitad): parte A (modelos:
+clasificador 404, respaldo por defecto, `/omo-models`, retirados, `small_model`) y parte B (filtro de herramientas,
+MCP/`ctx_*` ocultos a orquestadores, descripciones). Al retomar: revisar el diff, terminar A1–A5 y B2–B6, pruebas que
+fallen antes, chequeo de tipos, sonda de contexto con la configuración real, banco antes/después, QA aislada,
+documentar, fusionar. Ya hecho y vigente: reglas de `ai-guidelines` acotadas en `~/.config/opencode/opencode.json`
+(copia `opencode.json.bak.2026-10-07-context`).
+Después, lo que sigue abajo (0.9b decisión ling vs. modelo guionizado, 0.9a, 0.16…).
+
+## Punto de reanudación anterior (06-10-2026)
 **Hecho y en `mis-mejoras`:** 4.18 `@web-researcher`, puerta Zen, arreglo de la barra lateral, 0.9b (freno de bucles,
 código y QA), 0.15 completo (red, congelamiento, kill, poca RAM, nombres de herramienta; QA 6/6 + cambio de red real),
 guardianes solo apagables desde la configuración del usuario, arreglos de la validación de `loops-hard` (avisos de

@@ -71,6 +71,22 @@ function getDetailErrorType(error: unknown): string | undefined {
   return typeof type === "string" ? type.toLowerCase() : undefined
 }
 
+/**
+ * A provider that lists a model but has no route for it answers 404 "Cannot find any route matching [POST] ..."
+ * (OpenCode Zen, 07-10-2026), others say the model is not found/served/does not exist. All mean "this model will not
+ * answer": fall back, never wait for the network (fork plan real-use-incidents A2).
+ */
+const MODEL_NOT_SERVED_PATTERNS = [
+  /cannot find any route matching/i,
+  /\bmodel\b[^\n]{0,120}?\b(?:not found|not served|does not exist|doesn['’]t exist|not exist)\b/i,
+  /\bno such model\b/i,
+  /\bunknown model\b/i,
+]
+
+export function isModelNotServedMessage(message: string): boolean {
+  return MODEL_NOT_SERVED_PATTERNS.some((pattern) => pattern.test(message))
+}
+
 function isTerminalQuotaMessage(message: string): boolean {
   if (
     /\bnon[-\s]+terminal\s+quota\b/i.test(message) ||
@@ -152,6 +168,10 @@ export function classifyRuntimeFallbackError(error: unknown): RuntimeFallbackErr
     isLocalizedQuotaExhaustionMessage(message)
   ) {
     return "quota_exceeded"
+  }
+
+  if (isModelNotServedMessage(message)) {
+    return "model_not_found"
   }
 
   return undefined

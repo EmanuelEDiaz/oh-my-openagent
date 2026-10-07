@@ -1,4 +1,5 @@
 import type { PluginInput } from "@opencode-ai/plugin";
+import { isRuntimeFallbackConfigEnabled } from "../shared/runtime-fallback-enabled";
 import type { OhMyOpenCodeConfig } from "../config";
 import type { CreatedHooks } from "../create-hooks";
 import type { Managers } from "../create-managers";
@@ -39,9 +40,7 @@ export function createEventHandler(args: {
   const isRuntimeFallbackEnabled =
     hooks.runtimeFallback !== null &&
     hooks.runtimeFallback !== undefined &&
-    (typeof pluginConfig.runtime_fallback === "boolean"
-      ? pluginConfig.runtime_fallback
-      : (pluginConfig.runtime_fallback?.enabled ?? false));
+    isRuntimeFallbackConfigEnabled(pluginConfig);
   const isModelFallbackEnabled = hooks.modelFallback !== null && hooks.modelFallback !== undefined;
   const runEventHookSafely = createEventHookRunner();
   const dispatchToHooks = createEventHookDispatcher(hooks, runEventHookSafely);

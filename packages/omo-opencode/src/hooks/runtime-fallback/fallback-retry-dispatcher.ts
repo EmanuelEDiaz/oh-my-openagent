@@ -12,10 +12,17 @@ type DispatchFallbackRetryOptions = {
   fallbackModels: string[]
   resolvedAgent?: string
   source: string
+  /** The failed model is listed by its provider but not served (model_not_found): say so in the toast. */
+  notServed?: boolean
 }
 
-function resolveDispatchMessage(result: AutoRetryDispatchOutcome, newModel: string): string {
-  const modelName = newModel.split("/").pop() || newModel
+function shortModelName(model: string): string {
+  return model.split("/").pop() || model
+}
+
+function resolveDispatchMessage(result: AutoRetryDispatchOutcome, newModel: string, notServedModel?: string): string {
+  const modelName = shortModelName(newModel)
+  if (notServedModel !== undefined) return `${shortModelName(notServedModel)} is not served → switched to ${modelName}`
   if (result.status === "queued") return `Fallback queued for ${modelName}`
   if (result.status === "possibly-accepted") return `Fallback dispatch may have been accepted for ${modelName}`
   return `Switched to ${modelName} for next request`
@@ -32,6 +39,7 @@ export async function dispatchFallbackRetry(
     return
   }
   const snapshot = snapshotFallbackState(options.state)
+  const failedModel = options.state.currentModel
   const result = prepareFallback(
     options.sessionID,
     options.state,
@@ -71,7 +79,7 @@ export async function dispatchFallbackRetry(
         .showToast({
           body: {
             title: "Model Fallback",
-            message: resolveDispatchMessage(dispatchOutcome, result.newModel),
+            message: resolveDispatchMessage(dispatchOutcome, result.newModel, options.notServed ? failedModel : undefined),
             variant: "warning",
             duration: 5000,
           },

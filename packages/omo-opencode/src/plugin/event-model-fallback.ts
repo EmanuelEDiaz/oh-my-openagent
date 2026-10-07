@@ -7,6 +7,7 @@ import {
   type ModelFallbackHook,
 } from "../hooks/model-fallback/hook";
 import { stepAsideForNetwork } from "../features/network-guard";
+import { recordIfModelNotServed } from "../hooks/runtime-fallback/model-not-served";
 import { shouldRetryError } from "../shared/model-error-classifier";
 import { AGENT_MODEL_REQUIREMENTS } from "../shared/model-requirements";
 import { extractRetryAttempt, normalizeRetryStatusMessage } from "../shared/retry-status-utils";
@@ -142,6 +143,7 @@ export function createModelFallbackEventHandler(args: {
     const currentProvider = continuation.resolveFallbackProviderID(params.sessionID, providerHint);
     const rawModel = (params.info.modelID as string | undefined) ?? SISYPHUS_MISSING_METADATA_CURRENT_MODEL_ID;
     const currentModel = normalizeFallbackModelID(rawModel);
+    if (providerHint && params.info.modelID) recordIfModelNotServed(assistantError, `${providerHint}/${rawModel}`);
     const fallbackContext = { agentName, providerID: currentProvider, dedupeProviderID: providerHint, modelID: currentModel };
     const shouldAutoContinue = args.shouldAutoRetrySession(params.sessionID) && !args.isSessionStopped(params.sessionID);
 
@@ -226,9 +228,11 @@ export function createModelFallbackEventHandler(args: {
     const parsed = extractProviderModelFromErrorMessage(params.errorMessage);
     const providerHint = (params.props?.providerID as string | undefined) || parsed.providerID;
     const currentProvider = continuation.resolveFallbackProviderID(params.sessionID, providerHint);
-    const currentModel = normalizeFallbackModelID(
-      (params.props?.modelID as string | undefined) || parsed.modelID || SISYPHUS_MISSING_METADATA_CURRENT_MODEL_ID,
-    );
+    const failedModelID = (params.props?.modelID as string | undefined) || parsed.modelID;
+    const currentModel = normalizeFallbackModelID(failedModelID || SISYPHUS_MISSING_METADATA_CURRENT_MODEL_ID);
+    if (providerHint && failedModelID) {
+      recordIfModelNotServed(params.props?.error ?? { name: params.errorName, message: params.errorMessage }, `${providerHint}/${failedModelID}`);
+    }
     const fallbackContext = { agentName, providerID: currentProvider, dedupeProviderID: providerHint, modelID: currentModel };
     const shouldAutoContinue = args.shouldAutoRetrySession(params.sessionID) && !args.isSessionStopped(params.sessionID);
 

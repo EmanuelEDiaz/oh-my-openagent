@@ -35,6 +35,8 @@ export type ModelOption = {
 export const ZEN_PROVIDER = "opencode"
 export const ZEN_FREE_CATEGORY = "OpenCode Zen · Free"
 export const ZEN_CATEGORY = "OpenCode Zen"
+/** Label for a model its provider lists but answered "not found / no route" for (fork plan real-use-incidents A2). */
+export const NOT_SERVED_LABEL = "not served"
 
 const FREE_SUFFIX_PATTERN = /(?:-free|:free)$/
 
@@ -78,6 +80,8 @@ export function buildModelOptions(
     readonly disabledProviders?: readonly string[]
     readonly exclude?: readonly string[]
     readonly describe?: (provider: string, model: ProviderModelView) => string
+    /** Models a provider lists but did not serve in the last 24 h (fork plan real-use-incidents A2). */
+    readonly notServed?: ReadonlySet<string>
   } = {},
 ): ModelOption[] {
   const disabled = new Set(options.disabledProviders ?? [])
@@ -92,7 +96,7 @@ export function buildModelOptions(
         title: model.id || key,
         value: id,
         description: options.describe?.(provider.id, model) ?? formatContext(model.limit?.context) ?? "",
-        footer: formatFooter(model),
+        footer: options.notServed?.has(id) ? NOT_SERVED_LABEL : formatFooter(model),
         category: categoryFor(provider, model),
       })
     }

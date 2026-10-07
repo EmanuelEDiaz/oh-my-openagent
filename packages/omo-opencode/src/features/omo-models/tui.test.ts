@@ -65,9 +65,10 @@ function io(saved: { agent: string; chain: readonly string[] }[]): OmoModelsConf
   } }
 }
 
-function deps(saved: { agent: string; chain: readonly string[] }[]): OmoModelsDeps {
+function deps(saved: { agent: string; chain: readonly string[] }[], notServed: readonly string[] = []): OmoModelsDeps {
   return {
     io: io(saved),
+    notServed: () => new Set(notServed),
     catalog: () => new Map(),
     external: { load: async () => ({ fetchedAt: "", benchmarks: {}, openRouter: {} }), reliability: async () => undefined },
   }
@@ -130,7 +131,8 @@ describe("/omo-models", () => {
     expect(primaryDialog?.current).toBe("opencode/big-pickle")
     expect(primaryDialog?.options.some((option) => option.value.startsWith("openai/"))).toBe(false)
     expect(saved).toEqual([{ agent: "explore", chain: ["opencode/nemotron-free", "openrouter/qwen/qwen3:free"] }])
-    expect(toasts.at(-1)).toContain("Restart OpenCode to apply")
+    expect(toasts.at(-1)).toContain("Applies from your next message")
+    expect(toasts.at(-1)).not.toContain("Restart")
     expect(details?.title).toBe("opencode/nemotron-free for explore?")
     expect(details?.options.some((option) => option.category === "Fit for explore")).toBe(true)
     expect(details?.options.some((option) => option.title.startsWith("Free on OpenCode Zen only") && option.category === "Free tier")).toBe(true)
@@ -157,6 +159,42 @@ describe("/omo-models", () => {
     expect(fallbackDialog?.options[0]?.value).toBe("__omo_models_done__")
     expect(fallbackDialog?.options.map((option) => option.value)).not.toContain("opencode/big-pickle")
     expect(saved).toEqual([{ agent: "oracle", chain: ["opencode/big-pickle", "opencode/nemotron-free", "opencode/claude-opus-5", "openrouter/qwen/qwen3:free"] }])
+  })
+})
+
+describe("/omo-models live apply and not-served models (real-use incidents A1, A2)", () => {
+  test("saving a chain with a single model warns that it has no fallback", () => {
+    // given
+    const saved: { agent: string; chain: readonly string[] }[] = []
+    const { api, toasts, choose } = fakeApi()
+
+    // when
+    openOmoModels(api, deps(saved))
+    choose("oracle")
+    choose("opencode/big-pickle")
+    choose("__omo_models_confirm__")
+    choose("__omo_models_done__")
+
+    // then
+    expect(saved).toEqual([{ agent: "oracle", chain: ["opencode/big-pickle"] }])
+    expect(toasts.at(-1)).toContain("Applies from your next message")
+    expect(toasts.at(-1)).toContain("No fallback")
+  })
+
+  test("a model listed but not served is labelled 'not served' in the model list and the agent list", () => {
+    // given
+    const { api, dialogs, choose } = fakeApi()
+
+    // when
+    openOmoModels(api, deps([], ["opencode/big-pickle"]))
+    const agents = dialogs[0]
+    choose("explore")
+    const primaryDialog = dialogs.at(-1)
+
+    // then
+    expect(agents?.options.find((option) => option.value === "explore")?.footer).toBe("broken")
+    expect(primaryDialog?.options.find((option) => option.value === "opencode/big-pickle")?.footer).toBe("not served")
+    expect(primaryDialog?.current).toBeUndefined()
   })
 })
 

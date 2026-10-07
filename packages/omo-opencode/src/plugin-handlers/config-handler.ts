@@ -20,6 +20,8 @@ import {
 } from "../features/claude-code-session-state";
 import { setDefaultAgentForSort } from "../shared/agent-sort-shim";
 import { getConfiguredDefaultAgent } from "./agent-config-assembly";
+import { recordLoadedAgentModels } from "../shared/loaded-agent-models";
+import { applySmallModelDefault } from "./small-model";
 
 export { resolveCategoryConfig } from "./category-config-resolver";
 
@@ -150,6 +152,8 @@ export function createConfigHandler(deps: ConfigHandlerDeps) {
           };
     }
 
+    recordLoadedAgentModels(agentResult);
+    applySmallModelDefault({ config, preferFreeModels: pluginConfig.prefer_free_models === true });
     applyToolConfig({ config, pluginConfig, agentResult });
     await applyMcpConfig({ config, pluginConfig, ctx, pluginComponents });
     await applyCommandConfig({ config, pluginConfig, ctx, pluginComponents });

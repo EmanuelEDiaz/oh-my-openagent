@@ -12,6 +12,7 @@ import { subagentSessions } from "../../features/claude-code-session-state"
 import { resolveMessageEventSessionID } from "../../shared/event-session-id"
 import { normalizeModelToCanonicalString } from "./normalize-model"
 import { stepAsideForNetwork } from "../../features/network-guard"
+import { modelFromEventInfo, recordIfModelNotServed } from "./model-not-served"
 
 export { hasVisibleAssistantResponse } from "./visible-assistant-response"
 
@@ -161,6 +162,7 @@ export function createMessageUpdateHandler(deps: HookDeps, helpers: AutoRetryHel
       const fallbackModels = getFallbackModelsForSession(sessionID, resolvedAgent, pluginConfig)
 
       if (fallbackModels.length === 0) {
+        recordIfModelNotServed(error, modelFromEventInfo(info, model) ?? state?.currentModel)
         if (
           subagentSessions.has(sessionID) &&
           classifyErrorType(error) === "quota_exceeded"
@@ -221,12 +223,15 @@ export function createMessageUpdateHandler(deps: HookDeps, helpers: AutoRetryHel
         sessionRetryInFlight.delete(sessionID)
       }
 
+      const notServed = recordIfModelNotServed(error, modelFromEventInfo(info, model) ?? state.currentModel)
+
       await dispatchFallbackRetry(deps, helpers, {
         sessionID,
         state,
         fallbackModels,
         resolvedAgent,
         source: "message.updated",
+        notServed,
       })
     }
   }

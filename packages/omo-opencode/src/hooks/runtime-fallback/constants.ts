@@ -11,7 +11,9 @@ import type { RuntimeFallbackConfig } from "../../config"
  * Default configuration values for runtime fallback
  */
 export const DEFAULT_CONFIG: Required<RuntimeFallbackConfig> = {
-  enabled: false,
+  // On by default (fork plan real-use-incidents A3): a model that is not served, out of quota or retired switches to
+  // the next one in the chain. Network cuts never get here: the network guard waits them out on the same model (0.15).
+  enabled: true,
   retry_on_errors: [429, 500, 502, 503, 504],
   max_fallback_attempts: 3,
   cooldown_seconds: 60,
