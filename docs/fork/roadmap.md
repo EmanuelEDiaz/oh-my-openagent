@@ -99,8 +99,17 @@ merge --no-ff a mis-mejoras → actualizar este roadmap`.
    `ling-3.1-flash-free` pero la sesión siguió igual); el usuario tuvo que usar `/models`.
 4. (De paso) el título de sesión usa `opencode/gpt-5.4-nano`, **de pago** (0.14); varios agentes siguen configurados con
    modelos retirados (`deepseek-v4-flash-free`, `mimo-v2.5-free`).
-Investigación en curso (registros reales de la sesión `ses_ee7fddc21ffee0KX6v5DYfkf7Z`); arreglo, pruebas y QA antes de
-seguir con el resto.
+**Causas (investigación del código y de los registros):** respaldo de modelos **apagado por defecto**
+(`runtime_fallback`, `model_fallback`) y el 404 "Cannot find any route" no se clasificaba como modelo no disponible;
+`/omo-models` guarda bien pero el plugin solo lee los modelos al arrancar y la interfaz manda el modelo cargado al
+inicio en cada mensaje; el selector no comprueba si un modelo responde; el modelo pequeño (títulos) es el de pago por
+defecto de OpenCode; contexto: tus reglas `ai-guidelines` (~24,6k), MCP (~12–18k), Sisyphus (~9,6k), skills listados
+dos veces (~9k), context-mode (~5,6k), y un filtro de herramientas del plugin que OpenCode ignora.
+**Decisiones del usuario (07-10-2026):** respaldo de modelos **encendido por defecto** (modelo no atendido, sin cuota o
+retirado → siguiente gratuito con aviso; los cortes de red siguen esperando en el mismo modelo); reglas de
+`ai-guidelines` acotadas (hecho: sin `languages/`, `frameworks/`, `07-restful-api-design`, `project-map`,
+`planning-log`; 98k → 49k caracteres, ~12k tokens menos por petición; copia `opencode.json.bak.2026-10-07-context`);
+herramientas `ctx_*` de context-mode ocultas a los orquestadores. Arreglos en `plans/real-use-incidents.md`.
 
 ## Punto de reanudación (06-10-2026, pruebas paradas a petición del usuario)
 **Hecho y en `mis-mejoras`:** 4.18 `@web-researcher`, puerta Zen, arreglo de la barra lateral, 0.9b (freno de bucles,
