@@ -13,19 +13,20 @@ Generado por `script/fork/bench/run.ts` (plan: `docs/fork/plans/test-bench.md`).
 | 2026-10-06 | smoke-nemotron-3.5-lightning-free | all | opencode/nemotron-3.5-lightning-free | 100 % | — | 104612 | 0 |
 | 2026-10-06 | smoke-ling-3.1-flash-free | all | opencode/ling-3.1-flash-free | 100 % | — | 40709 | 0 |
 | 2026-10-06 | lh-off-nemotron-3.5-lightning-free | all | opencode/nemotron-3.5-lightning-free | 86 % | — | 79198 | 0 |
+| 2026-10-07 | lh-off-ling-3.1-flash-free | all | opencode/ling-3.1-flash-free | 29 % | — | 50990 | 0 |
 <!-- history:end -->
 
-> **Aviso:** la última ejecución usó modelos distintos que la anterior (opencode/ling-3.1-flash-free → opencode/nemotron-3.5-lightning-free); no son comparables.
+> **Aviso:** la última ejecución usó modelos distintos que la anterior (opencode/nemotron-3.5-lightning-free → opencode/ling-3.1-flash-free); no son comparables.
 
-## Última ejecución — 2026-10-06, lh-off-nemotron-3.5-lightning-free
-- k = 3; turnos medios 13.4; tiempo medio 263 s.
+## Última ejecución — 2026-10-07, lh-off-ling-3.1-flash-free
+- k = 3; turnos medios 7.0; tiempo medio 238 s.
 
 | Tarea | Pasa | pass^k | Fallos infra | Correctores que fallan |
 |---|---|---|---|---|
 | loops-hard/stale-shadow | 1/1 | — | 0 | — |
-| loops-hard/codegen-preload | 1/1 | — | 0 | — |
-| loops-hard/wrapper-rethrow | 0/1 | — | 0 | outcome:hiddenTests ×1 |
-| loops-hard/round-half | 1/1 | — | 0 | — |
-| loops-hard/tz-month | 1/1 | — | 0 | — |
-| loops-hard/bigint-json | 1/1 | — | 0 | — |
-| loops-hard/shallow-defaults | 1/1 | — | 0 | — |
+| loops-hard/codegen-preload | 0/1 | — | 0 | outcome:hiddenTests ×1 |
+| loops-hard/wrapper-rethrow | 1/1 | — | 0 | — |
+| loops-hard/round-half | 0/1 | — | 0 | — |
+| loops-hard/tz-month | 0/1 | — | 0 | outcome:hiddenTests ×1 |
+| loops-hard/bigint-json | 0/1 | — | 0 | — |
+| loops-hard/shallow-defaults | 0/1 | — | 0 | outcome:hiddenTests ×1 |
