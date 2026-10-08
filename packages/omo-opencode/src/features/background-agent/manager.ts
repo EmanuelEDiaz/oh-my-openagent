@@ -126,6 +126,7 @@ import type {
 } from "./types"
 import { getStallWatchdog, stallErrorMessage } from "../stall-watchdog"
 import { isSessionRetained } from "../resume/retention"
+import { clearBackgroundSessionOwner, setBackgroundSessionOwner } from "../../shared/background-session-owner"
 
 type OpencodeClient = PluginInput["client"]
 
@@ -314,6 +315,8 @@ export class BackgroundManager {
     this.enableParentSessionNotifications = options?.enableParentSessionNotifications ?? true
     this.modelFallbackControllerAccessor = options?.modelFallbackControllerAccessor
     this.logger = options?.log ?? log
+    // This manager owns the fallback of every session it tracks; runtime-fallback steps aside for them.
+    setBackgroundSessionOwner(this.ownsSession)
     this.memoryGate = options?.memoryGate
     this.parentWakeNotifier = new ParentWakeNotifier(
       {
@@ -1196,6 +1199,8 @@ The fallback retry session is now created and can be inspected directly.
 
     return result
   }
+
+  private readonly ownsSession = (sessionID: string): boolean => this.findBySession(sessionID) !== undefined
 
   findBySession(sessionID: string): BackgroundTask | undefined {
     for (const task of this.tasks.values()) {
@@ -3207,6 +3212,7 @@ The task was re-queued on a fallback model after a retryable failure.
   async shutdown(): Promise<void> {
     if (this.shutdownTriggered) return
     this.shutdownTriggered = true
+    clearBackgroundSessionOwner(this.ownsSession)
     log("[background-agent] Shutting down BackgroundManager")
     this.stopPolling()
     const trackedSessionIDs = new Set<string>()

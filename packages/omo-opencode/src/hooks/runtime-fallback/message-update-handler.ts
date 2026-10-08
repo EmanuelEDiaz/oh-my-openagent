@@ -13,6 +13,7 @@ import { resolveMessageEventSessionID } from "../../shared/event-session-id"
 import { normalizeModelToCanonicalString } from "./normalize-model"
 import { stepAsideForNetwork } from "../../features/network-guard"
 import { modelFromEventInfo, recordIfModelNotServed } from "./model-not-served"
+import { isBackgroundTaskSession } from "../../shared/background-session-owner"
 
 export { hasVisibleAssistantResponse } from "./visible-assistant-response"
 
@@ -218,7 +219,7 @@ export function createMessageUpdateHandler(deps: HookDeps, helpers: AutoRetryHel
         }
       }
 
-      if (classifyErrorType(error) === "quota_exceeded") {
+      if (classifyErrorType(error) === "quota_exceeded" && !isBackgroundTaskSession(sessionID)) {
         await helpers.abortSessionRequest(sessionID, "message.updated.quota-fallback")
         sessionRetryInFlight.delete(sessionID)
       }

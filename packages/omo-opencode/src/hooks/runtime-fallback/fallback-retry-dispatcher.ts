@@ -5,6 +5,7 @@ import { log } from "../../shared/logger"
 import { prepareFallback } from "./fallback-state"
 import { restoreFallbackState, snapshotFallbackState } from "./fallback-state-snapshot"
 import { getNetworkGuard } from "../../features/network-guard"
+import { isBackgroundTaskSession } from "../../shared/background-session-owner"
 
 type DispatchFallbackRetryOptions = {
   sessionID: string
@@ -33,6 +34,12 @@ export async function dispatchFallbackRetry(
   helpers: AutoRetryHelpers,
   options: DispatchFallbackRetryOptions,
 ): Promise<void> {
+  // A background task's session belongs to the BackgroundManager, which relaunches the task on its own chain
+  // (see shared/background-session-owner.ts); a second switch here would double the fallback.
+  if (isBackgroundTaskSession(options.sessionID)) {
+    log(`[${HOOK_NAME}] Fallback skipped - background task session is handled by the BackgroundManager`, { sessionID: options.sessionID, source: options.source })
+    return
+  }
   // Timeouts can fire while the session waits for the network; a fallback then would only burn the chain.
   if (getNetworkGuard()?.isWaiting(options.sessionID)) {
     log(`[${HOOK_NAME}] Fallback skipped - session is waiting for the network`, { sessionID: options.sessionID, source: options.source })

@@ -2,7 +2,8 @@ import type { BackgroundTask, LaunchInput } from "./types"
 import type { FallbackEntry } from "../../shared/model-requirements"
 import type { ConcurrencyManager } from "./concurrency"
 import type { OpencodeClient, QueueItem } from "./constants"
-import { isProviderExhaustionFallbackEligible } from "@oh-my-opencode/model-core"
+import { classifyRuntimeFallbackError, isProviderExhaustionFallbackEligible } from "@oh-my-opencode/model-core"
+import { listBrokenModels, markModelBroken } from "../../shared/broken-models-cache"
 import { log, readConnectedProvidersCache, readProviderModelsCache } from "../../shared"
 import {
   shouldRetryError,
@@ -82,6 +83,12 @@ export async function tryFallbackRetry(args: {
     deps.log("[background-agent] Network cut; no fallback", { taskId: task.id, source, errorMessage: errorInfo.message?.slice(0, 100) })
     return false
   }
+  // A model listed but not served (404 "Cannot find any route", fork plan real-use-incidents A2) is remembered for
+  // 24 h whatever happens next: this path owns background sessions, runtime-fallback skips them.
+  if (task.model && classifyRuntimeFallbackError(errorInfo) === "model_not_found") {
+    markModelBroken(`${task.model.providerID}/${task.model.modelID}`, errorInfo.message ?? "model not found")
+  }
+  const notServed = listBrokenModels()
   const fallbackChain = task.fallbackChain
   const canUseProviderExhaustionFallback = deps.isProviderExhaustionFallbackEligible(errorInfo)
   const canRetry =
@@ -127,6 +134,10 @@ export async function tryFallbackRetry(args: {
       !!task.model &&
       candidateProviderID.toLowerCase() === task.model.providerID.toLowerCase() &&
       canonicalizeModelID(candidateModelID) === canonicalizeModelID(task.model.modelID)
+    if (notServed.has(`${candidateProviderID}/${candidateModelID}`)) {
+      deps.log("[background-agent] Skipping fallback not served by its provider:", { taskId: task.id, source, model: candidate.model })
+      continue
+    }
     if (isNoOpFallback) {
       deps.log("[background-agent] Skipping no-op fallback:", {
         taskId: task.id,
