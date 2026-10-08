@@ -47,4 +47,11 @@ describe("createDelegateTaskPresentation", () => {
       expect(CATEGORY_PROMPT_APPENDS[category]).not.toContain("<Caller_Warning>")
     }
   })
+
+  test("#given every request carries it #when rendered with the builtin categories #then the static text stays compact (incidents 07-10-2026)", () => {
+    const description = createDelegateTaskPresentation({}).description
+    expect(description.length).toBeLessThan(4000)
+    expect(description).toContain("EXACTLY ONE of category or subagent_type")
+    expect(description).toContain("Prompts MUST be in English.")
+  })
 })

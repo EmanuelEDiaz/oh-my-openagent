@@ -9961,6 +9961,15 @@
     "zen_free_gate": {
       "type": "boolean"
     },
+    "context_budget": {
+      "type": "object",
+      "properties": {
+        "orchestrator_minimal_tools": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
     "team_mode": {
       "type": "object",
       "properties": {
