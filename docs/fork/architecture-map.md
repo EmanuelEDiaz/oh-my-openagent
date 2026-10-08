@@ -12,103 +12,92 @@ abierta) · ⬜ **pendiente**.
 flowchart TB
     U([Usuario])
 
-    subgraph UI["Interfaz (TUI)"]
-        SB["Barra lateral<br/>(estado, conexión)"]:::done
-        OMOM["/omo-models<br/>(elegir modelos)"]:::wip
-        TOAST["Avisos y tarjetas<br/>de reanudación"]:::done
-        LAB["Laboratorio visual<br/>y lista de subagentes (7.x)"]:::todo
-        MERM["Mermaid dibujado<br/>en el chat (0.19)"]:::todo
-        GVIS["Guardianes visibles<br/>(0.18)"]:::todo
+    subgraph UI["Interfaz"]
+        SB["Barra lateral"]:::done
+        TOAST["Avisos y reanudación"]:::done
+        OMOM["/omo-models"]:::wip
+        MERM["Mermaid en el chat · 0.19"]:::todo
+        GVIS["Guardianes visibles · 0.18"]:::todo
+        LAB["Laboratorio visual · 7.x"]:::todo
     end
 
-    subgraph TAB["Orquestadores (agentes de tab): planifican y delegan"]
+    subgraph TAB["Orquestadores · agentes de tab · planifican y delegan"]
         SIS["Sisyphus"]:::done
         HEP["Hephaestus"]:::done
-        ATL["Atlas<br/>(ejecuta planes)"]:::done
-        PRO["Prometheus<br/>(planifica)"]:::done
-        ARCH["Planificador arquitecto<br/>FR/NFR/US/ADR + matriz (4.16)"]:::todo
-        ROUTE["Uso obligatorio de<br/>especialistas (4.19)"]:::todo
+        ATL["Atlas"]:::done
+        PRO["Prometheus"]:::done
+        ARCH["Planificador arquitecto · 4.16"]:::todo
+        ROUTE["Uso obligatorio · 4.19"]:::todo
     end
 
-    subgraph SPEC["Especialistas '@' (atómicos, no delegan)"]
+    subgraph SPEC["Especialistas @ · atómicos"]
         WR["@web-researcher"]:::done
         EXP["@explore"]:::wip
-        REST["Resto del plantel:<br/>librarian, verifier, test-writer,<br/>debugger, git-committer, revisores…<br/>(4.2–4.15)"]:::todo
-        EXPL["@explainer (4.25)"]:::todo
-        ADV["Adversarios:<br/>@breaker, @mutant,<br/>@plan-attacker (4.21–4.23)"]:::todo
+        EXPL["@explainer · 4.25"]:::todo
+        REST["Resto del plantel · 4.2–4.15"]:::todo
+        ADV["Adversarios · 4.21–4.23"]:::todo
     end
 
-    subgraph GUARD["Guardianes por código (el modelo no puede saltárselos)"]
-        TI["Integridad de tests (0.9a)"]:::done
-        ED["Errores de tipos nuevos (0.9a)"]:::done
-        LB["Freno de bucles + tope<br/>de reintentos (0.9b)"]:::wip
-        TG["Guardián de tipos y<br/>errores tragados (0.9c)"]:::todo
-        EVG["Evidencia y citas (1.5)"]:::done
-        CG["Bloqueo de commits<br/>sin pruebas (0.16)"]:::todo
-        GU["Guardianes solo se apagan<br/>desde config del usuario"]:::done
-        RG["Reglas del proyecto<br/>aprobadas (4.5)"]:::todo
+    subgraph GUARD["Guardianes por código"]
+        TI["Tests · 0.9a"]:::done
+        ED["Errores de tipos · 0.9a"]:::done
+        EVG["Evidencia y citas · 1.5"]:::done
+        GU["Apagar solo desde tu config"]:::done
+        LB["Freno de bucles · 0.9b"]:::wip
+        TG["Tipos y catch vacíos · 0.9c"]:::todo
+        CG["Commit sin pruebas · 0.16"]:::todo
+        RG["Reglas aprobadas · 4.5"]:::todo
     end
 
-    subgraph RES["Resiliencia (que nada se pierda)"]
-        STALL["Cuelgues del modelo (0.8)"]:::done
-        NET["Red, congelamiento, kill,<br/>poca RAM (0.15)"]:::done
-        HDR["Límite al primer byte<br/>y avisos de procesos"]:::done
-        TNR["Reparación de nombres<br/>de herramienta"]:::done
-        RESUME["Reanudar con cualquier texto"]:::done
+    subgraph BASE["Soporte"]
+        subgraph RES["Resiliencia"]
+            STALL["Cuelgues · 0.8"]:::done
+            NET["Red, RAM, kill · 0.15"]:::done
+            TNR["Nombres de herramienta"]:::done
+        end
+        subgraph MODEL["Modelos"]
+            FREE["Gratuitos · 0.5"]:::done
+            RET["Retirados · 0.7"]:::done
+            ZEN["Puerta Zen"]:::done
+            FB["Respaldo y no atendidos"]:::wip
+        end
+        subgraph CTX["Contexto y memoria"]
+            KN["Índice y decisiones · 1.2–1.4"]:::done
+            LOSS["Compactación sin pérdida · 1.6"]:::done
+            BUD["Presupuesto de contexto · 0.13"]:::wip
+            SK["Skills bajo demanda · 4.20"]:::todo
+            CLOOP["Compactación sin bucles · 0.17"]:::todo
+        end
     end
 
-    subgraph MODEL["Modelos (gratuitos primero)"]
-        FREE["Preferir gratuitos (0.5)"]:::done
-        RET["Modelos retirados (0.7)"]:::done
-        ZEN["Puerta Zen gratis"]:::done
-        FB["Respaldo encendido +<br/>modelos no atendidos"]:::wip
-        SMALL["Modelo pequeño gratuito<br/>para títulos"]:::wip
-    end
-
-    subgraph CTX["Contexto y memoria"]
-        KN["Índice del proyecto y<br/>sesiones (1.2–1.3)"]:::done
-        DEC["Decisiones citadas (1.4)"]:::done
-        LOSS["Compactación sin pérdida (1.6)"]:::done
-        BUD["Presupuesto de contexto (0.13)"]:::wip
-        SK["Skills bajo demanda<br/>para todos (regla 16, 4.20)"]:::todo
-        CLOOP["Compactación sin bucles (0.17a)"]:::todo
-        TOP["Varios temas (0.17b)"]:::todo
-    end
-
-    subgraph MEAS["Medición y pruebas"]
-        BENCH["Banco con modelos reales (3.0)"]:::done
+    subgraph MEAS["Medición"]
+        BENCH["Banco · 3.0"]:::done
         QA["QA aislada"]:::done
-        SUITE["Suite de integración<br/>acumulativa (0.16)"]:::todo
-        MATRIX["Matriz de integración (5.2)"]:::todo
+        SUITE["Suite de integración · 0.16"]:::todo
+        MATRIX["Matriz · 5.2"]:::todo
     end
 
     U --> UI
-    U --> TAB
+    UI --> TAB
     TAB -- "delegan en" --> SPEC
-    PRO --> ARCH
-    ARCH -. "pide variantes" .-> EXPL
-    ROUTE -. "obliga a" .-> SPEC
-    TAB -- "vigilados por" --> GUARD
     SPEC -- "vigilados por" --> GUARD
-    TAB --> RES
-    SPEC --> RES
-    TAB -- "eligen modelo por" --> MODEL
-    SPEC -- "eligen modelo por" --> MODEL
-    TAB --> CTX
-    SPEC --> CTX
-    LB -- "investiga con" --> WR
-    LB -- "comparte tope con" --> STALL
-    NET -- "deja tarjeta para" --> RESUME
-    GUARD -- "estado visible en" --> GVIS
-    RES -- "estado en" --> SB
-    MEAS -. "mide" .-> GUARD
-    MEAS -. "mide" .-> SPEC
-    MEAS -. "mide" .-> CTX
+    GUARD -- "se apoyan en" --> BASE
+    MEAS -. "mide todo" .-> GUARD
 
-    classDef done fill:#1f7a3a,stroke:#0d3d1c,color:#ffffff
-    classDef wip fill:#c98a00,stroke:#6b4a00,color:#ffffff
-    classDef todo fill:#d9d9d9,stroke:#8a8a8a,color:#222222
+    classDef done fill:#c8ecd3,stroke:#1f7a3a,stroke-width:2px,color:#0d2e18
+    classDef wip fill:#ffe6a8,stroke:#b87d00,stroke-width:2px,color:#3d2a00
+    classDef todo fill:#ececec,stroke:#9a9a9a,stroke-dasharray:4 3,color:#3a3a3a
 ```
+
+
+**Relaciones finas entre piezas** (fuera del diagrama para que se lea):
+- Los guardianes vigilan tanto a los orquestadores como a los especialistas.
+- El freno de bucles investiga con `@web-researcher` y comparte el tope de reintentos con el vigilante de cuelgues.
+- Un corte de red, congelamiento o kill deja una tarjeta y una nota que se entrega con tu siguiente mensaje.
+- El planificador arquitecto pedirá las variantes a `@explainer`.
+- El estado de la conexión aparece en la barra lateral; el de los guardianes aparecerá con 0.18.
+
+Versión ampliable sin internet: `docs/fork/architecture-map.html` (solo local, fuera de git).
 
 ## 2. Qué pasa con cada petición (de arriba abajo)
 
