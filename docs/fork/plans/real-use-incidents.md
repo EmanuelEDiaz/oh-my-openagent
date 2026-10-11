@@ -159,3 +159,9 @@ atendidos, el aviso de arranque dice "listado pero no atendido", y `oh-my-openag
   las cadenas y acción para limpiarlos. **Verificación obligatoria en la interfaz real** (regla 17): tmux + registros de
   OpenCode (`script/fork/qa/tui-driver.ts`), con casos: cambio normal, elección deliberada con `/models` que se respeta,
   sesión reanudada y agente con modelo retirado.
+- **Configuración del usuario corregida (10-10-2026, con su permiso):** quitados de `~/.omo/omo.jsonc` los modelos
+  retirados (`deepseek-v4-flash-free`, `north-mini-code-free`, `laguna-s-2.1-free`, `mimo-v2.5-free`, presentes en 17 de
+  19 cadenas; 5 cadenas se habían quedado sin ningún modelo vivo). Todas las cadenas tienen ahora principal + respaldo
+  gratuitos y activos: `sisyphus` ling-3.1-flash-free → big-pickle, `prometheus` mimo-v2.6-flash-free → big-pickle, el
+  resto big-pickle → nemotron-3.5-lightning-free. Copia: `~/.omo/omo.jsonc.bak.2026-10-10-retired-models`. Surte efecto
+  al reiniciar OpenCode.
