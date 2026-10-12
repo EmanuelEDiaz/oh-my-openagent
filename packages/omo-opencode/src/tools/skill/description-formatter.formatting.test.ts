@@ -91,3 +91,15 @@ describe("formatCombinedDescription with skills OpenCode already lists (incident
     expect(result).not.toContain("short debugging command")
   })
 })
+
+describe("synced copies of skills are listed once (real config, 12-10-2026)", () => {
+  it("drops synced/<id>/<name> when <name> is listed or native", () => {
+    const skills: SkillInfo[] = [makeSkill("synced/abc_def/docx"), makeSkill("synced/abc_def/redux"), makeSkill("git-master"), makeSkill("synced/abc_def/git-master")]
+    const result = formatCombinedDescription(skills, [], { includeSkills: true, excludeSkillNames: new Set(["docx"]) })
+    expect(result).not.toContain("synced/abc_def/docx")
+    expect(result).not.toContain("synced/abc_def/git-master")
+    expect(result).toContain("/git-master")
+    // a synced skill with no bare twin stays: it is the only way to reach it
+    expect(result).toContain("synced/abc_def/redux")
+  })
+})

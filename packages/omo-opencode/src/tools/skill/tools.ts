@@ -25,6 +25,7 @@ import {
   mergeNativeSkills,
 } from "./native-skills"
 
+import { liveSkillDescription } from "./live-description"
 export function createSkillTool(options: SkillLoadOptions): ToolDefinition {
   let cachedDescription: string | null = null
   // Skills OpenCode lists itself in <available_skills>; the description does not repeat them.
@@ -124,6 +125,11 @@ export function createSkillTool(options: SkillLoadOptions): ToolDefinition {
   } else if (options.commands !== undefined) {
     cachedDescription = formatDescription([], options.commands)
   }
+
+  liveSkillDescription.set(() => {
+    if (cachedDescription === null) void buildDescription()
+    return cachedDescription ?? undefined
+  })
 
   return tool({
     get description() {

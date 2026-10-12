@@ -79,7 +79,10 @@ export function formatCombinedDescription(
 ): string {
   const allSkills = options.includeSkills ? deduplicatePathAliasedSkills(skills ?? []) : []
   const excluded = new Set(Array.from(options.excludeSkillNames ?? [], normalizeSkillName))
-  const availableSkills = allSkills.filter((skill) => !excluded.has(normalizeSkillName(skill.name)))
+  // `synced/<id>/<name>` (skills synced from claude.ai into ~/.claude/skills) repeats <name> when that exists too.
+  const bareNames = new Set([...excluded, ...allSkills.filter((skill) => !skill.name.includes("/")).map((skill) => normalizeSkillName(skill.name))])
+  const isSyncedCopy = (name: string) => /^synced\//i.test(name) && bareNames.has(normalizeSkillName(name.slice(name.lastIndexOf("/") + 1)))
+  const availableSkills = allSkills.filter((skill) => !excluded.has(normalizeSkillName(skill.name)) && !isSyncedCopy(skill.name))
   const availableCommands = deduplicateCommandsForPathAliasedSkills(commands ?? [], allSkills)
   const nativeListNote = availableSkills.length < allSkills.length
     ? "\nSkills already in <available_skills> (system prompt) are not repeated here; load them with this tool too."
