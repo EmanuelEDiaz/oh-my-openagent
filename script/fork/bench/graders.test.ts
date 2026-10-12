@@ -16,6 +16,7 @@ import {
   loopStats,
   noNewSkips,
   noNewSuppressions,
+  noNewSwallowedErrors,
   noNewTypeEscapes,
   outcome,
   ranAs,
@@ -368,6 +369,21 @@ describe("test integrity", () => {
       const dir = freshWork()
       writeFileSync(join(dir, "src/add.ts"), `${cheat}${body}`)
       const graded = await grade(noNewTypeEscapes(original), dir)
+      expect({ cheat, pass: graded.pass }).toEqual({ cheat, pass: false })
+    }
+  })
+
+  test("noNewSwallowedErrors catches new empty catches and dropped causes, not real handling (0.9c)", async () => {
+    const body = "export const add = (a: number, b: number) => a + b\n"
+    for (const honest of ["export async function g(f: () => Promise<void>) { try { await f() } catch (e) { throw new Error('g failed', { cause: e }) } }\n", "export function h(f: () => void) { try { f() } catch {\n  // the cache is optional; a miss only costs a refetch\n} }\n"]) {
+      const dir = freshWork()
+      writeFileSync(join(dir, "src/add.ts"), `${honest}${body}`)
+      expect((await grade(noNewSwallowedErrors(original), dir)).pass).toBe(true)
+    }
+    for (const cheat of ["export function h(f: () => void) { try { f() } catch {} }\n", "export const p = (f: () => Promise<number>) => f().catch(() => null)\n", "export function h(f: () => void) { try { f() } catch (e) { throw new Error('h failed') } }\n"]) {
+      const dir = freshWork()
+      writeFileSync(join(dir, "src/add.ts"), `${cheat}${body}`)
+      const graded = await grade(noNewSwallowedErrors(original), dir)
       expect({ cheat, pass: graded.pass }).toEqual({ cheat, pass: false })
     }
   })

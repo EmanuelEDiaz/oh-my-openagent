@@ -122,7 +122,7 @@ export function createTestIntegrityGuard(deps: GuardDeps) {
             typeCheckAfter.add(change.path)
             continue
           }
-          const findings = typeErrorFindings(change.path, content.before, content.after)
+          const findings = typeErrorFindings(rel(change.path), content.before, content.after)
           if (findings.length > 0) throw new Error(typeMessage(change.path, findings))
         }
       }
@@ -168,7 +168,7 @@ export function createTestIntegrityGuard(deps: GuardDeps) {
         for (const change of entry.changes) {
           const before = entry.originals.get(change.path)
           if (entry.typeCheckAfter.has(change.path) && !unlocked(root, change.path)) {
-            const findings = typeErrorFindings(change.path, before ?? "", readText(change.path) ?? "")
+            const findings = typeErrorFindings(rel(change.path), before ?? "", readText(change.path) ?? "")
             if (findings.length > 0) {
               if (before === undefined) rmSync(change.path, { force: true })
               else writeFileSync(change.path, before)

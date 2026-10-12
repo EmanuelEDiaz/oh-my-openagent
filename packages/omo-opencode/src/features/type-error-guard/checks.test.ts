@@ -56,6 +56,8 @@ describe("swallowed errors", () => {
     ["promise catch with an empty arrow", "fetchIt().catch(() => {})"],
     ["promise catch returning undefined", "fetchIt().catch((e) => undefined)"],
     ["a useless comment does not explain anything", "try { run() } catch (e) { // ignore\n}"],
+    ["catch returning a default without looking at the error", "try { return parse(text) } catch { return DEFAULTS }"],
+    ["catch returning a fallback call, error unused", "try { return load() } catch (error) { return fallback() }"],
   ])("%s is blocked", (_name, after) => {
     expect(rules("/p/src/a.ts", "", after)).toContain("swallowed-error")
   })
@@ -71,6 +73,8 @@ describe("swallowed errors", () => {
     ["an explained, intentional swallow", "try { rmSync(tmp) } catch {\n  // the temp dir may already be gone; nothing to clean\n}"],
     ["catch with nested blocks that handles the error", "try { run() } catch (e) { if (isRetryable(e)) { retry() } else { throw e } }"],
     ["the word catch inside a string", "const s = 'try { } catch (e) {}'"],
+    ["a returned value built from the error", "try { return { ok: true, value: run() } } catch (e) { return { ok: false, error: e } }"],
+    ["an explained fallback", "try { return readCache() } catch {\n  // a cold cache is normal on first start\n  return {}\n}"],
   ])("%s is fine", (_name, after) => {
     expect(rules("/p/src/a.ts", "", after)).toEqual([])
   })
@@ -85,6 +89,9 @@ describe("swallowed errors", () => {
     expect(rules("/p/app/run.py", "", "try:\n    run()\nexcept Exception as e:\n    pass\n")).toContain("swallowed-error")
     expect(rules("/p/app/run.py", "", "try:\n    run()\nexcept Exception as e:\n    log.exception('run failed')\n    raise\n")).toEqual([])
     expect(rules("/p/app/run.py", "", "try:\n    os.remove(p)\nexcept FileNotFoundError:\n    pass  # already removed by the cleanup job\n")).toEqual([])
+    expect(rules("/p/app/run.py", "", "try:\n    return load()\nexcept Exception:\n    return DEFAULTS\n")).toContain("swallowed-error")
+    expect(rules("/p/app/run.py", "", "try:\n    return table[key]\nexcept KeyError:\n    return default\n")).toEqual([])
+    expect(rules("/p/app/run.py", "", "try:\n    os.remove(p)\nexcept FileNotFoundError:\n    pass\n")).toEqual([])
   })
 
   test("Go: discarded error", () => {

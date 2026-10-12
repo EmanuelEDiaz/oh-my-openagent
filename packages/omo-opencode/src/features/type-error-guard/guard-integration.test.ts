@@ -54,6 +54,19 @@ describe("type and error guard on edits", () => {
     expect(await blocked(g.before("edit", "s", "c3", swallow))).toBe("")
   })
 
+  test("a project that lives inside a folder named build or dist is still guarded", async () => {
+    const parent = mkdtempSync(join(tmpdir(), "type-error-guard-parent-"))
+    try {
+      const project = join(parent, "build", "app")
+      mkdirSync(join(project, "src"), { recursive: true })
+      writeFileSync(join(project, "src/load.ts"), SOURCE)
+      const g = createTestIntegrityGuard({ directory: project, agentOf: async () => "sisyphus", rootOf: async (id) => id, typeErrors: true })
+      expect(await blocked(g.before("edit", "s", "c7", swallow))).toContain("[type-guard] BLOCKED")
+    } finally {
+      rmSync(parent, { recursive: true, force: true })
+    }
+  })
+
   test("a clean edit is not touched", async () => {
     const edit = { filePath: "src/load.ts", oldString: "  return fetchUser(id)", newString: "  const user = await fetchUser(id)\n  return user" }
     expect(await blocked(guard().before("edit", "s", "c4", edit))).toBe("")

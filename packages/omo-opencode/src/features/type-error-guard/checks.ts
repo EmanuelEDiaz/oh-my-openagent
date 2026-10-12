@@ -142,6 +142,12 @@ function lineAt(text: string, index: number): string {
 type Hit = { readonly line: string }
 
 const EMPTY_RESULT = /^(?:return\s*(?:null|undefined|false|\[\s*\]|\{\s*\}|void\s+0)?\s*;?)?$/
+/** A body that is one return statement. */
+const SINGLE_RETURN = /^return\b[^;\n]*;?$/
+
+function refersTo(name: string, text: string): boolean {
+  return new RegExp(`(?<![\\w$])${name.replace(/\$/g, "\\$")}(?![\\w$])`).test(text)
+}
 
 /** catch (…) { … } blocks: swallowed ones and rethrows that drop the caught error. */
 function catchBlocks(text: string, v: { code: string; noStrings: string }): { swallowed: Hit[]; noCause: Hit[] } {
@@ -166,14 +172,17 @@ function catchBlocks(text: string, v: { code: string; noStrings: string }): { sw
     const body = v.code.slice(i + 1, close)
     const comments = v.noStrings.slice(i + 1, close)
     const where = { line: lineAt(text, match.index ?? 0) }
-    if (EMPTY_RESULT.test(body.trim()) && !explains(comments)) swallowed.push(where)
     const name = /\$?[A-Za-z_][\w$]*/.exec(param.replace(/^[^$]*?(\$\w+)/, "$1"))?.[0]
+    // A catch clause takes every error: returning a value without looking at it hides them all.
+    const trimmed = body.trim()
+    const hides = EMPTY_RESULT.test(trimmed) || (SINGLE_RETURN.test(trimmed) && !(name && refersTo(name, trimmed)))
+    if (hides && !explains(comments)) swallowed.push(where)
     if (!name) continue
     for (const thrown of body.matchAll(/\bthrow\s+new\s+[\w$.]+\s*\(/g)) {
       const open = i + 1 + (thrown.index ?? 0) + thrown[0].length - 1
       const end = matchingClose(v.code, open, "(", ")")
       const args = end === -1 ? "" : v.code.slice(open, end)
-      if (!/\bcause\b/.test(args) && !new RegExp(`\\b${name.replace("$", "\\$")}\\b`).test(args)) noCause.push(where)
+      if (!/\bcause\b/.test(args) && !refersTo(name, args)) noCause.push(where)
     }
   }
   for (const match of v.code.matchAll(/\.catch\(\s*(?:\([^()]*\)|[\w$]+)\s*=>\s*(?:\{\s*\}|null|undefined|void\s+0|\[\s*\]|false)\s*\)/g)) {
@@ -189,11 +198,15 @@ function pythonSwallows(text: string, v: { noStrings: string }): Hit[] {
   const original = text.split("\n")
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index] ?? ""
-    const header = /^(\s*)except\b[^:]*:(.*)$/.exec(line)
+    const header = /^(\s*)except\b([^:]*):(.*)$/.exec(line)
     if (!header) continue
+    // Only a broad except (bare, Exception, BaseException) hides every error; `except KeyError: return d` is idiom.
+    const clause = header[2] ?? ""
+    const broad = clause.trim() === "" || /^\s*\(?\s*(?:Base)?Exception\b/.test(clause)
+    const bound = /\bas\s+(\w+)/.exec(clause)?.[1]
     const indent = header[1]?.length ?? 0
     const body: string[] = []
-    const inline = (header[2] ?? "").trim()
+    const inline = (header[3] ?? "").trim()
     if (inline && !inline.startsWith("#")) body.push(inline)
     let comments = inline.startsWith("#") ? inline : ""
     for (let next = index + 1; next < lines.length; next++) {
@@ -207,7 +220,9 @@ function pythonSwallows(text: string, v: { noStrings: string }): Hit[] {
       if (hash !== -1) comments += ` ${entry.slice(hash)}`
     }
     const code = body.map((entry) => entry.replace(/#.*$/, "").trim()).filter(Boolean)
-    if (code.length > 0 && code.every((entry) => /^(?:pass|\.\.\.|return(?:\s+None)?|continue)$/.test(entry)) && !explains(comments)) {
+    const onlyPass = broad && code.length > 0 && code.every((entry) => /^(?:pass|\.\.\.|return(?:\s+None)?|continue)$/.test(entry))
+    const blindReturn = broad && code.length === 1 && /^return\b/.test(code[0] ?? "") && !(bound && refersTo(bound, code[0] ?? ""))
+    if ((onlyPass || blindReturn) && !explains(comments)) {
       hits.push({ line: (original[index] ?? "").trim() })
     }
   }
@@ -308,7 +323,10 @@ export function isExemptFromTypeGuard(path: string): boolean {
   return isTestFile(path) || GENERATED.test(path.replace(/\\/g, "/"))
 }
 
-/** What this edit adds; empty when nothing grows. `before` is "" for a new file. */
+/**
+ * What this edit adds; empty when nothing grows. `before` is "" for a new file. `path` is relative to the project, so a
+ * project that lives under a folder named `build` or `dist` is not taken for generated code.
+ */
 export function typeErrorFindings(path: string, before: string, after: string): TypeErrorFinding[] {
   if (isExemptFromTypeGuard(path)) return []
   const config = configLoosened(path, before, after)

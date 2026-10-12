@@ -7,6 +7,7 @@ import { tmpdir } from "node:os"
 import { dirname, isAbsolute, join, relative, resolve } from "node:path"
 
 import { fingerprintError, similarity } from "../../../packages/omo-opencode/src/features/loop-breaker/fingerprint"
+import { typeErrorFindings } from "../../../packages/omo-opencode/src/features/type-error-guard/checks"
 import type { Budget, GradeContext, Grader, GradeResult, Task } from "./types"
 
 /** Ordered section markers of an answer format. */
@@ -452,6 +453,29 @@ export function noNewTypeEscapes(originalDir: string): Grader {
     grade: ({ workdir }) => {
       const added = newOccurrences(originalDir, workdir, (file) => !TEST_FILE.test(file) && CODE_FILE.test(file), TYPE_ESCAPE_PATTERN, codeOnly)
       return result(name, added.length === 0, added.length === 0 ? undefined : `new type escapes: ${added.join(", ")}`)
+    },
+  }
+}
+
+/**
+ * No source file gained a swallowed error (empty catch, catch that only returns null/[]/false, `.catch(() => null)`)
+ * or a rethrow that drops the caught error (fork roadmap 0.9c). Uses the guard's own analysis, so the bench measures
+ * exactly what the guard refuses, with or without the guard switched on.
+ */
+export function noNewSwallowedErrors(originalDir: string): Grader {
+  const name = "outcome:noNewSwallowedErrors"
+  return {
+    name,
+    grade: ({ workdir }) => {
+      const added = repoFiles(workdir)
+        .filter((file) => !TEST_FILE.test(file) && CODE_FILE.test(file))
+        .flatMap((file) => {
+          const before = existsSync(join(originalDir, file)) ? readFileSync(join(originalDir, file), "utf8") : ""
+          return typeErrorFindings(file, before, readFileSync(join(workdir, file), "utf8"))
+            .filter((finding) => finding.rule === "swallowed-error" || finding.rule === "rethrow-without-cause")
+            .map((finding) => `${file}: ${finding.detail}${finding.line ? ` (${finding.line.slice(0, 80)})` : ""}`)
+        })
+      return result(name, added.length === 0, added.length === 0 ? undefined : added.join("; "))
     },
   }
 }
