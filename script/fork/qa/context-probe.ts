@@ -17,7 +17,7 @@ import { homedir, tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 
 import { analyseRequest, approxTokens, type ContextRecord } from "../bench/context-proxy"
-import { createSandbox, destroySandbox, overridePluginConfig, startServer, warmUp, type Sandbox, type Server } from "../bench/sandbox"
+import { createSandbox, destroySandbox, overridePluginConfig, saveServerLogs, startServer, warmUp, type Sandbox, type Server } from "../bench/sandbox"
 
 const HOME = homedir()
 const REAL_CONFIG = join(process.env.XDG_CONFIG_HOME ?? join(HOME, ".config"), "opencode")
@@ -225,6 +225,15 @@ async function runOnce(label: string, pluginEntry: string, minRamMb: number, kee
         return { path: request.path, totalTokens: record.totalTokens, toolCount: record.toolCount, subagent: request.subagent }
       }),
     }
+  } catch (error) {
+    // A failed run deletes its sandbox below: keep OpenCode's and the plugin's logs to find out why.
+    if (sandbox) {
+      const logs = join(process.cwd(), ".omo/evidence/context-probe-failures", `${label}-${Date.now()}`)
+      mkdirSync(logs, { recursive: true })
+      saveServerLogs(sandbox, logs)
+      console.error(`run ${label} failed; logs kept in ${logs}`)
+    }
+    throw error
   } finally {
     server?.stop()
     mock.stop()

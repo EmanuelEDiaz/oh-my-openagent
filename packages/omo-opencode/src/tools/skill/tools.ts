@@ -26,12 +26,16 @@ import {
 } from "./native-skills"
 
 import { liveSkillDescription } from "./live-description"
+import { log } from "../../shared/logger"
 export function createSkillTool(options: SkillLoadOptions): ToolDefinition {
   let cachedDescription: string | null = null
   // Skills OpenCode lists itself in <available_skills>; the description does not repeat them.
   let nativeSkillNames: ReadonlySet<string> = new Set()
+  /** OpenCode answered with its native skill list at least once. */
+  let nativeKnown = false
   const rememberNativeSkills = (nativeAll: readonly { name: string }[]): void => {
     nativeSkillNames = new Set(nativeAll.map((skill) => skill.name))
+    nativeKnown = true
   }
   const formatDescription = (skillInfos: Parameters<typeof formatCombinedDescription>[0], commands: CommandInfo[]): string =>
     formatCombinedDescription(skillInfos, commands, {
@@ -65,7 +69,8 @@ export function createSkillTool(options: SkillLoadOptions): ToolDefinition {
         rememberNativeSkills(nativeAll)
         mergeNativeSkills(skills, nativeAll, options.disabledSkills)
       } catch (error) {
-        if (!(error instanceof Error)) throw error
+        // Expected while OpenCode is still starting; the per-request description retries (live-description).
+        log("[skill] OpenCode's native skill list is not available yet", { error: error instanceof Error ? error.message : String(error) })
       }
     }
   }
@@ -108,6 +113,8 @@ export function createSkillTool(options: SkillLoadOptions): ToolDefinition {
       try {
         const nativeAll = options.nativeSkills.all()
         if (isPromiseLike(nativeAll)) {
+          // Handled by the refresh below; a failure here would otherwise surface as an unhandled rejection.
+          Promise.resolve(nativeAll).catch(() => undefined)
           needsAsyncRefresh = true
         } else {
           rememberNativeSkills(nativeAll)
@@ -120,14 +127,17 @@ export function createSkillTool(options: SkillLoadOptions): ToolDefinition {
 
     cachedDescription = formatDescription(skillInfos, commandsForDescription)
     if (needsAsyncRefresh) {
-      void buildDescription(true)
+      buildDescription(true).catch((error: unknown) => log("[skill] description refresh failed", { error: String(error) }))
     }
   } else if (options.commands !== undefined) {
     cachedDescription = formatDescription([], options.commands)
   }
 
-  liveSkillDescription.set(() => {
-    if (cachedDescription === null) void buildDescription()
+  liveSkillDescription.set(async () => {
+    if (cachedDescription === null || (options.nativeSkills && !nativeKnown)) {
+      // OpenCode answers by now (this runs per request): load its native list, but never hold a request long.
+      await Promise.race([buildDescription(true), Bun.sleep(3000)]).catch((error: unknown) => log("[skill] description refresh failed", { error: String(error) }))
+    }
     return cachedDescription ?? undefined
   })
 

@@ -8,7 +8,7 @@ import type { CreatedHooks } from "../create-hooks"
 // skill tool knows OpenCode's native skills; tool.definition runs on every request (registry.ts:318).
 describe("tool.definition gives the skill tool its current description (real config, 12-10-2026)", () => {
   it("replaces the registration-time description with the live one", async () => {
-    liveSkillDescription.set(() => "live description without native skills")
+    liveSkillDescription.set(async () => "live description without native skills")
     const output = { description: "registration-time description with every skill", parameters: {} }
     await createToolDefinitionHandler({ hooks: {} as CreatedHooks })({ toolID: "skill" }, output)
     expect(output.description).toBe("live description without native skills")

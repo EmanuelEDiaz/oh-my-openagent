@@ -10,7 +10,7 @@ export function createToolDefinitionHandler(args: {
   const { hooks } = args
   return async (input, output) => {
     if (input.toolID === "skill") {
-      const live = liveSkillDescription.get()
+      const live = await liveSkillDescription.get()
       if (live) output.description = live
     }
     const overrideHook = hooks.todoDescriptionOverride
