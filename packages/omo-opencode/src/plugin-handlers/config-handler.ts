@@ -25,6 +25,24 @@ import { applySmallModelDefault } from "./small-model";
 
 export { resolveCategoryConfig } from "./category-config-resolver";
 
+/** Every model the user configured for an agent or a category (primary and fallbacks), in order. */
+function configuredChainModels(pluginConfig: OhMyOpenCodeConfig): string[] {
+  const models: string[] = []
+  const add = (entry: unknown) => {
+    const id = typeof entry === "string" ? entry : entry && typeof entry === "object" && typeof (entry as { model?: unknown }).model === "string" ? (entry as { model: string }).model : undefined
+    if (id && !models.includes(id)) models.push(id.replace(/\s*\(.*\)$/, ""))
+  }
+  for (const group of [pluginConfig.agents, pluginConfig.categories]) {
+    for (const config of Object.values(group ?? {})) {
+      if (!config || typeof config !== "object") continue
+      const { model, fallback_models: fallbacks } = config as { model?: unknown; fallback_models?: unknown }
+      add(model)
+      if (Array.isArray(fallbacks)) fallbacks.forEach(add)
+    }
+  }
+  return models
+}
+
 function collectTrustedVisionCapableModels(
   pluginConfig: OhMyOpenCodeConfig,
 ): string[] {
@@ -153,7 +171,7 @@ export function createConfigHandler(deps: ConfigHandlerDeps) {
     }
 
     recordLoadedAgentModels(agentResult);
-    applySmallModelDefault({ config, preferFreeModels: pluginConfig.prefer_free_models === true });
+    applySmallModelDefault({ config, preferFreeModels: pluginConfig.prefer_free_models === true, chainModels: () => configuredChainModels(pluginConfig) });
     applyToolConfig({ config, pluginConfig, agentResult });
     await applyMcpConfig({ config, pluginConfig, ctx, pluginComponents });
     await applyCommandConfig({ config, pluginConfig, ctx, pluginComponents });

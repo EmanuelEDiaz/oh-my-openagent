@@ -18,13 +18,14 @@ const CACHE: ProviderModelsCache = {
   updatedAt: "2026-10-07T00:00:00.000Z",
 }
 
-function run(config: Record<string, unknown>, options: { preferFree?: boolean; broken?: string[] } = {}) {
+function run(config: Record<string, unknown>, options: { preferFree?: boolean; broken?: string[]; chains?: string[] } = {}) {
   applySmallModelDefault({
     config,
     preferFreeModels: options.preferFree ?? true,
     readCache: () => CACHE,
     brokenModels: () => new Set(options.broken ?? []),
     isPaid: (model) => model.endsWith("gpt-5.4-nano"),
+    chainModels: () => options.chains ?? [],
   })
   return config
 }
@@ -48,5 +49,14 @@ describe("small_model with prefer_free_models", () => {
 
   test("prefer_free_models off: OpenCode's default is left alone", () => {
     expect(run({}, { preferFree: false }).small_model).toBeUndefined()
+  })
+
+  test("first start (nothing marked yet): a free model from the user's own chains wins over the cache order (QA 12-10-2026)", () => {
+    // ling-3.0-flash-fin-free is listed by Zen but not served; the cache lists it before nemotron
+    expect(run({}, { chains: ["opencode/big-pickle", "opencode/nemotron-3.5-lightning-free"] }).small_model).toBe("opencode/nemotron-3.5-lightning-free")
+  })
+
+  test("the user's chains only rank models the provider still offers for free", () => {
+    expect(run({}, { chains: ["opencode/gpt-5.4-nano", "opencode/old-flash-free", "opencode/big-pickle"] }).small_model).toBe("opencode/big-pickle")
   })
 })

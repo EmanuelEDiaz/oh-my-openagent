@@ -8,8 +8,10 @@ import { log } from "../shared/logger"
 /**
  * Session titles and summaries run on OpenCode's `small_model`; unset, OpenCode picks a paid one (opencode/gpt-5.4-nano)
  * even for a user who asked for free models (fork plan real-use-incidents A5, roadmap 0.14). With prefer_free_models on
- * and no explicit small_model, the plugin sets the first free, active, served model, preferring small/fast ones. An
- * explicit small_model is never changed; a paid or not-served one only gets a startup warning.
+ * and no explicit small_model, the plugin sets a free, active, served model: first one the user already runs in their
+ * own agent chains (chosen on purpose, so known to work; QA 12-10-2026 found the cache order picking a model Zen lists
+ * but does not serve), small/fast ones first. An explicit small_model is never changed; a paid or not-served one only
+ * gets a startup warning.
  */
 const SMALL_NAME = /(?:nano|mini|flash|lightning|small|lite|haiku)/i
 const FREE_ID = /(?:-free|:free)$/i
@@ -32,7 +34,7 @@ function isRetired(entry: unknown): boolean {
   return isRecord(entry) && typeof entry["status"] === "string" && entry["status"] !== "active" && entry["status"] !== "beta"
 }
 
-export function pickFreeSmallModel(cache: ProviderModelsCache | null, broken: ReadonlySet<string>): string | undefined {
+export function pickFreeSmallModel(cache: ProviderModelsCache | null, broken: ReadonlySet<string>, chainModels: readonly string[] = []): string | undefined {
   if (!cache) return undefined
   const providers = cache.connected.length > 0 ? cache.connected : Object.keys(cache.models)
   const candidates: Candidate[] = []
@@ -45,7 +47,8 @@ export function pickFreeSmallModel(cache: ProviderModelsCache | null, broken: Re
       candidates.push({ id, preferred: SMALL_NAME.test(modelID) })
     }
   }
-  const rank = (candidate: Candidate) => (candidate.id.startsWith(`${ZEN}/`) ? 0 : 2) + (candidate.preferred ? 0 : 1)
+  const inChains = new Set(chainModels)
+  const rank = (candidate: Candidate) => (inChains.has(candidate.id) ? 0 : 4) + (candidate.id.startsWith(`${ZEN}/`) ? 0 : 2) + (candidate.preferred ? 0 : 1)
   return [...candidates].sort((left, right) => rank(left) - rank(right))[0]?.id
 }
 
@@ -55,6 +58,8 @@ export function applySmallModelDefault(input: {
   readonly readCache?: () => ProviderModelsCache | null
   readonly brokenModels?: () => ReadonlySet<string>
   readonly isPaid?: (model: string) => boolean
+  /** Models of the user's agent and category chains. */
+  readonly chainModels?: () => readonly string[]
 }): void {
   if (!input.preferFreeModels) return
   const broken = (input.brokenModels ?? listBrokenModels)()
@@ -70,7 +75,7 @@ export function applySmallModelDefault(input: {
     }
     return
   }
-  const picked = pickFreeSmallModel((input.readCache ?? readProviderModelsCache)(), broken)
+  const picked = pickFreeSmallModel((input.readCache ?? readProviderModelsCache)(), broken, input.chainModels?.() ?? [])
   if (!picked) return
   input.config["small_model"] = picked
   log("[small-model] small_model set to a free model (prefer_free_models)", { model: picked })
