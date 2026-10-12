@@ -12,7 +12,7 @@
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 
 import { createSandbox, destroySandbox, prepareWorkdir, type Sandbox } from "../bench/sandbox"
 
@@ -35,7 +35,8 @@ export type TuiSession = {
   capture(): string
   waitFor(pattern: RegExp, timeoutMs?: number): Promise<string>
   openCodeLog(): string
-  stop(): void
+  /** Closes the TUI; the sandbox is deleted unless `keepSandbox` (to restart on the same data, e.g. --continue). */
+  stop(options?: { keepSandbox?: boolean }): void
 }
 
 function tmux(socket: string, ...args: string[]): string {
@@ -52,14 +53,30 @@ export function availableMb(): number | undefined {
   }
 }
 
+export type StartTuiOptions = {
+  plugin: string
+  fixture?: string
+  name: string
+  configure?: (sandbox: Sandbox) => void
+  /** Extra `opencode` arguments, e.g. ["--continue"]. */
+  args?: readonly string[]
+  /** Restart on a sandbox kept by an earlier `stop({ keepSandbox: true })`. */
+  reuse?: { sandbox: Sandbox; workdir: string }
+}
+
 /** Starts the real TUI for a fixture workdir inside a private tmux server. */
-export async function startTui(options: { plugin: string; fixture?: string; name: string; configure?: (sandbox: Sandbox) => void }): Promise<TuiSession> {
-  const sandbox = createSandbox(join(tmpdir(), `omo-qa-tui-${process.pid}-${Date.now()}`), options.plugin)
-  options.configure?.(sandbox)
-  const workdir = options.fixture ? prepareWorkdir(sandbox, options.fixture, options.name) : join(sandbox.root, "work")
+export async function startTui(options: StartTuiOptions): Promise<TuiSession> {
+  const sandbox = options.reuse?.sandbox ?? createSandbox(join(tmpdir(), `omo-qa-tui-${process.pid}-${Date.now()}`), options.plugin)
+  if (!options.reuse) {
+    // The TUI half of the plugin (/omo-models, sidebar) loads from tui.json, next to the server entry.
+    const tuiEntry = join(dirname(options.plugin), "tui.js")
+    if (existsSync(tuiEntry)) writeFileSync(join(sandbox.root, "config/opencode/tui.json"), JSON.stringify({ plugin: [`file://${tuiEntry}`] }, null, 2))
+    options.configure?.(sandbox)
+  }
+  const workdir = options.reuse?.workdir ?? (options.fixture ? prepareWorkdir(sandbox, options.fixture, options.name) : join(sandbox.root, "work"))
   const socket = `omo-qa-${process.pid}`
   const env = Object.entries(sandbox.env).map(([key, value]) => `${key}=${value}`)
-  tmux(socket, "new-session", "-d", "-s", "qa", "-x", "200", "-y", "55", "-c", workdir, "env", ...env, "TERM=xterm-256color", "opencode")
+  tmux(socket, "new-session", "-d", "-s", "qa", "-x", "200", "-y", "55", "-c", workdir, "env", ...env, "TERM=xterm-256color", "opencode", ...(options.args ?? []))
   const session: TuiSession = {
     sandbox,
     workdir,
@@ -81,9 +98,9 @@ export async function startTui(options: { plugin: string; fixture?: string; name
       const latest = readdirSync(dir).filter((name) => name.endsWith(".log")).sort().at(-1)
       return latest ? readFileSync(join(dir, latest), "utf8") : ""
     },
-    stop: () => {
+    stop: (stopOptions) => {
       tmux(socket, "kill-server")
-      destroySandbox(sandbox)
+      if (!stopOptions?.keepSandbox) destroySandbox(sandbox)
     },
   }
   return session
