@@ -9751,10 +9751,15 @@
         "enabled": {
           "default": true,
           "type": "boolean"
+        },
+        "type_errors": {
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
-        "enabled"
+        "enabled",
+        "type_errors"
       ],
       "additionalProperties": false
     },

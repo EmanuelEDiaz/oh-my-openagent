@@ -9,7 +9,7 @@ import { createSessionRootResolver } from "../../shared/session-root"
 import { log } from "../../shared/logger"
 import { getAgentFromSession } from "../prometheus-md-only/agent-resolution"
 
-export function createTestIntegrityGuardHook(ctx: PluginInput) {
+export function createTestIntegrityGuardHook(ctx: PluginInput, options: { typeErrors?: boolean } = {}) {
   const roots = createSessionRootResolver(ctx)
   /** Arguments by call, for OpenCode versions that leave them out of tool.execute.after. */
   const argsByCall = new Map<string, Record<string, unknown>>()
@@ -21,6 +21,7 @@ export function createTestIntegrityGuardHook(ctx: PluginInput) {
       return agent ? getAgentConfigKey(agent) : undefined
     },
     rootOf: roots.rootOf,
+    typeErrors: options.typeErrors ?? true,
   })
 
   return {

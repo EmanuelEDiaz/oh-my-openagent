@@ -160,7 +160,7 @@ export function createToolGuardHooks(args: {
 
   // Existing tests are read-only while fixing and cheating edits are refused (fork roadmap 0.9a).
   const testIntegrityGuard = isHookEnabled("test-integrity-guard") && pluginConfig.test_integrity?.enabled !== false
-    ? safeHook("test-integrity-guard", () => createTestIntegrityGuardHook(ctx))
+    ? safeHook("test-integrity-guard", () => createTestIntegrityGuardHook(ctx, { typeErrors: pluginConfig.test_integrity?.type_errors !== false }))
     : null
 
   // Repeated failures escalate instead of looping; new type errors count as sightings (fork roadmap 0.9b).

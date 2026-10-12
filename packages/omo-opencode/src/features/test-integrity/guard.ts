@@ -9,6 +9,8 @@ import { changesFromArgs, lineDiff, type FileChange } from "./change"
 import { blockingFindings, stringLiterals, warningFindings, type Finding } from "./checks"
 import { createTestRunTracker, isTestRun } from "./test-runs"
 import { isTestFile, siblingTestCandidates } from "./test-files"
+import { typeErrorFindings, type TypeErrorFinding } from "../type-error-guard/checks"
+import { contentChangeFromArgs } from "../type-error-guard/content"
 
 export const TEST_WRITER_AGENT = "test-writer"
 const WRITE_TOOLS = new Set(["write", "edit", "multiedit", "apply_patch", "hashline_edit"])
@@ -21,9 +23,17 @@ export type GuardDeps = {
   readonly agentOf: (sessionID: string) => Promise<string | undefined>
   /** The top-level session of a session tree, so a user's approval covers its subagents. */
   readonly rootOf: (sessionID: string) => Promise<string>
+  /** Type escapes and swallowed errors (fork roadmap 0.9c); switched off only from the user config. */
+  readonly typeErrors?: boolean
 }
 
-type Pending = { readonly changes: FileChange[]; readonly originals: Map<string, string | undefined>; readonly warnings: Finding[] }
+type Pending = {
+  readonly changes: FileChange[]
+  readonly originals: Map<string, string | undefined>
+  readonly warnings: Finding[]
+  /** Files whose type/error check waits for the real result (apply_patch, hashline edits). */
+  readonly typeCheckAfter: Set<string>
+}
 
 function readText(path: string): string | undefined {
   try {
@@ -61,6 +71,15 @@ export function createTestIntegrityGuard(deps: GuardDeps) {
     ].join("\n")
   }
 
+  function typeMessage(path: string, findings: readonly TypeErrorFinding[]): string {
+    const list = findings.map((finding) => `- ${finding.detail}${finding.line ? `: \`${finding.line.slice(0, 120)}\`` : ""}\n  Instead: ${finding.fix}.`).join("\n")
+    return [
+      `[type-guard] BLOCKED: this change to ${rel(path)} hides a problem instead of fixing it:`,
+      list,
+      `If this really is the right change, do not work around the block: stop and ask the user with the question tool, offering the option "Allow editing ${rel(path)}" and explaining why.`,
+    ].join("\n")
+  }
+
   function protectedMessage(path: string): string {
     return [
       `[test-integrity] BLOCKED: ${rel(path)} is an existing test. Tests are the specification: change the code, not the test.`,
@@ -94,8 +113,21 @@ export function createTestIntegrityGuard(deps: GuardDeps) {
         }
         warnings.push(...warningFindings(change, testLiterals))
       }
+      const typeCheckAfter = new Set<string>()
+      if (deps.typeErrors) {
+        const content = contentChangeFromArgs(tool, args, deps.directory)
+        for (const change of changes) {
+          if (unlocked(root, change.path) || change.kind === "delete") continue
+          if (content?.path !== change.path) {
+            typeCheckAfter.add(change.path)
+            continue
+          }
+          const findings = typeErrorFindings(change.path, content.before, content.after)
+          if (findings.length > 0) throw new Error(typeMessage(change.path, findings))
+        }
+      }
       const originals = new Map(changes.map((change) => [change.path, readText(change.path)] as const))
-      pending.set(callID, { changes, originals, warnings })
+      pending.set(callID, { changes, originals, warnings, typeCheckAfter })
       // A call that fails never reaches after(); keep the map bounded.
       if (pending.size > 200) pending.delete(pending.keys().next().value as string)
     },
@@ -135,6 +167,15 @@ export function createTestIntegrityGuard(deps: GuardDeps) {
         const root = await deps.rootOf(input.sessionID)
         for (const change of entry.changes) {
           const before = entry.originals.get(change.path)
+          if (entry.typeCheckAfter.has(change.path) && !unlocked(root, change.path)) {
+            const findings = typeErrorFindings(change.path, before ?? "", readText(change.path) ?? "")
+            if (findings.length > 0) {
+              if (before === undefined) rmSync(change.path, { force: true })
+              else writeFileSync(change.path, before)
+              notes.push(`${typeMessage(change.path, findings)}\nThe edit was UNDONE; the file is back as it was.`)
+              continue
+            }
+          }
           if (!change.exact && !unlocked(root, change.path)) {
             // Hashline edits: judge the real result now and undo it if it cheats.
             const actual = { ...change, ...lineDiff(before ?? "", readText(change.path) ?? ""), exact: true }
