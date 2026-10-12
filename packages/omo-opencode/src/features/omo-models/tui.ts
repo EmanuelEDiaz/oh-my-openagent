@@ -2,21 +2,25 @@ import { resolveUserOmoConfigPath, updateOmoConfig } from "@oh-my-opencode/omo-c
 
 import { buildChainEntries, CONFIGURABLE_AGENTS, readAgentChain } from "../../cli/config-models/agent-chains"
 import { getAgentProfile } from "../../cli/config-models/agent-profiles"
-import { chainEdits, readOpenCodeSection } from "../../cli/config-models/context"
+import { chainEdits, pruneChainEdits, readOpenCodeSection } from "../../cli/config-models/context"
 import type { OpenCodeSection } from "../../cli/config-models/context"
 import { loadModelCatalog } from "../../cli/config-models/model-catalog"
 import type { ModelInfo } from "../../cli/config-models/model-catalog"
 import { createExternalDataStore } from "./external-data"
 import type { ExternalData, ExternalDataStore, ReliabilityFacts } from "./external-data"
 import { collectFacts, detailRows, previewLine, wrapText } from "./model-facts"
+import { getAgentConfigKey } from "../../shared/agent-display-names"
 import { listBrokenModels } from "../../shared/broken-models-cache"
-import { buildModelOptions, NOT_SERVED_LABEL } from "./model-options"
+import { buildModelOptions, NOT_SERVED_LABEL, RETIRED_LABEL } from "./model-options"
 import type { ProviderModelView, ProviderView } from "./model-options"
 
 export const MAX_CHAIN = 4
 const DONE = "__omo_models_done__"
 const CONFIRM = "__omo_models_confirm__"
 const BACK = "__omo_models_back__"
+const PRUNE = "__omo_models_prune__"
+/** OpenCode's own model dialog; confirming a model there pins it as the TUI's pick for the current agent. */
+const MODEL_LIST_COMMAND = "model.list"
 const WRAP_WIDTH = 50
 const FOOTER_WRAP_WIDTH = 36
 const RELIABILITY_WAIT_MS = 1500
@@ -33,7 +37,13 @@ export type OmoModelsTuiApi = {
   readonly command?: {
     readonly register: (factory: () => readonly unknown[]) => (() => void) | undefined
   }
-  readonly state: { readonly provider: readonly ProviderView[] }
+  readonly state: {
+    readonly provider: readonly ProviderView[]
+    readonly session?: { readonly messages: (sessionID: string) => readonly unknown[] }
+  }
+  readonly route?: { readonly current: { readonly name: string; readonly params?: Readonly<Record<string, unknown>> } }
+  /** `dispatchCommand` returns @opentui/keymap's RunCommandResult (`{ ok: true }` when the command ran). */
+  readonly keymap?: { readonly dispatchCommand?: (command: string) => unknown }
   readonly ui: {
     readonly dialog: { readonly replace: (render: () => unknown) => void; readonly clear: () => void }
     readonly DialogSelect: <Value>(props: {
@@ -50,6 +60,8 @@ export type OmoModelsTuiApi = {
 export type OmoModelsConfigIo = {
   readonly read: () => OpenCodeSection
   readonly save: (agent: string, chain: readonly string[], section: OpenCodeSection) => string
+  /** Same as `oh-my-openagent config models --prune`: drops dead models from every chain; returns one line per agent. */
+  readonly prune: (section: OpenCodeSection, isDead: (model: string) => boolean) => readonly string[]
 }
 
 export type OmoModelsDeps = {
@@ -66,6 +78,11 @@ export const DEFAULT_CONFIG_IO: OmoModelsConfigIo = {
     const entries = buildChainEntries(chain, readAgentChain(section.agents[agent]))
     return updateOmoConfig({ edits: chainEdits(agent, entries), scope: "user" }).path
   },
+  prune: (section, isDead) => {
+    const { edits, report } = pruneChainEdits(section, isDead)
+    if (edits.length > 0) updateOmoConfig({ edits, scope: "user" })
+    return report
+  },
 }
 
 function defaultDeps(): OmoModelsDeps {
@@ -80,16 +97,34 @@ function currentChain(section: OpenCodeSection, agent: string): string[] {
   return readAgentChain(section.agents[agent]).map((entry) => (typeof entry === "string" ? entry : entry.model))
 }
 
-function chainFooter(chain: readonly string[], available: ReadonlySet<string>, notServed: ReadonlySet<string>): string {
-  const unusable = chain.filter((model) => !available.has(model) || notServed.has(model))
+function chainFooter(chain: readonly string[], isRetired: (model: string) => boolean, notServed: ReadonlySet<string>): string {
+  const unusable = chain.filter((model) => isRetired(model) || notServed.has(model))
   if (chain.length > 0 && unusable.length === chain.length) return "broken"
   if (chain.some((model) => notServed.has(model))) return NOT_SERVED_LABEL
-  return unusable.length > 0 ? "model gone" : ""
+  return unusable.length > 0 ? RETIRED_LABEL : ""
+}
+
+/**
+ * A chain model OpenCode will not run: no longer listed by its provider (OpenCode drops deprecated models from the
+ * list), or listed but marked deprecated by models.dev.
+ */
+export function retiredModelCheck(
+  available: ReadonlySet<string>,
+  catalog: ReadonlyMap<string, ModelInfo>,
+  providers: readonly ProviderView[] = [],
+): (model: string) => boolean {
+  const deprecated = new Set<string>()
+  for (const provider of providers) {
+    for (const [key, model] of Object.entries(provider.models)) {
+      if (model.status === "deprecated") deprecated.add(`${provider.id}/${model.id || key}`)
+    }
+  }
+  return (model) => !available.has(model) || deprecated.has(model) || catalog.get(model)?.status === "deprecated"
 }
 
 export function buildAgentOptions(
   section: OpenCodeSection,
-  available: ReadonlySet<string>,
+  isRetired: (model: string) => boolean,
   notServed: ReadonlySet<string> = new Set(),
 ): SelectOption<string>[] {
   return CONFIGURABLE_AGENTS.map((agent) => {
@@ -98,9 +133,42 @@ export function buildAgentOptions(
       title: agent,
       value: agent,
       description: chain.length === 0 ? `${getAgentProfile(agent).summary} · omo default` : chain.join(" > "),
-      footer: chainFooter(chain, available, notServed),
+      footer: chainFooter(chain, isRetired, notServed),
     }
   })
+}
+
+/** Agents whose chain holds a retired or not-served model, with the dead models. */
+function deadModelsByAgent(section: OpenCodeSection, isDead: (model: string) => boolean): Map<string, string[]> {
+  const result = new Map<string, string[]>()
+  for (const agent of CONFIGURABLE_AGENTS) {
+    const dead = currentChain(section, agent).filter(isDead)
+    if (dead.length > 0) result.set(agent, dead)
+  }
+  return result
+}
+
+/** The agent of the last user message in the open session: the agent OpenCode's own model dialog would pin. */
+export function currentTuiAgent(api: OmoModelsTuiApi): string | undefined {
+  const route = api.route?.current
+  const sessionID = route?.name === "session" ? route.params?.["sessionID"] : undefined
+  if (typeof sessionID !== "string" || !api.state.session) return undefined
+  const messages = api.state.session.messages(sessionID)
+  for (let index = messages.length - 1; index >= 0; index--) {
+    const message = messages[index] as { readonly role?: unknown; readonly agent?: unknown } | undefined
+    if (message?.role === "user" && typeof message.agent === "string") return getAgentConfigKey(message.agent)
+  }
+  return undefined
+}
+
+/** Opens OpenCode's model dialog; false when the command is missing or did not run. */
+function openNativeModelList(api: OmoModelsTuiApi): boolean {
+  try {
+    const result = api.keymap?.dispatchCommand?.(MODEL_LIST_COMMAND)
+    return typeof result === "object" && result !== null && (result as { readonly ok?: unknown }).ok === true
+  } catch {
+    return false
+  }
 }
 
 function findModel(providers: readonly ProviderView[], id: string): { provider: string; model: ProviderModelView } | undefined {
@@ -113,9 +181,21 @@ function findModel(providers: readonly ProviderView[], id: string): { provider: 
   return undefined
 }
 
-/** /omo-models changes apply live (fork plan real-use-incidents A1); a chain with one model has nothing to fall back to. */
-export function savedToast(agent: string, chain: readonly string[]): { message: string; variant: "success" | "warning" } {
-  const applied = `${agent}: ${chain.join(" > ")}. Applies from your next message.`
+/**
+ * /omo-models changes apply live (fork plan real-use-incidents A1). When the saved agent is the TUI's current agent,
+ * OpenCode's model dialog was just opened: OpenCode keeps its own model pick per agent, and confirming it there pins
+ * the new primary. A chain with one model has nothing to fall back to.
+ */
+export function savedToast(
+  agent: string,
+  chain: readonly string[],
+  confirmInModelList = false,
+): { message: string; variant: "success" | "warning" } {
+  const fallbacks = chain.length > 1 ? ` (fallbacks: ${chain.slice(1).join(" > ")})` : ""
+  const next = confirmInModelList
+    ? "Confirm it in the model list that just opened (OpenCode keeps its own pick per agent)."
+    : "Applies from your next message."
+  const applied = `Saved: ${agent} → ${chain[0] ?? "omo default"}${fallbacks}. ${next}`
   return chain.length === 1
     ? { message: `${applied} No fallback: if ${chain[0]} fails, ${agent} has no other model to switch to.`, variant: "warning" }
     : { message: applied, variant: "success" }
@@ -146,15 +226,32 @@ export function openOmoModels(api: OmoModelsTuiApi, deps: OmoModelsDeps = defaul
     notServed,
   })
   const available = new Set(modelOptions([]).map((option) => option.value))
+  const isRetired = retiredModelCheck(available, catalog, api.state.provider)
+  const isDead = (model: string) => isRetired(model) || notServed.has(model)
   let screen = 0
 
   const save = (agent: string, chain: readonly string[]): void => {
     api.ui.dialog.clear()
     try {
       deps.io.save(agent, chain, section)
-      api.ui.toast?.(savedToast(agent, chain))
     } catch (error) {
       api.ui.toast?.({ message: `Could not save: ${error instanceof Error ? error.message : String(error)}`, variant: "error" })
+      return
+    }
+    const confirm = currentTuiAgent(api) === agent && openNativeModelList(api)
+    api.ui.toast?.(savedToast(agent, chain, confirm))
+  }
+
+  const prune = (): void => {
+    api.ui.dialog.clear()
+    try {
+      const report = deps.io.prune(section, isDead)
+      const removed = report.map((line) => line.replace(/\s+/g, " ").trim()).join("; ")
+      api.ui.toast?.(report.length === 0
+        ? { message: "No retired or not-served models in the agent chains.", variant: "info" }
+        : { message: `Removed retired models (backup kept): ${removed}`, variant: "success" })
+    } catch (error) {
+      api.ui.toast?.({ message: `Could not prune: ${error instanceof Error ? error.message : String(error)}`, variant: "error" })
     }
   }
 
@@ -222,7 +319,7 @@ export function openOmoModels(api: OmoModelsTuiApi, deps: OmoModelsDeps = defaul
       ? []
       : [{ title: "✓ Done, save", value: DONE, description: chain.join(" > "), category: "Chain" }]
     const current = primary
-      ? currentChain(section, agent).find((model) => available.has(model) && !notServed.has(model))
+      ? currentChain(section, agent).find((model) => !isDead(model))
       : undefined
 
     api.ui.dialog.replace(() =>
@@ -239,12 +336,25 @@ export function openOmoModels(api: OmoModelsTuiApi, deps: OmoModelsDeps = defaul
     )
   }
 
+  const dead = deadModelsByAgent(section, isDead)
+  const pruneOption: SelectOption<string>[] = dead.size === 0
+    ? []
+    : [{
+        title: "Remove retired models from all chains",
+        value: PRUNE,
+        description: [...dead].map(([agent, models]) => `${agent}: ${models.join(", ")}`).join(" · "),
+        footer: "cleanup",
+      }]
+
   api.ui.dialog.replace(() =>
     api.ui.DialogSelect<string>({
       title: "Choose models for an omo agent",
       placeholder: "Search agents...",
-      options: buildAgentOptions(section, available, notServed),
-      onSelect: (option) => pickModel(option.value, []),
+      options: [...pruneOption, ...buildAgentOptions(section, isRetired, notServed)],
+      onSelect: (option) => {
+        if (option.value === PRUNE) prune()
+        else pickModel(option.value, [])
+      },
     }),
   )
 }

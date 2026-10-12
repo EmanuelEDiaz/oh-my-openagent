@@ -37,6 +37,8 @@ export const ZEN_FREE_CATEGORY = "OpenCode Zen · Free"
 export const ZEN_CATEGORY = "OpenCode Zen"
 /** Label for a model its provider lists but answered "not found / no route" for (fork plan real-use-incidents A2). */
 export const NOT_SERVED_LABEL = "not served"
+/** Label for a model OpenCode will not run: deprecated, or no longer listed by its provider. */
+export const RETIRED_LABEL = "retired"
 
 const FREE_SUFFIX_PATTERN = /(?:-free|:free)$/
 
@@ -96,7 +98,7 @@ export function buildModelOptions(
         title: model.id || key,
         value: id,
         description: options.describe?.(provider.id, model) ?? formatContext(model.limit?.context) ?? "",
-        footer: options.notServed?.has(id) ? NOT_SERVED_LABEL : formatFooter(model),
+        footer: options.notServed?.has(id) ? NOT_SERVED_LABEL : model.status === "deprecated" ? RETIRED_LABEL : formatFooter(model),
         category: categoryFor(provider, model),
       })
     }

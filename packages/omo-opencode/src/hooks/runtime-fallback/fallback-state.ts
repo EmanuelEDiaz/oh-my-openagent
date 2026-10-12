@@ -8,6 +8,7 @@ import { HOOK_NAME } from "./constants"
 import { log } from "../../shared/logger"
 import type { RuntimeFallbackConfig } from "../../config"
 import { listBrokenModels, brokenModelKey } from "../../shared/broken-models-cache"
+import { recordFallbackSwitch } from "../../shared/fallback-switched-models"
 
 export const stringifyRuntimeModel = stringifyRuntimeFallbackModel
 export const stringifyRuntimeModelWithVariant = stringifyRuntimeFallbackModelWithVariant
@@ -99,6 +100,7 @@ export function prepareFallback(
   state.attemptCount++
   state.currentModel = nextModel
   state.pendingFallbackModel = nextModel
+  recordFallbackSwitch(nextModel)
 
   return { success: true, newModel: nextModel }
 }

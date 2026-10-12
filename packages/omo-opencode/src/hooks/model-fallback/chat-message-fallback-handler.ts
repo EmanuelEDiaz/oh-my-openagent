@@ -1,4 +1,5 @@
 import { log } from "../../shared/logger"
+import { recordFallbackSwitch } from "../../shared/fallback-switched-models"
 import { getTaskToastManager } from "../../features/task-toast-manager"
 import type { ChatMessageHandlerOutput, ChatMessageInput } from "../../plugin/chat-message"
 
@@ -28,6 +29,7 @@ export async function applyFallbackToChatMessage(params: {
     providerID: fallback.providerID,
     modelID: fallback.modelID,
   }
+  recordFallbackSwitch(`${fallback.providerID}/${fallback.modelID}`)
   if (fallback.variant !== undefined) {
     output.message["variant"] = fallback.variant
   } else {

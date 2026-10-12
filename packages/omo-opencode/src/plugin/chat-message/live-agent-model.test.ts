@@ -20,7 +20,13 @@ const SAVED: OpenCodeSection = {
   disabledProviders: [],
 }
 
-function harness(options: { broken?: string[]; project?: OpenCodeSection } = {}) {
+const THIRD: OpenCodeSection = {
+  agents: { sisyphus: { models: ["opencode/nemotron-free", "opencode/big-pickle"] } },
+  runtimeFallback: undefined,
+  disabledProviders: [],
+}
+
+function harness(options: { broken?: string[]; retired?: string[]; fallbackSwitched?: string[]; project?: OpenCodeSection } = {}) {
   let mtime = 1
   let section = STARTUP
   const deps: LiveAgentModelDeps = {
@@ -30,6 +36,8 @@ function harness(options: { broken?: string[]; project?: OpenCodeSection } = {})
     read: (path) => (path === USER ? section : (options.project ?? STARTUP)),
     loadedModel: (agent) => (agent === "sisyphus" ? "opencode/ling-3.0-flash-fin-free" : undefined),
     isBroken: (model) => (options.broken ?? []).includes(model),
+    isRetired: (model) => (options.retired ?? []).includes(model),
+    wasFallbackSwitch: (model) => (options.fallbackSwitched ?? []).includes(model),
   }
   const live = createLiveAgentModel(deps)
   const save = (next: OpenCodeSection) => {
@@ -62,8 +70,9 @@ describe("live /omo-models changes (no restart)", () => {
 
     // then
     expect(applied).toBe("opencode/mimo-v2.6-flash-free")
-    expect(output.message["model"]).toEqual({ providerID: "opencode", modelID: "mimo-v2.6-flash-free" })
-    expect(output.message["variant"]).toBe("high")
+    // OpenCode reads the variant from UserMessage.model.variant; a top-level field is outside its schema.
+    expect(output.message["model"]).toEqual({ providerID: "opencode", modelID: "mimo-v2.6-flash-free", variant: "high" })
+    expect(output.message["variant"]).toBeUndefined()
   })
 
   test("a model the user picked by hand with /models is never overridden", () => {
@@ -90,5 +99,51 @@ describe("live /omo-models changes (no restart)", () => {
     const { save, send } = harness()
     save(SAVED)
     expect(send("ling-3.0-flash-fin-free", "oracle").applied).toBeUndefined()
+  })
+
+  test("a deprecated startup model makes the TUI send its recent model: that stand-in is replaced too", () => {
+    // given: the TUI rejected the retired startup model and sent recent[0] (big-pickle) instead
+    const { save, send } = harness({ retired: ["opencode/ling-3.0-flash-fin-free"] })
+    save(SAVED)
+
+    // when
+    const { applied, output } = send("big-pickle")
+
+    // then
+    expect(applied).toBe("opencode/mimo-v2.6-flash-free")
+    expect(output.message["model"]).toEqual({ providerID: "opencode", modelID: "mimo-v2.6-flash-free", variant: "high" })
+  })
+
+  test("with a deprecated startup model, a /models pick made after the stand-in is still kept", () => {
+    const { save, send } = harness({ retired: ["opencode/ling-3.0-flash-fin-free"] })
+    send("big-pickle")
+    save(SAVED)
+    expect(send("claude-opus-5").applied).toBeUndefined()
+  })
+
+  test("a message still on the previous omo.jsonc primary moves to the newest primary", () => {
+    // given: the user saved mimo, then confirmed it in the TUI (pinned), then saved a new chain
+    const { save, send } = harness()
+    save(SAVED)
+    send("mimo-v2.6-flash-free")
+    save(THIRD)
+
+    // when
+    const { applied } = send("mimo-v2.6-flash-free")
+
+    // then
+    expect(applied).toBe("opencode/nemotron-free")
+  })
+
+  test("a model the plugin's fallback switched to is not a user pick", () => {
+    const { save, send } = harness({ fallbackSwitched: ["opencode/claude-opus-5"] })
+    save(SAVED)
+    expect(send("claude-opus-5").applied).toBe("opencode/mimo-v2.6-flash-free")
+  })
+
+  test("a retired model at the head of the new chain is skipped", () => {
+    const { save, send } = harness({ retired: ["opencode/mimo-v2.6-flash-free"] })
+    save(SAVED)
+    expect(send("ling-3.0-flash-fin-free").applied).toBe("opencode/big-pickle")
   })
 })

@@ -1,4 +1,4 @@
-import { buildChainEntries, entryModel, isConfigurableAgent, readAgentChain, readAgentChains, CONFIGURABLE_AGENTS } from "./agent-chains"
+import { buildChainEntries, isConfigurableAgent, readAgentChain, readAgentChains, CONFIGURABLE_AGENTS } from "./agent-chains"
 import { listBrokenModels } from "../../shared/broken-models-cache"
 import { listAvailableModels } from "./available-models"
 import type { AvailableModels } from "./available-models"
@@ -8,6 +8,7 @@ import {
   isRuntimeFallbackEnabled,
   isRuntimeFallbackExplicitlyOn,
   printStatuses,
+  pruneChainEdits,
   rankForAgent,
   readOpenCodeSection,
   resolveConfigPath,
@@ -19,7 +20,6 @@ import {
   writeEdits,
 } from "./context"
 import type { ConfigModelsScope, ModelsContext, OpenCodeSection } from "./context"
-import type { OmoConfigEdit } from "@oh-my-opencode/omo-config-core"
 import { formatRankingTable } from "./format"
 import { runInteractive } from "./interactive"
 import type { ConfigModelsPrompts } from "./interactive"
@@ -131,17 +131,7 @@ function runPreset(context: ModelsContext, preset: PresetName): number {
  */
 function runPrune(context: ModelsContext, notServed: ReadonlySet<string>): number {
   const available = new Set(context.state.models)
-  const isDead = (model: string) => !available.has(model) || notServed.has(model)
-  const edits: OmoConfigEdit[] = []
-  const report: string[] = []
-  for (const agent of CONFIGURABLE_AGENTS) {
-    const entries = readAgentChain(context.section.agents[agent])
-    const dead = entries.map(entryModel).filter(isDead)
-    if (dead.length === 0) continue
-    const kept = entries.filter((entry) => !isDead(entryModel(entry)))
-    edits.push(...chainEdits(agent, kept).map((edit) => (kept.length === 0 ? { ...edit, value: undefined } : edit)))
-    report.push(`${agent.padEnd(19)}removed ${dead.join(", ")}${kept.length === 0 ? " (chain empty: omo default)" : ""}`)
-  }
+  const { edits, report } = pruneChainEdits(context.section, (model) => !available.has(model) || notServed.has(model))
   if (edits.length === 0) {
     context.output("No retired or not-served models in the agent chains.")
     return 0
