@@ -73,7 +73,7 @@ export function createShellSafetyGuard(deps: ShellSafetyDeps) {
     return [
       "[shell-safety] BLOCKED: a database password just failed, and this command would destroy data:",
       ...findings.map((finding) => `- ${finding.what}`),
-      "Destroying a database to get past a forgotten password loses the user's data. Find the password first (.env, docker-compose.yml, config files, the README).",
+      "Destroying a database to get past a forgotten password loses the user's data. Find the password first: credential({ action: \"list\" }) has the test passwords saved for this project; also .env, docker-compose.yml, config files, the README.",
       "Then ask the user with the question tool, with these options in this order:",
       '1. "Reuse the saved password" (say where you found it)',
       '2. "Change the password without losing data" (e.g. ALTER USER … PASSWORD)',
@@ -125,7 +125,7 @@ export function createShellSafetyGuard(deps: ShellSafetyDeps) {
       const text = output.output ?? ""
       if (PASSWORD_FAILURE.test(text)) {
         stateOf(root).passwordFailureAt = Date.now()
-        return "[shell-safety] A database password failed. Do not drop, reset or recreate the database or its volume to get around it: find the saved password (.env, docker-compose.yml, config) or ask the user."
+        return "[shell-safety] A database password failed. Do not drop, reset or recreate the database or its volume to get around it: get the saved password with credential({ action: \"list\" }) (or look in .env / docker-compose.yml), or ask the user."
       }
       const exit = output.metadata?.["exit"]
       if (exit === 0 && isBackup(command)) stateOf(root).backupAt = Date.now()

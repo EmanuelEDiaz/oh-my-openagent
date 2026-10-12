@@ -110,6 +110,11 @@ export function createPluginInterface(args: {
       backgroundManager: managers.backgroundManager,
     }),
 
+    // Saved test passwords reach the shell through its environment, never through the command text (fork 0.21).
+    "shell.env": async (input, output) => {
+      await hooks.credentialsGuard?.["shell.env"]?.(input, output)
+    },
+
     "tool.execute.after": createToolExecuteAfterHandler({
       ctx,
       hooks,
