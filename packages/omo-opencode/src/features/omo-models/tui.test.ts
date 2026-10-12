@@ -34,6 +34,8 @@ type Dialog = { title: string; options: { title: string; value: string; category
 
 type FakeApiOptions = {
   readonly currentAgent?: string
+  /** No session open yet: OpenCode's home screen. */
+  readonly home?: { readonly defaultAgent?: string }
   readonly dispatch?: ((command: string) => unknown) | null
   readonly providers?: ProviderView[]
 }
@@ -47,13 +49,14 @@ function fakeApi(options: FakeApiOptions = {}) {
   const api: OmoModelsTuiApi = {
     state: {
       provider: options.providers ?? PROVIDERS,
+      ...(options.home?.defaultAgent ? { config: { default_agent: options.home.defaultAgent } } : {}),
       session: {
         messages: (sessionID) => (sessionID === "ses_1" && options.currentAgent
           ? [{ role: "user", agent: "build" }, { role: "assistant", agent: "build" }, { role: "user", agent: options.currentAgent }, { role: "assistant" }]
           : []),
       },
     },
-    route: { current: { name: "session", params: { sessionID: "ses_1" } } },
+    route: options.home ? { current: { name: "home" } } : { current: { name: "session", params: { sessionID: "ses_1" } } },
     ...(dispatch === null ? {} : { keymap: { dispatchCommand: (command: string) => {
       dispatched.push(command)
       return dispatch(command)
@@ -284,7 +287,22 @@ describe("/omo-models hands the new primary to OpenCode's own model pick (incide
 
     // then
     expect(dispatched).toEqual(["model.list"])
-    expect(toasts.at(-1)).toBe("Saved: oracle → opencode/big-pickle (fallbacks: opencode/nemotron-free). Confirm it in the model list that just opened (OpenCode keeps its own pick per agent).")
+    expect(toasts.at(-1)).toBe("Saved: oracle → opencode/big-pickle (fallbacks: opencode/nemotron-free). Confirm it in the model list that just opened for oracle (OpenCode keeps its own pick per agent).")
+  })
+
+  test("on the home screen (no session yet) the default agent counts as the current one (real TUI, 12-10-2026)", () => {
+    const { api, toasts, dispatched, choose } = fakeApi({ home: { defaultAgent: "oracle" } })
+    openOmoModels(api, deps([]))
+    saveOracleChain(choose)
+    expect(dispatched).toEqual(["model.list"])
+    expect(toasts.at(-1)).toContain("Confirm it in the model list that just opened")
+  })
+
+  test("on the home screen another agent's chain does not open the model list", () => {
+    const { api, dispatched, choose } = fakeApi({ home: { defaultAgent: "Sisyphus - ultraworker" } })
+    openOmoModels(api, deps([]))
+    saveOracleChain(choose)
+    expect(dispatched).toEqual([])
   })
 
   test("saving another agent's chain does not open the model list", () => {

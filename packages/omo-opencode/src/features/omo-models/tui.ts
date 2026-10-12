@@ -40,6 +40,8 @@ export type OmoModelsTuiApi = {
   readonly state: {
     readonly provider: readonly ProviderView[]
     readonly session?: { readonly messages: (sessionID: string) => readonly unknown[] }
+    /** OpenCode's config; `default_agent` is the agent of a new session. */
+    readonly config?: { readonly default_agent?: string }
   }
   readonly route?: { readonly current: { readonly name: string; readonly params?: Readonly<Record<string, unknown>> } }
   /** `dispatchCommand` returns @opentui/keymap's RunCommandResult (`{ ok: true }` when the command ran). */
@@ -148,10 +150,18 @@ function deadModelsByAgent(section: OpenCodeSection, isDead: (model: string) => 
   return result
 }
 
-/** The agent of the last user message in the open session: the agent OpenCode's own model dialog would pin. */
+/**
+ * The agent OpenCode's own model dialog would pin: the agent of the last user message in the open session, or on the
+ * home screen (no session yet) the default agent. The TUI API does not expose a Tab switch made on the home screen,
+ * so the toast always names the agent the model list is for.
+ */
 export function currentTuiAgent(api: OmoModelsTuiApi): string | undefined {
   const route = api.route?.current
   const sessionID = route?.name === "session" ? route.params?.["sessionID"] : undefined
+  if (route?.name !== "session") {
+    const fallback = api.state.config?.default_agent
+    return typeof fallback === "string" ? getAgentConfigKey(fallback) : undefined
+  }
   if (typeof sessionID !== "string" || !api.state.session) return undefined
   const messages = api.state.session.messages(sessionID)
   for (let index = messages.length - 1; index >= 0; index--) {
@@ -193,7 +203,7 @@ export function savedToast(
 ): { message: string; variant: "success" | "warning" } {
   const fallbacks = chain.length > 1 ? ` (fallbacks: ${chain.slice(1).join(" > ")})` : ""
   const next = confirmInModelList
-    ? "Confirm it in the model list that just opened (OpenCode keeps its own pick per agent)."
+    ? `Confirm it in the model list that just opened for ${agent} (OpenCode keeps its own pick per agent).`
     : "Applies from your next message."
   const applied = `Saved: ${agent} → ${chain[0] ?? "omo default"}${fallbacks}. ${next}`
   return chain.length === 1

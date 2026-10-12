@@ -80,13 +80,16 @@ async function ask(session: TuiSession, text: string): Promise<string> {
   return turn.model
 }
 
-async function ready(session: TuiSession): Promise<void> {
+const registries = (sandbox: Sandbox) => pluginLog(sandbox).split("[tool-registry] Built tool registry").length - 1
+
+/** `loadsBefore`: registry lines already in the shared plugin log, so a restarted OpenCode must add its own. */
+async function ready(session: TuiSession, loadsBefore = 0): Promise<void> {
   await session.waitFor(/ctrl\+p|commands|Ask anything/i, 180_000)
   // OpenCode drops a plugin that fails to import without a word in its log: check the server half really loaded,
   // or every "model used" below would be OpenCode's default agent and the test would blame the fix.
   const deadline = Date.now() + 60_000
-  while (Date.now() < deadline && !pluginLog(session.sandbox).includes("[tool-registry] Built tool registry")) await Bun.sleep(1000)
-  if (!pluginLog(session.sandbox).includes("[tool-registry] Built tool registry")) throw new Error("the plugin's server half did not load (no tool registry in its log): check that the dist imports, e.g. that skills/ sits next to index.js")
+  while (Date.now() < deadline && registries(session.sandbox) <= loadsBefore) await Bun.sleep(1000)
+  if (registries(session.sandbox) <= loadsBefore) throw new Error("the plugin's server half did not load (no tool registry in its log): check that the dist imports, e.g. that skills/ sits next to index.js")
   await Bun.sleep(2000)
 }
 
@@ -147,8 +150,9 @@ async function main(): Promise<void> {
         session.stop({ keepSandbox: true })
         setSisyphusChain(sandbox, [MIMO, PICKLE])
         await guard()
+        const loadsBefore = registries(sandbox)
         session = await startTui({ plugin, name: "omo-models", args: ["--continue"], reuse: { sandbox, workdir } })
-        await ready(session)
+        await ready(session, loadsBefore)
         save(evidence, "2a-resumed", session)
         const resumed = await ask(session, "Reply with one word: three")
         save(evidence, "2b-resumed-answer", session)
