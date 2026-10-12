@@ -2380,6 +2380,7 @@
               "ulw-execute",
               "stop-continuation",
               "omo-resume",
+              "omo-ideas",
               "remove-ai-slops",
               "hyperplan"
             ]
@@ -20735,6 +20736,7 @@
                     "ulw-execute",
                     "stop-continuation",
                     "omo-resume",
+                    "omo-ideas",
                     "remove-ai-slops",
                     "hyperplan"
                   ]

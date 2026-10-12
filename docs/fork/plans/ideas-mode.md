@@ -1,6 +1,8 @@
 # 0.23 — Modo de ideas en el planificador
 
-**Estado:** plan aprobado el 11-10-2026, en tres capas y midiendo primero. No hay nada implementado todavía.
+**Estado:** plan aprobado el 11-10-2026, en tres capas y midiendo primero.
+- **Capa 1 (puerta por código) y comando `/omo-ideas`:** implementados, con pruebas (ver abajo).
+- **Medición de referencia, capa 2 y QA en la interfaz real:** pendientes, bloqueadas por RAM.
 
 ## Problema (usuario, 10-10-2026)
 
@@ -84,6 +86,29 @@ Métricas:
 - tiempo.
 
 La capa 2 se queda solo si reduce los tokens del modelo grande sin bajar los aciertos ni las respuestas correctas.
+
+## Capa 1 implementada (11-10-2026)
+
+- `features/ideas-mode/gate.ts`:
+  - el modo se calcula a partir de los mensajes del usuario: `/omo-ideas` (o un mensaje que empieza por `idea:`) lo
+    enciende y `/omo-ideas off` lo apaga;
+  - la orden explícita es un verbo como añadir, agregar, meter, incluir, pasar o poner (o add, put, move, include)
+    seguido de "al plan", "en el plan", "to the plan" o "in the plan";
+  - no cuentan como orden las preguntas, las negaciones previas ("no lo añadas al plan") ni un simple "sí" u "ok".
+- `features/ideas-mode/session-user-texts.ts`: lee los mensajes del usuario de la sesión, sin las partes sintéticas.
+  Así ningún texto inyectado puede abrir la puerta, y la puerta sobrevive a un reinicio. Si los mensajes no se pueden
+  leer, el planificador funciona como antes.
+- `hooks/prometheus-md-only/hook.ts`: antes de escribir en `.omo/plans/`, aplica `planWriteRefusal`. En modo de ideas
+  rechaza la escritura sin la orden y explica qué hacer: guardarla en `.omo/ideas.md` y preguntar al usuario.
+- `/omo-ideas` (`features/builtin-commands/commands.ts`): se ejecuta con Prometheus y su instrucción es corta
+  (regla 16).
+
+| Prueba | Casos | Antes del cambio |
+| --- | --- | --- |
+| `features/ideas-mode/gate.test.ts` | 24: encendido y apagado; 8 órdenes válidas en español e inglés; 8 que no lo son (sí, ok, negaciones, preguntas); una orden antigua no cubre turnos nuevos; una nota sintética no abre la puerta | módulo inexistente |
+| `hooks/prometheus-md-only/ideas-mode.test.ts` | 4: rechazo sin orden, permiso con orden, `.omo/ideas.md` siempre escribible, comportamiento anterior fuera del modo o sin mensajes | 1 falla |
+| `features/builtin-commands/ideas-command.test.ts` | 2: el comando se ejecuta con Prometheus, enciende y apaga el modo, y la instrucción mide menos de 1.500 caracteres | 1 falla |
+| Regresión | `prometheus-md-only` 49/49, comandos y esquemas 7/7 | — |
 
 ## Orden de trabajo
 
