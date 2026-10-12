@@ -1,6 +1,8 @@
 # Incidentes del uso real (07-10-2026)
 
-Estado: **arreglos aprobados (07-10-2026), en curso** en `fix/user-session-incidents`. `S/` = `packages/omo-opencode/src/`.
+Estado: **verificado en la interfaz real y con la configuración real (12-10-2026)**, en `fix/user-session-incidents`. Falta
+la batería completa de resiliencia (cortada por RAM), el banco antes/después y la fusión. Ver "Cierre (12-10-2026)" al
+final. `S/` = `packages/omo-opencode/src/`.
 Sesión real: `ses_ee7fddc21ffee0KX6v5DYfkf7Z` (registros `/tmp/oh-my-opencode.log`, `~/.local/share/opencode/log/opencode.log`).
 
 ## A. Modelos
@@ -109,8 +111,10 @@ atendidos, el aviso de arranque dice "listado pero no atendido", y `oh-my-openag
   `context_budget.orchestrator_minimal_tools` (activo) tampoco ven `lsp_*` (salvo `lsp_diagnostics`), `ast_grep_*`,
   `session_list`, `session_info`, `look_at`. Se conservan a propósito, con su motivo: `lsp_diagnostics`,
   `interactive_bash`, `skill_mcp`, `session_read`, `process_*`, `monitor_*`. Los especialistas conservan todo.
-- **Skills listados una sola vez** (`S/tools/skill/description-formatter.ts`): medido con la configuración del usuario,
-  la descripción pasa de 38.914 a 9.378 caracteres (**~7,4k tokens menos por petición** en cada agente con `skill`).
+- **Skills listados una sola vez** (`S/tools/skill/description-formatter.ts`). **Corrección (12-10-2026):** la cifra que
+  figuraba aquí (38.914 → 9.378 caracteres) salió de una prueba unitaria, no de lo que recibe el modelo. La sonda con la
+  configuración real mostró que el recorte **nunca llegaba**: seguía en 38.765 caracteres y 81 entradas. Causa y arreglo
+  en "Cierre (12-10-2026)".
 - **Descripciones recortadas:** `task` 4.721 → 3.667 caracteres; `decision_record` 810 → 457.
 - **Registrador de contexto** del banco: todas las herramientas, agrupadas por origen, y secciones partidas también por
   `## ` y etiquetas en mayúsculas.
@@ -165,3 +169,97 @@ atendidos, el aviso de arranque dice "listado pero no atendido", y `oh-my-openag
   gratuitos y activos: `sisyphus` ling-3.1-flash-free → big-pickle, `prometheus` mimo-v2.6-flash-free → big-pickle, el
   resto big-pickle → nemotron-3.5-lightning-free. Copia: `~/.omo/omo.jsonc.bak.2026-10-10-retired-models`. Surte efecto
   al reiniciar OpenCode.
+
+## Cierre (12-10-2026): prueba real, fallos encontrados y evidencia
+
+### Cómo se verificó (regla 17)
+- **Interfaz real** (`script/fork/qa/omo-models-tui.ts`): OpenCode 1.18.26 real en un tmux privado y un entorno XDG
+  aislado. Escribe como el usuario y lee del **log propio de OpenCode** el modelo usado en cada mensaje: cada línea
+  `message=process … messageID` va seguida de su `stream modelID=…`, así que los reintentos de un turno anterior no se
+  confunden con la respuesta. Se exige que la mitad de servidor del plugin haya cargado (línea `Built tool registry`).
+- **Contexto con la configuración real** (`script/fork/qa/context-probe.ts`): tu `opencode.json`, `AGENTS.md`, skills,
+  MCP y `omo.jsonc` contra un Zen simulado que no cuesta nada.
+- **QA aislada** (`script/fork/qa/resilience.ts`): proxy de Zen que rechaza modelos de pago y simula modelos muertos.
+- **Batería de pruebas:** el paquete entero, archivo por archivo y cada carpeta en un solo proceso, como `test:fast`.
+
+### Flujo final de `/omo-models`
+```mermaid
+flowchart TD
+    M[Mensaje del usuario a un agente] --> P{"¿Hay cadena en el proyecto?"}
+    P -- sí --> X[No se toca: manda la del proyecto]
+    P -- no --> C{"¿Cambió omo.jsonc desde el arranque,<br/>o la sesión reanudada trae un principal<br/>de una ejecución anterior,<br/>o es el sustituto de un modelo retirado?"}
+    C -- no --> X2[No se toca]
+    C -- sí --> D{"¿El modelo del mensaje es una elección<br/>deliberada con /models?"}
+    D -- "sí (nunca fue principal, ni respaldo<br/>del plugin, ni sustituto)" --> X3[Se respeta]
+    D -- no --> N["Primer modelo de la cadena que no esté<br/>roto ni retirado (con su variante)"]
+    N --> L["Log: [live-agent-model] … reason"]
+    T["/omo-models guarda la cadena"] --> O["Abre la lista de modelos de OpenCode para ese agente<br/>(también en la pantalla de inicio: agente por defecto)"]
+```
+El historial de principales por agente se guarda en `~/.cache/oh-my-opencode/agent-primary-history.json` (últimos 20).
+
+### Resultados en la interfaz real (`.omo/evidence/omo-models-tui/1791839579229/`)
+| Caso | Evidencia del log de OpenCode y del plugin |
+|---|---|
+| 1. Cambio en vivo | mensaje 1 → `big-pickle`; plugin `reason "chain changed"`; mensaje 2 → `nemotron-3.5-lightning-free` |
+| 2. Sesión reanudada (`--continue`) | plugin `from nemotron to mimo-v2.6-flash-free, reason "resumed session"`; mensaje → `mimo-v2.6-flash-free` |
+| 3. Elección con `/models` | elegido "Nemotron 3 Ultra" en el diálogo nativo → mensaje con `nemotron-3-ultra-free`; el plugin no actúa |
+| 4. Modelo retirado | cadena `glm-5-free` (retirado) → `nemotron`: plugin `reason "configured model retired"`; stream `nemotron-3.5-lightning-free` |
+| 5. Diálogo `/omo-models` | cadena guardada en `omo.jsonc` y lista "Select model" abierta |
+
+### Contexto de un "hola" con la configuración real
+| | `mis-mejoras` | Esta rama |
+|---|---|---|
+| Total | 74.194 tokens | **48.299 (−35 %)** |
+| Herramientas de Sisyphus | 89 (39.402 tokens) | 33 (13.704) |
+| Descripción de `skill` | 38.765 caracteres, 81 entradas | 8.231 caracteres, 23 entradas |
+
+Ninguna skill quedó inalcanzable: las 43 nativas siguen en `<available_skills>` y las 15 copias `synced/<id>/x` tienen
+su nombre corto ahí. Evidencia: `.omo/evidence/incidents/context-probe*.json`, con los cuerpos de petición en
+`context-bodies-2/` y `context-bodies-3/`.
+
+### Fallos que solo encontró la prueba real (todos corregidos con una prueba que fallaba antes)
+| Fallo | Causa | Arreglo | Prueba |
+|---|---|---|---|
+| Con un modelo retirado se usaba el modelo por defecto de OpenCode | En el primer arranque el plugin no tiene la lista de modelos, conserva el retirado, y la interfaz manda su modelo por defecto | `live-agent-model` sustituye a ese sustituto por el siguiente de la cadena en cada mensaje | `live-agent-model.test.ts`: 2 nuevas |
+| `/omo-models` no abría la lista en la pantalla de inicio | Sin sesión, no sabía cuál era el agente activo | Agente por defecto de la configuración; el aviso nombra el agente | `tui.test.ts`: 2 nuevas |
+| Skills repetidas (nunca funcionó) | OpenCode copia la descripción una vez al registrar (`tool/registry.ts:142`); el plugin pedía la lista nativa mientras OpenCode arrancaba, y el error se tragaba en un `catch` vacío | `tool.definition` (por petición, `registry.ts:318`) da la descripción viva y carga la lista nativa si falta (3 s como máximo); el error se registra; también faltaba un `import` | `native-late.test.ts` 2, `tool-definition-skill.test.ts` 2 |
+| La tarea se paraba con un modelo no atendido | Carrera entre `session.error` y `message.updated`: el segundo creaba un estado nuevo con una lectura antigua y dejaba huérfano el reintento del primero ("stale fallback generation") | `message.updated` vuelve a leer el estado tras su espera y no toca un salto en marcha | `message-update-handler.test.ts`: 1 nueva |
+| Los títulos iban a un modelo listado pero no atendido | El selector tomaba el primer gratuito "rápido" en el orden de la caché | Prefiere los modelos de las cadenas del usuario | `small-model.test.ts`: 2 nuevas |
+| 65 pruebas fallaban al correr juntas | El ayudante de simulacros cortaba la ruta en el primer espacio ("mejoras opencode") | Lee la ruta completa | `module-mock-lifecycle.test.ts`: 1 nueva; `runtime-fallback` 299/299 en un proceso |
+| Dos suites de los hooks de Claude Code fallaban solas | Simulacros incompletos e import por el índice general | Simulacros con las exportaciones reales; import directo | 3/3 y 2/2 |
+| La auditoría de simulacros necesitaba más de 2 GB | Analizaba los ~1.200 archivos de prueba a la vez | Filtra por texto y analiza solo los candidatos (un archivo trampa la sigue haciendo fallar) | 1/1, unos 1,2 GB |
+
+También se corrigió el arnés de QA:
+- el dist necesita `skills/` junto a `index.js`, porque OpenCode descarta en silencio un plugin que no se importa;
+- los reintentos no se toman por respuestas;
+- se comprueba que el diálogo de `/models` abre;
+- se descarta `ling` (73 % de fallos de Zen);
+- el umbral de RAM es configurable;
+- un caso que falla no oculta los demás;
+- la prueba de títulos usa su propia sesión sin título.
+
+### QA aislada (`.omo/evidence/incidents/resilience-2`, `resilience-3`)
+- **`omo-models-live`:** PASA; el siguiente mensaje usa el modelo de `omo.jsonc`.
+- **`model-not-served`:** PASA. Prueba el modelo muerto, salta a `big-pickle`, termina la tarea con las pruebas en
+  verde, recuerda el modelo como no atendido y avisa del salto.
+- **`title-free-model`:** PASA. Se genera 1 título, con `big-pickle`, y ninguna petición de pago.
+
+### Batería de pruebas
+- **Paquete `omo-opencode`:** 1.130 archivos de uno en uno, 0 fallos; además, 162 carpetas en un solo proceso cada una,
+  8.279 pruebas y 0 fallos.
+- **Otros paquetes:** `model-core` 492/492, `script/fork` 88/88, esquemas 7/7.
+- **Tipos:** `tsgo` del paquete, 0 errores.
+
+### Límites conocidos
+- La barra inferior de la interfaz muestra el modelo que la interfaz eligió hasta que se confirma en la lista que se
+  abre. La API de plugins no permite cambiarla.
+- Un cambio de agente con Tab en la pantalla de inicio no es visible para la API: la lista se abre para el agente por
+  defecto, y el aviso dice para cuál.
+- Si un modelo muerto está en tus cadenas, en el primer arranque puede elegirse para los títulos. En cuanto falla, la
+  caché de no atendidos lo marca y deja de usarse.
+
+### Pendiente para fusionar
+- La batería completa de resiliencia (10 escenarios, todo activado): la primera ejecución la cortó el vigilante de RAM.
+- El banco antes y después, que no puede bajar la tasa de acierto.
+- Las filas del roadmap, la fusión, reconstruir el dist real con el shim y subir.
+
