@@ -114,6 +114,8 @@ export const OhMyOpenCodeConfigSchema = z.object({
   web_research: WebResearchConfigSchema.optional(),
   /** Same error after repeated fixes: nudge, fresh debugger + research, then ask the user (fork roadmap 0.9b) */
   loop_breaker: LoopBreakerConfigSchema.optional(),
+  /** Each tab agent delegates only to its fixed specialist set; outside it, the user is told which agent to switch to (fork roadmap 0.22) */
+  tab_agent_roles: z.object({ enabled: z.boolean().default(true) }).optional(),
   resilience: ResilienceConfigSchema.optional(),
   /** One retry budget per task for stalls and loops; spent → paused and the user is told (fork roadmap 0.9b) */
   retry_budget: RetryBudgetConfigSchema.optional(),

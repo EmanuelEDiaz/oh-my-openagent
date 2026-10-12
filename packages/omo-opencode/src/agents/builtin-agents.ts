@@ -15,6 +15,7 @@ import { createHephaestusAgent } from "./hephaestus"
 import { createSisyphusJuniorAgentWithOverrides } from "./sisyphus-junior"
 import { SPECIALISTS } from "./specialists/catalog"
 import { createSpecialistAgent } from "./specialists/factory"
+import { isAllowedForTabAgent } from "./tab-agent-roles"
 import { customAgentsForDelegation } from "./custom-agent-visibility"
 import type { AvailableCategory } from "./dynamic-agent-prompt-builder"
 import {
@@ -79,6 +80,7 @@ export async function createBuiltinAgents(
   useTaskSystem = false,
   disableOmoEnv = false,
   teamModeEnabled = false,
+  tabAgentRoles = true,
 ): Promise<Record<string, AgentConfig>> {
 
   resetAgentRegistrationReport()
@@ -131,6 +133,9 @@ export async function createBuiltinAgents(
     ...availableAgents,
     ...customAgentsForDelegation(customAgentSummaries, new Set([...Object.keys(agentSources), "prometheus"]), disabledAgents),
   ]
+  // Each tab agent advertises only the specialists its role may call (fork roadmap 0.22); task refuses the rest.
+  const delegationAgentsFor = (tabAgent: string) =>
+    tabAgentRoles ? delegationAgents.filter((agent) => isAllowedForTabAgent(tabAgent, agent.name)) : delegationAgents
 
   const sisyphusConfig = maybeCreateSisyphusConfig({
     connectedProviders: mergedConnectedProviders,
@@ -140,7 +145,7 @@ export async function createBuiltinAgents(
     availableModels,
     systemDefaultModel,
     isFirstRunNoCache,
-    availableAgents: delegationAgents,
+    availableAgents: delegationAgentsFor("sisyphus"),
     availableSkills: buildAvailableSkills(discoveredSkills, browserProvider, disabledSkills, teamModeEnabled, "sisyphus"),
     availableCategories,
     mergedCategories,
@@ -160,7 +165,7 @@ export async function createBuiltinAgents(
     availableModels,
     systemDefaultModel,
     isFirstRunNoCache,
-    availableAgents: delegationAgents,
+    availableAgents: delegationAgentsFor("hephaestus"),
     availableSkills: buildAvailableSkills(discoveredSkills, browserProvider, disabledSkills, teamModeEnabled, "hephaestus"),
     availableCategories,
     mergedCategories,
@@ -184,7 +189,7 @@ export async function createBuiltinAgents(
     uiSelectedModel,
     availableModels,
     systemDefaultModel,
-    availableAgents: delegationAgents,
+    availableAgents: delegationAgentsFor("atlas"),
     availableSkills: buildAvailableSkills(discoveredSkills, browserProvider, disabledSkills, teamModeEnabled, "atlas"),
     mergedCategories,
     directory,
