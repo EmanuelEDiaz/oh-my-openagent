@@ -17,7 +17,8 @@ import { dirname, join } from "node:path"
 import { createSandbox, destroySandbox, prepareWorkdir, type Sandbox } from "../bench/sandbox"
 
 const REPO = join(import.meta.dir, "../../..")
-const RESERVE_MB = 3072
+/** RAM kept free for the user's other work; OMO_QA_RESERVE_MB overrides it when the user agrees to less. */
+const RESERVE_MB = Number(process.env.OMO_QA_RESERVE_MB ?? 3072)
 const TUI_COST_MB = 1024
 
 export type Step =
@@ -113,8 +114,39 @@ export function modelsFromLog(log: string): Array<{ at: string; model: string; a
     if (!line.includes("message=stream ") || line.includes("small=true")) continue
     const at = /timestamp=(\S+)/.exec(line)?.[1] ?? ""
     const model = /modelID=(\S+)/.exec(line)?.[1] ?? ""
-    const agent = /agent="([^"]+)"/.exec(line)?.[1] ?? ""
+    // OpenCode writes agent="Sisyphus - ultraworker" when the name has spaces, agent=build otherwise.
+    const agent = /agent="([^"]+)"/.exec(line)?.[1] ?? /agent=(\S+)/.exec(line)?.[1] ?? ""
     out.push({ at, model, agent })
+  }
+  return out
+}
+
+export type UserMessageModel = { readonly messageID: string; readonly model: string; readonly agent: string; readonly error?: string }
+
+/**
+ * The model OpenCode really used for each user message: `message=process … messageID=X` is followed by the stream
+ * line of that turn. Retries of an earlier turn stream again without a new process line, so they are never
+ * mistaken for the answer to a later message. A stream error on that turn is kept (Zen being down is not a model
+ * choice).
+ */
+export function modelsByUserMessage(log: string): UserMessageModel[] {
+  const out: UserMessageModel[] = []
+  let pending: string | undefined
+  for (const line of log.split("\n")) {
+    const processed = /message=process .*messageID=(\S+)/.exec(line)?.[1]
+    if (processed) {
+      pending = processed
+      continue
+    }
+    if (!pending || line.includes("small=true")) continue
+    const isStream = line.includes("message=stream ")
+    const isError = line.includes('message="stream error"')
+    if (!isStream && !isError) continue
+    const model = /modelID=(\S+)/.exec(line)?.[1] ?? ""
+    const agent = /agent="([^"]+)"/.exec(line)?.[1] ?? /agent=(\S+)/.exec(line)?.[1] ?? ""
+    const error = isError ? /error\.error="([^"]*)"/.exec(line)?.[1] ?? "stream error" : undefined
+    out.push({ messageID: pending, model, agent, ...(error ? { error } : {}) })
+    pending = undefined
   }
   return out
 }

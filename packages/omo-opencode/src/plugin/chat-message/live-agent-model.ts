@@ -169,7 +169,9 @@ export function createLiveAgentModel(deps: LiveAgentModelDeps): LiveAgentModel {
       if (projectSection && readAgentChain(projectSection.agents[agent]).length > 0) return undefined
       const chain = section ? readAgentChain(section.agents[agent]) : startupChain
       const changed = JSON.stringify(chain) !== JSON.stringify(startupChain)
-      if (chain.length === 0 || (!changed && !resumedOnPastPrimary)) return undefined
+      // The TUI's stand-in for a retired configured model is never what the user chose, changed chain or not.
+      const onStandIn = sameModel(standIns.get(agent), messageModel)
+      if (chain.length === 0 || (!changed && !resumedOnPastPrimary && !onStandIn)) return undefined
 
       const deliberate = isDeliberatePick(agent, messageModel, loaded)
       const primary = chain.find((entry) => !deps.isBroken(entryModel(entry)) && !deps.isRetired(entryModel(entry)))
@@ -184,7 +186,7 @@ export function createLiveAgentModel(deps: LiveAgentModelDeps): LiveAgentModel {
       // OpenCode keeps the variant inside the message model (UserMessage.model.variant), not at the top level.
       output.message.model = { providerID: parsed.providerID, modelID: parsed.modelID, ...(variant ? { variant } : {}) }
       const applied = `${parsed.providerID}/${parsed.modelID}`
-      log("[live-agent-model] /omo-models change applied without restart", { agent, from: messageModel, to: applied, resumed: !changed })
+      log("[live-agent-model] /omo-models change applied without restart", { agent, from: messageModel, to: applied, reason: changed ? "chain changed" : onStandIn ? "configured model retired" : "resumed session" })
       return applied
     },
   }

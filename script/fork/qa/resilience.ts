@@ -494,7 +494,8 @@ SCENARIOS.push(TITLE_SCENARIO)
 
 // --- Main --------------------------------------------------------------------------------------------------------
 /** The user's other work needs 3 GB; an OpenCode server with a task takes about 1 GB more. */
-const RESERVE_MB = 3072
+/** RAM kept free for the user's other work; OMO_QA_RESERVE_MB overrides it when the user agrees to less. */
+const RESERVE_MB = Number(process.env.OMO_QA_RESERVE_MB ?? 3072)
 const QA_COST_MB = 1024
 
 function availableMb(): number | undefined {

@@ -213,3 +213,39 @@ describe("resumed sessions after a restart (incident: /omo-models ignored on a r
     expect(output.message["model"]).toBeUndefined()
   })
 })
+
+describe("a retired configured model without any /omo-models change (real TUI, 12-10-2026)", () => {
+  const RETIRED_CHAIN: OpenCodeSection = {
+    agents: { sisyphus: { models: ["opencode/glm-5-free", "opencode/nemotron-3.5-lightning-free"] } },
+    runtimeFallback: undefined,
+    disabledProviders: [],
+  }
+
+  test("the TUI's stand-in moves to the next usable model of the agent's own chain", () => {
+    // given: OpenCode dropped the retired model from its list and the TUI sent its default (big-pickle) instead
+    const { send } = harness({ startup: RETIRED_CHAIN, retired: ["opencode/glm-5-free"] })
+
+    // when
+    const { applied } = send("big-pickle")
+
+    // then
+    expect(applied).toBe("opencode/nemotron-3.5-lightning-free")
+  })
+
+  test("every later message of that agent moves too, not only the first", () => {
+    const { send } = harness({ startup: RETIRED_CHAIN, retired: ["opencode/glm-5-free"] })
+    send("big-pickle")
+    expect(send("big-pickle").applied).toBe("opencode/nemotron-3.5-lightning-free")
+  })
+
+  test("a /models pick made after that is still respected", () => {
+    const { send } = harness({ startup: RETIRED_CHAIN, retired: ["opencode/glm-5-free"] })
+    send("big-pickle")
+    expect(send("claude-opus-5").applied).toBeUndefined()
+  })
+
+  test("with a usable configured model nothing changes", () => {
+    const { send } = harness()
+    expect(send("ling-3.0-flash-fin-free").applied).toBeUndefined()
+  })
+})
