@@ -112,6 +112,25 @@ retirado → siguiente gratuito con aviso; los cortes de red siguen esperando en
 `ai-guidelines` acotadas (hecho: sin `languages/`, `frameworks/`, `07-restful-api-design`, `project-map`,
 `planning-log`; 98k → 49k caracteres, ~12k tokens menos por petición; copia `opencode.json.bak.2026-10-07-context`);
 herramientas `ctx_*` de context-mode ocultas a los orquestadores. Arreglos en `plans/real-use-incidents.md`.
+**Estado (12-10-2026): verificado con datos reales; falta fusionar.** Interfaz real de `/omo-models`: 5/5 casos.
+"Hola" con la configuración real: 74.194 → 48.299 tokens (−35 %). QA aislada: 3/3. Batería del paquete: 1.130 archivos
+y 8.279 pruebas por carpeta, 0 fallos; tipos 0 errores. La prueba real encontró 6 fallos que las pruebas unitarias no
+veían, todos corregidos con una prueba que fallaba antes; entre ellos, que el recorte de skills **nunca había llegado
+al modelo**. Faltan la batería completa de resiliencia, el banco antes/después y la fusión. Detalle y evidencia en el
+cierre del plan.
+
+## Punto de reanudación (12-10-2026)
+Rama `fix/user-session-incidents`, verificada con datos reales (ver arriba). Para fusionarla faltan:
+1. La batería completa de resiliencia (`resilience.ts` sin `--only`; la primera ejecución la cortó el vigilante de RAM).
+2. El banco antes y después.
+3. Fusionar, reconstruir el dist real con el shim y subir.
+
+Después vienen las otras ramas listas para su prueba real y su banco: `feat/tab-agent-roles` (0.22),
+`feat/ideas-mode` (0.23, capa 1), `feat/type-error-guard` (0.9c), `feat/safe-kill-destructive` y
+`feat/test-credentials` (0.21, entregas 1 y 2).
+
+Memoria: el usuario aprobó un mínimo de 1 GB libre para las pruebas, y el vigilante corta en 1,2 GB; el agente del
+juego (`code-quest-c7`) necesita al menos 800 MB.
 
 ## Punto de reanudación (07-10-2026, parado a petición del usuario)
 **Retomar primero:** los incidentes del uso real (sección anterior; plan `plans/real-use-incidents.md`). Rama
@@ -320,6 +339,15 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 - ~~Reglas de lenguaje/framework cargadas bajo demanda~~ — absorbido en 4.5 (antes 2.9), 29-09-2026.
 
 ## Registro de decisiones del roadmap
+- 12-10-2026 — Incidentes verificados en la interfaz real y con la configuración real.
+  - El usuario pidió que cada parte cerrada se le enseñe con su evidencia, y "no dejar cabos sueltos: el plugin debe
+    quedar perfecto".
+  - Bajo esa regla se arreglaron también los fallos previos que destaparon las pruebas: rutas con espacios en el
+    ayudante de simulacros (65 fallos al correr juntas), dos suites de los hooks de Claude Code y la auditoría de
+    simulacros, que necesitaba más de 2 GB.
+  - Se corrige una afirmación anterior: el recorte de skills de 0.13 se había medido en una prueba unitaria y no
+    llegaba al modelo.
+  - El usuario bajó el mínimo de RAM para la QA a 1 GB, tras preguntar al agente del juego cuánto necesita (800 MB).
 - 05-10-2026 — Caída de red (usuario): 0.8 cubría cortes y cuelgues del modelo pero no distinguía la red; nuevo paso 0.15 (esperar conexión, aviso visible con contador, misma sesión y modelo, sin contar como fallo del modelo), justo tras cerrar 0.9. Hallazgo para 0.14: los títulos fallan porque el modelo pequeño es de pago (`gpt-5.4-nano`).
 - 05-10-2026 — Cortes por RAM (usuario): 0.15 amplía a congelamientos y procesos matados por falta de RAM: estado atómico en disco, marca de trabajo en curso, tarjeta de reanudación con herramientas a medias, y freno de subagentes en paralelo con poca RAM. Además el agente reanuda con cualquier mensaje siguiente ("continúa" u otro texto): nota de reanudación de un solo uso con el trabajo cortado.
 - 05-10-2026 — Orden (usuario): 0.15 empieza ya, en paralelo con la medición de 0.9. Integración: nuevo 0.16, suite acumulativa con todo activado antes de cada merge (elegido frente a "solo cruces por paso" y "medir primero"). Nuevo 0.17: compactación sin bucles y varios temas por conversación (investigación primero). Tras la investigación (usuario): 0.17a guardianes antes de 0.13, 0.17b temas después de 0.13, con detección automática + `/tema`.
