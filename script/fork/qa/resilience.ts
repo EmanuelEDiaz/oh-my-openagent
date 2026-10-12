@@ -478,15 +478,26 @@ const GUARD_SCENARIO: Scenario = {
 }
 SCENARIOS.push(GUARD_SCENARIO)
 
-// Titles use a free model when small_model is not set (incident 07-10-2026: the paid gpt-5.4-nano was used). Checked
-// over every request of the run: requests without tools are the title/small-model ones.
+// Titles use a free model when small_model is not set (incident 07-10-2026: the paid gpt-5.4-nano was used). Its own
+// session WITHOUT a title: OpenCode only generates a title for an untitled session (the other scenarios name theirs,
+// so a run of them alone never made a title request; QA 12-10-2026). Requests without tools are the title ones.
 const TITLE_SCENARIO: Scenario = {
   id: "title-free-model",
   async run(context) {
-    const small = context.proxy.requests.filter((entry) => entry.model && !entry.tools).map((entry) => entry.model ?? "")
+    const workdir = prepareWorkdir(context.sandbox, FIXTURE, "title")
+    const client = context.client(workdir)
+    const mark = context.proxy.requests.length
+    const sessionID = ((await client.session.create({})).data as { id: string }).id
+    await client.session.promptAsync({ sessionID, agent: "Sisyphus - ultraworker", parts: [{ type: "text", text: "Reply with exactly one word: hello. Do not use tools." }] })
+    await waitSettled(client, sessionID, 300_000)
+    const deadline = Date.now() + 30_000
+    const titleRequests = () => context.proxy.requests.slice(mark).filter((entry) => entry.model && !entry.tools)
+    while (titleRequests().length === 0 && Date.now() < deadline) await Bun.sleep(1_000)
+    const small = titleRequests().map((entry) => entry.model ?? "")
     return [
+      check("a title was generated for the untitled session", small.length > 0, `${small.length} title request(s)`),
       check("no paid model was requested", context.proxy.blockedPaid.length === 0, context.proxy.blockedPaid.join(", ")),
-      check("title/small requests used a free model", small.length > 0 && small.every((model) => model.endsWith("-free") || model === "big-pickle"), [...new Set(small)].join(", ")),
+      check("title requests used a free model", small.length > 0 && small.every((model) => model.endsWith("-free") || model === "big-pickle"), [...new Set(small)].join(", ")),
     ]
   },
 }
