@@ -160,6 +160,14 @@ export function createMessageUpdateHandler(deps: HookDeps, helpers: AutoRetryHel
 
       const agent = info?.agent as string | undefined
       const resolvedAgent = await helpers.resolveAgentForSessionFromContext(sessionID, agent)
+      // OpenCode also emits session.error for the same failure; while the agent was being resolved, that path may
+      // have started the fallback. Read the state again and leave a fallback already under way alone, or a second
+      // state would orphan its retry and neither would run (isolated QA, 12-10-2026).
+      state = sessionStates.get(sessionID)
+      if (sessionRetryInFlight.has(sessionID) && !retrySignal) {
+        log(`[${HOOK_NAME}] message.updated fallback skipped (session.error already started it)`, { sessionID })
+        return
+      }
       const fallbackModels = getFallbackModelsForSession(sessionID, resolvedAgent, pluginConfig)
 
       if (fallbackModels.length === 0) {
