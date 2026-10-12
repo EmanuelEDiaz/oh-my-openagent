@@ -72,6 +72,16 @@ describe("managed processes (fork 0.8b)", () => {
     expect(manager.logs(record.id, 10)).toEqual(["added 12 packages"])
   })
 
+  test("runningPids lists every live process the agent started, across sessions (0.21: kill only your own)", async () => {
+    const { manager, children } = setup()
+    await manager.start({ sessionID: "s1", name: "api", command: "node api.js", cwd: "/w" })
+    await manager.start({ sessionID: "s2", name: "web", command: "vite", cwd: "/w" })
+    await manager.start({ sessionID: "s1", name: "once", command: "true", cwd: "/w" })
+    children[2]!.exit(0)
+    await flush()
+    expect(manager.runningPids().sort()).toEqual([1000, 1001])
+  })
+
   test("wait_for a pattern: told once when the line appears, then again only if it dies", async () => {
     const { manager, children, notes } = setup()
     await manager.start({ sessionID: "s1", name: "web", command: "npm run dev", waitFor: { pattern: "ready on" } })

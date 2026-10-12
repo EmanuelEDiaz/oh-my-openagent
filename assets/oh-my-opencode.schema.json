@@ -9855,6 +9855,19 @@
       ],
       "additionalProperties": false
     },
+    "shell_safety": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "default": true,
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "enabled"
+      ],
+      "additionalProperties": false
+    },
     "resilience": {
       "type": "object",
       "properties": {

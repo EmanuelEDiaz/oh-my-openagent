@@ -75,8 +75,8 @@ export function classifyCommand(command: string): CommandClass {
       kind: "self-kill",
       message: [
         `Blocked: \`${trimmed}\` can kill OpenCode, the agent's own shell or unrelated processes.`,
-        "Stop a managed process with `process_stop <id>`; otherwise kill one known PID (`kill <pid>`, on Windows `taskkill /PID <pid> /T`)",
-        "or free a port with `fuser -k <port>/tcp`. If none applies, ask the user.",
+        "Stop a process you started with `process_stop <id>`. To free a port, find its owner (`lsof -i :PORT` or `ss -ltnp`)",
+        "and ask the user before stopping it.",
       ].join(" "),
     }
   }

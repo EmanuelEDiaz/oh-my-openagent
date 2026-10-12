@@ -9,6 +9,7 @@ import type { OhMyOpenCodeConfig } from "./schema"
 /** Hooks that keep the agent honest or the work safe. */
 export const GUARD_HOOKS: readonly string[] = [
   "test-integrity-guard",
+  "shell-safety-guard",
   "edit-diagnostics",
   "loop-breaker",
   "stall-watchdog",
@@ -21,7 +22,7 @@ export const GUARD_HOOKS: readonly string[] = [
 ]
 
 /** Settings sections of those guards (and the Zen gate and the network guard). */
-export const GUARD_SECTIONS = ["test_integrity", "edit_diagnostics", "loop_breaker", "retry_budget", "resilience", "stall", "zen_free_gate"] as const
+export const GUARD_SECTIONS = ["test_integrity", "edit_diagnostics", "loop_breaker", "retry_budget", "resilience", "stall", "zen_free_gate", "shell_safety"] as const
 
 export type GuardProtection = { readonly config: OhMyOpenCodeConfig; readonly ignored: readonly string[] }
 

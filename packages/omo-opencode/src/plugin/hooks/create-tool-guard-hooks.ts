@@ -24,6 +24,7 @@ import {
 } from "../../hooks"
 import { createManagedProcessGuardHook } from "../../hooks/managed-process-guard/hook"
 import { createTestIntegrityGuardHook } from "../../hooks/test-integrity-guard"
+import { createShellSafetyGuardHook } from "../../hooks/shell-safety-guard"
 import { createEditDiagnosticsHook } from "../../hooks/edit-diagnostics"
 import { createWebResearchVerdictHook } from "../../hooks/web-research-verdict"
 import { createLoopBreakerHook } from "../../hooks/loop-breaker"
@@ -56,6 +57,7 @@ export type ToolGuardHooks = {
   bashFileReadGuard: ReturnType<typeof createBashFileReadGuardHook> | null
   managedProcessGuard: ReturnType<typeof createManagedProcessGuardHook> | null
   testIntegrityGuard: ReturnType<typeof createTestIntegrityGuardHook> | null
+  shellSafetyGuard: ReturnType<typeof createShellSafetyGuardHook> | null
   editDiagnostics: ReturnType<typeof createEditDiagnosticsHook> | null
   webResearchVerdict: ReturnType<typeof createWebResearchVerdictHook> | null
   loopBreaker: ReturnType<typeof createLoopBreakerHook> | null
@@ -158,6 +160,11 @@ export function createToolGuardHooks(args: {
     ? safeHook("managed-process-guard", () => createManagedProcessGuardHook({ enforceLongRunning: pluginConfig.processes?.enforce !== false }))
     : null
 
+  // Kill only what the agent started; destructive commands need the user's approval (fork roadmap 0.21).
+  const shellSafetyGuard = isHookEnabled("shell-safety-guard") && pluginConfig.shell_safety?.enabled !== false
+    ? safeHook("shell-safety-guard", () => createShellSafetyGuardHook(ctx))
+    : null
+
   // Existing tests are read-only while fixing and cheating edits are refused (fork roadmap 0.9a).
   const testIntegrityGuard = isHookEnabled("test-integrity-guard") && pluginConfig.test_integrity?.enabled !== false
     ? safeHook("test-integrity-guard", () => createTestIntegrityGuardHook(ctx))
@@ -238,6 +245,7 @@ export function createToolGuardHooks(args: {
     bashFileReadGuard,
     managedProcessGuard,
     testIntegrityGuard,
+    shellSafetyGuard,
     editDiagnostics,
     webResearchVerdict,
     loopBreaker,

@@ -114,6 +114,8 @@ export const OhMyOpenCodeConfigSchema = z.object({
   web_research: WebResearchConfigSchema.optional(),
   /** Same error after repeated fixes: nudge, fresh debugger + research, then ask the user (fork roadmap 0.9b) */
   loop_breaker: LoopBreakerConfigSchema.optional(),
+  /** Kill only what the agent started; nothing destructive without the user's approval; no destroying after a password failure (fork roadmap 0.21) */
+  shell_safety: z.object({ enabled: z.boolean().default(true) }).optional(),
   resilience: ResilienceConfigSchema.optional(),
   /** One retry budget per task for stalls and loops; spent → paused and the user is told (fork roadmap 0.9b) */
   retry_budget: RetryBudgetConfigSchema.optional(),

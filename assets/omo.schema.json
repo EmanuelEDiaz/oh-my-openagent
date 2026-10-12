@@ -12171,6 +12171,19 @@
           ],
           "additionalProperties": false
         },
+        "shell_safety": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "enabled"
+          ],
+          "additionalProperties": false
+        },
         "resilience": {
           "type": "object",
           "properties": {
@@ -30523,6 +30536,19 @@
                   "nudge_after",
                   "research_after",
                   "block_after"
+                ],
+                "additionalProperties": false
+              },
+              "shell_safety": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "default": true,
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "enabled"
                 ],
                 "additionalProperties": false
               },
