@@ -26,18 +26,37 @@ const THIRD: OpenCodeSection = {
   disabledProviders: [],
 }
 
-function harness(options: { broken?: string[]; retired?: string[]; fallbackSwitched?: string[]; project?: OpenCodeSection } = {}) {
+type HarnessOptions = {
+  broken?: string[]
+  retired?: string[]
+  fallbackSwitched?: string[]
+  project?: OpenCodeSection
+  /** omo.jsonc at startup (default STARTUP); loadedModel follows its sisyphus primary. */
+  startup?: OpenCodeSection
+  /** Persisted primaries from earlier OpenCode runs, shared between harnesses like the cache file. */
+  pastPrimaries?: Map<string, string[]>
+}
+
+function harness(options: HarnessOptions = {}) {
   let mtime = 1
-  let section = STARTUP
+  let section = options.startup ?? STARTUP
+  const past = options.pastPrimaries ?? new Map<string, string[]>()
+  const startupPrimary = (section.agents["sisyphus"] as { models: (string | { model: string })[] }).models[0]
+  const loaded = typeof startupPrimary === "string" ? startupPrimary : startupPrimary?.model
   const deps: LiveAgentModelDeps = {
     userConfigPath: USER,
     ...(options.project ? { projectConfigPath: "/p/.omo/omo.jsonc" } : {}),
     modifiedAt: (path) => (path === USER ? mtime : 1),
     read: (path) => (path === USER ? section : (options.project ?? STARTUP)),
-    loadedModel: (agent) => (agent === "sisyphus" ? "opencode/ling-3.0-flash-fin-free" : undefined),
+    loadedModel: (agent) => (agent === "sisyphus" ? loaded : undefined),
     isBroken: (model) => (options.broken ?? []).includes(model),
     isRetired: (model) => (options.retired ?? []).includes(model),
     wasFallbackSwitch: (model) => (options.fallbackSwitched ?? []).includes(model),
+    pastPrimaries: (agent) => past.get(agent) ?? [],
+    recordPrimary: (agent, model) => {
+      const seen = past.get(agent) ?? []
+      if (!seen.includes(model)) past.set(agent, [...seen, model])
+    },
   }
   const live = createLiveAgentModel(deps)
   const save = (next: OpenCodeSection) => {
@@ -145,5 +164,52 @@ describe("live /omo-models changes (no restart)", () => {
     const { save, send } = harness({ retired: ["opencode/mimo-v2.6-flash-free"] })
     save(SAVED)
     expect(send("ling-3.0-flash-fin-free").applied).toBe("opencode/big-pickle")
+  })
+})
+
+describe("resumed sessions after a restart (incident: /omo-models ignored on a resumed session)", () => {
+  test("a resumed session still on a primary from an earlier run moves to the current primary", () => {
+    // given: run 1 had ling as primary; the user saved mimo with /omo-models and restarted OpenCode
+    const past = new Map<string, string[]>()
+    harness({ pastPrimaries: past }).send("ling-3.0-flash-fin-free")
+    const { send } = harness({ startup: SAVED, pastPrimaries: past })
+
+    // when: the TUI resumes the old session and sends that session's last model
+    const { applied, output } = send("ling-3.0-flash-fin-free")
+
+    // then
+    expect(applied).toBe("opencode/mimo-v2.6-flash-free")
+    expect(output.message["model"]).toEqual({ providerID: "opencode", modelID: "mimo-v2.6-flash-free", variant: "high" })
+  })
+
+  test("a primary saved live in an earlier run is remembered across the restart too", () => {
+    const past = new Map<string, string[]>()
+    const first = harness({ pastPrimaries: past })
+    first.save(SAVED)
+    first.send("ling-3.0-flash-fin-free")
+    const { send } = harness({ startup: THIRD, pastPrimaries: past })
+    expect(send("mimo-v2.6-flash-free").applied).toBe("opencode/nemotron-free")
+  })
+
+  test("a resumed session on a model that was never this agent's primary is a user pick and is kept", () => {
+    const past = new Map<string, string[]>()
+    harness({ pastPrimaries: past }).send("ling-3.0-flash-fin-free")
+    const { send } = harness({ startup: SAVED, pastPrimaries: past })
+    expect(send("claude-opus-5").applied).toBeUndefined()
+  })
+
+  test("another agent's past primary does not count for this agent", () => {
+    const past = new Map<string, string[]>([["oracle", ["opencode/ling-3.0-flash-fin-free"]]])
+    const { send } = harness({ startup: SAVED, pastPrimaries: past })
+    expect(send("ling-3.0-flash-fin-free").applied).toBeUndefined()
+  })
+
+  test("a message already on the current primary is left alone", () => {
+    const past = new Map<string, string[]>()
+    harness({ pastPrimaries: past }).send("ling-3.0-flash-fin-free")
+    const { send } = harness({ startup: SAVED, pastPrimaries: past })
+    const { applied, output } = send("mimo-v2.6-flash-free")
+    expect(applied).toBeUndefined()
+    expect(output.message["model"]).toBeUndefined()
   })
 })

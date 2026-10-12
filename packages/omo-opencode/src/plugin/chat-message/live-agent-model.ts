@@ -7,6 +7,7 @@ import type { OpenCodeSection } from "../../cli/config-models/context"
 import { isRetiredModel, loadModelCatalog } from "../../cli/config-models/model-catalog"
 import type { ModelCatalog } from "../../cli/config-models/model-catalog"
 import { getAgentConfigKey } from "../../shared/agent-display-names"
+import { pastAgentPrimaries, recordAgentPrimary } from "../../shared/agent-primary-history"
 import { isModelBroken } from "../../shared/broken-models-cache"
 import { wasFallbackSwitch } from "../../shared/fallback-switched-models"
 import { getLoadedAgentModel } from "../../shared/loaded-agent-models"
@@ -23,6 +24,8 @@ import type { ChatMessageHandlerOutput, ChatMessageInput } from "./types"
  * agent had in an earlier omo.jsonc version, a model the plugin's own fallback switched to, or (when the startup
  * model is retired, so the TUI substituted its most recent model) the stand-in the TUI first sent for the agent.
  * Anything else is a `/models` choice and is left alone, as is a project-level chain (which wins over the user file).
+ * A resumed session makes the TUI send that session's last model even when omo.jsonc did not change since startup:
+ * when that model was the agent's primary in an earlier OpenCode run (persisted history), it moves to today's primary.
  */
 export type LiveAgentModelDeps = {
   readonly userConfigPath: string
@@ -35,6 +38,9 @@ export type LiveAgentModelDeps = {
   readonly isRetired: (model: string) => boolean
   /** The plugin's runtime/model fallback switched a session to this model. */
   readonly wasFallbackSwitch: (model: string) => boolean
+  /** Primaries the agent had in omo.jsonc in any OpenCode run, persisted (see agent-primary-history). */
+  readonly pastPrimaries: (agent: string) => readonly string[]
+  readonly recordPrimary: (agent: string, model: string) => void
 }
 
 export type LiveAgentModel = {
@@ -60,6 +66,8 @@ export function defaultLiveAgentModelDeps(directory: string | undefined): LiveAg
     isBroken: (model) => isModelBroken(model),
     isRetired: (model) => isRetiredModel(model, catalog()),
     wasFallbackSwitch,
+    pastPrimaries: (agent) => pastAgentPrimaries(agent),
+    recordPrimary: (agent, model) => recordAgentPrimary(agent, model),
   }
 }
 
@@ -96,10 +104,12 @@ function entryVariant(entry: ModelChainEntry): string | undefined {
   return typeof variant === "string" ? variant : parseModelString(entry.model)?.variant
 }
 
-function remember(history: Map<string, string[]>, agent: string, model: string | undefined): void {
+function remember(deps: LiveAgentModelDeps, history: Map<string, string[]>, agent: string, model: string | undefined): void {
   if (!model) return
   const seen = history.get(agent) ?? []
-  if (!seen.some((entry) => sameModel(entry, model))) history.set(agent, [...seen, model])
+  if (seen.some((entry) => sameModel(entry, model))) return
+  history.set(agent, [...seen, model])
+  deps.recordPrimary(agent, model)
 }
 
 export function createLiveAgentModel(deps: LiveAgentModelDeps): LiveAgentModel {
@@ -126,9 +136,13 @@ export function createLiveAgentModel(deps: LiveAgentModelDeps): LiveAgentModel {
     return cached.section
   }
 
+  const wasPastRunPrimary = (agent: string, messageModel: string): boolean =>
+    deps.pastPrimaries(agent).some((model) => sameModel(model, messageModel))
+
   const isDeliberatePick = (agent: string, messageModel: string, loaded: string | undefined): boolean => {
     if (sameModel(messageModel, loaded)) return false
     if ((primaries.get(agent) ?? []).some((model) => sameModel(model, messageModel))) return false
+    if (wasPastRunPrimary(agent, messageModel)) return false
     if (deps.wasFallbackSwitch(messageModel)) return false
     return !sameModel(standIns.get(agent), messageModel)
   }
@@ -141,7 +155,9 @@ export function createLiveAgentModel(deps: LiveAgentModelDeps): LiveAgentModel {
       const messageModel = `${input.model.providerID}/${input.model.modelID}`
       const startupChain = readAgentChain(startupSection?.agents[agent])
       const startupPrimary = startupChain[0] === undefined ? loaded : entryModel(startupChain[0])
-      remember(primaries, agent, startupPrimary)
+      // Checked before this run's startup primary is recorded, so "past" means earlier runs or live saves.
+      const resumedOnPastPrimary = !sameModel(messageModel, loaded) && wasPastRunPrimary(agent, messageModel)
+      remember(deps, primaries, agent, startupPrimary)
       if (!standInChecked.has(agent)) {
         // The TUI validates the model the server registered for the agent; when it is retired it sends recent[0].
         standInChecked.add(agent)
@@ -150,16 +166,16 @@ export function createLiveAgentModel(deps: LiveAgentModelDeps): LiveAgentModel {
       }
 
       const section = currentSection()
-      if (!section) return undefined
       if (projectSection && readAgentChain(projectSection.agents[agent]).length > 0) return undefined
-      const chain = readAgentChain(section.agents[agent])
-      if (chain.length === 0 || JSON.stringify(chain) === JSON.stringify(startupChain)) return undefined
+      const chain = section ? readAgentChain(section.agents[agent]) : startupChain
+      const changed = JSON.stringify(chain) !== JSON.stringify(startupChain)
+      if (chain.length === 0 || (!changed && !resumedOnPastPrimary)) return undefined
 
       const deliberate = isDeliberatePick(agent, messageModel, loaded)
       const primary = chain.find((entry) => !deps.isBroken(entryModel(entry)) && !deps.isRetired(entryModel(entry)))
       // Once omo.jsonc changes again, a TUI still pinned to this version's primary is not a deliberate pick.
-      remember(primaries, agent, chain[0] === undefined ? undefined : entryModel(chain[0]))
-      remember(primaries, agent, primary === undefined ? undefined : entryModel(primary))
+      remember(deps, primaries, agent, chain[0] === undefined ? undefined : entryModel(chain[0]))
+      remember(deps, primaries, agent, primary === undefined ? undefined : entryModel(primary))
       if (deliberate || !primary || sameModel(entryModel(primary), messageModel)) return undefined
       const parsed = parseModelString(entryModel(primary))
       if (!parsed) return undefined
@@ -168,7 +184,7 @@ export function createLiveAgentModel(deps: LiveAgentModelDeps): LiveAgentModel {
       // OpenCode keeps the variant inside the message model (UserMessage.model.variant), not at the top level.
       output.message.model = { providerID: parsed.providerID, modelID: parsed.modelID, ...(variant ? { variant } : {}) }
       const applied = `${parsed.providerID}/${parsed.modelID}`
-      log("[live-agent-model] /omo-models change applied without restart", { agent, from: messageModel, to: applied })
+      log("[live-agent-model] /omo-models change applied without restart", { agent, from: messageModel, to: applied, resumed: !changed })
       return applied
     },
   }
