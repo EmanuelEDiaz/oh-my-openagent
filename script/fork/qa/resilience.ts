@@ -8,6 +8,7 @@
  *
  * The sandbox (with its copy of auth.json) is deleted at the end, also on failure.
  */
+import { relayUpstream } from "../bench/proxy-relay"
 import { createOpencodeClient } from "@opencode-ai/sdk/v2"
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -89,11 +90,8 @@ function createSwitchableProxy(upstream: string) {
           return new Response(JSON.stringify({ error: { message: "Cannot find any route matching [POST] https://opencode.ai/zen/v1/chat/completions" } }), { status: 404, headers: { "content-type": "application/json" } })
         }
         if (holdMs > 0 && body) await Bun.sleep(holdMs)
-        const headers = new Headers(request.headers)
-        headers.delete("host")
-        headers.delete("content-length")
         try {
-          return await fetch(`${upstream}${url.pathname.replace(/^\/proxy/, "")}${url.search}`, { method: request.method, headers, ...(body === undefined ? {} : { body }) })
+          return await relayUpstream(`${upstream}${url.pathname.replace(/^\/proxy/, "")}${url.search}`, { method: request.method, headers: request.headers, ...(body === undefined ? {} : { body }) })
         } catch (error) {
           // A real network drop upstream: answer like a gateway instead of crashing the request.
           return new Response(JSON.stringify({ error: { message: `upstream unreachable: ${error instanceof Error ? error.message : String(error)}` } }), { status: 502, headers: { "content-type": "application/json" } })

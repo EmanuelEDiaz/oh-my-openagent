@@ -3,6 +3,7 @@
  * unchanged and records how much each part of it weighs (agent prompt, loaded rules, plugin guidance, tool
  * definitions, conversation). Every bench report gets a per-agent, per-task context table from it.
  */
+import { relayUpstream } from "./proxy-relay"
 import { appendFileSync } from "node:fs"
 
 export type ContextRecord = {
@@ -137,11 +138,8 @@ export function startContextProxy(upstream: string, logFile: string): { readonly
           // recording must never break the run
         }
       }
-      const headers = new Headers(request.headers)
-      headers.delete("host")
-      headers.delete("content-length")
       try {
-        return await fetch(`${base}${url.pathname.replace(/^\/proxy/, "")}${url.search}`, { method: request.method, headers, ...(body === undefined ? {} : { body }) })
+        return await relayUpstream(`${base}${url.pathname.replace(/^\/proxy/, "")}${url.search}`, { method: request.method, headers: request.headers, ...(body === undefined ? {} : { body }) })
       } catch (error) {
         // A dropped upstream connection becomes a retryable 502 for OpenCode instead of an unhandled error.
         return new Response(JSON.stringify({ error: { message: `upstream unreachable: ${error instanceof Error ? error.message : String(error)}` } }), { status: 502, headers: { "content-type": "application/json" } })
