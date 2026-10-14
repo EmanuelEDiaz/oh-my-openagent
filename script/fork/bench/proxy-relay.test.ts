@@ -17,13 +17,13 @@ const upstream = Bun.serve({
 afterAll(() => upstream.stop(true))
 
 describe("relayUpstream", () => {
-  test("asks the upstream for an uncompressed answer", async () => {
+  test("the request headers reach the upstream unchanged (Zen refuses free-tier requests that do not look like OpenCode's)", async () => {
     const response = await relayUpstream(`http://127.0.0.1:${upstream.port}/x`, { method: "GET", headers: new Headers({ "accept-encoding": "gzip, br" }) })
-    expect(((await response.json()) as { asked: string }).asked).toBe("identity")
+    expect(((await response.json()) as { asked: string }).asked).toBe("gzip, br")
   })
 
   test("a compressed answer is passed on decoded, without a content-encoding the client would decode again", async () => {
-    const proxy = Bun.serve({ port: 0, fetch: () => relayUpstream(`http://127.0.0.1:${upstream.port}/x`, { method: "GET", headers: new Headers({ "accept-encoding": "br" }), forceUpstreamEncoding: "br" }) })
+    const proxy = Bun.serve({ port: 0, fetch: () => relayUpstream(`http://127.0.0.1:${upstream.port}/x`, { method: "GET", headers: new Headers({ "accept-encoding": "br" }) }) })
     try {
       const response = await fetch(`http://127.0.0.1:${proxy.port}/`)
       expect(response.headers.get("content-encoding")).toBeNull()
