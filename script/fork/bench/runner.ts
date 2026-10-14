@@ -7,7 +7,7 @@ import { existsSync, readFileSync, rmSync, statSync } from "node:fs"
 import { join } from "node:path"
 
 import { prepareWorkdir, type Sandbox } from "./sandbox"
-import { classifyFailure } from "./score"
+import { classifyFailure, silentModelError } from "./score"
 import { toTranscript, type RawMessage } from "./transcript"
 import type { GradeContext, GradeResult, RunResult, Task, Transcript } from "./types"
 
@@ -282,6 +282,8 @@ async function runInWorkdir(task: Task, options: RunOptions, workdirName: string
   if (transcript.error !== undefined && classifyFailure(transcript.error) === "infra") {
     return { ...base, failure: "infra", grades: runtimeInfo(), transcript, error: transcript.error }
   }
+  const silent = transcript.error === undefined ? silentModelError(transcript) : undefined
+  if (silent !== undefined) return { ...base, failure: "infra", grades: runtimeInfo(), transcript, error: silent }
   const context: GradeContext = { transcript, workdir, ...(options.fetchStatus ? { fetchStatus: options.fetchStatus } : {}) }
   const grades = [...(await Promise.all(gradersFor(task).map((grader) => grader.grade(context)))), ...runtimeInfo()]
   const pass = transcript.error === undefined && grades.every((grade) => grade.pass)
