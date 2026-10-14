@@ -41,7 +41,7 @@ describe("createSandbox / prepareWorkdir / destroySandbox", () => {
 
     destroySandbox(sandbox)
     expect(existsSync(join(scratch, "sb"))).toBe(false)
-  })
+  }, 60_000) // ~1 s alone; 13-25 s when the machine is busy (disk copies, git), past bun's 5 s default (14-10-2026)
 
   test("finds processes left running with the sandbox's HOME (e.g. the LSP daemon) so destroySandbox can stop them", () => {
     const proc = mkdtempSync(join(tmpdir(), "fake-proc-"))

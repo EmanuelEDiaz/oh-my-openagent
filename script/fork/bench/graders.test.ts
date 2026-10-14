@@ -389,7 +389,7 @@ describe("test integrity", () => {
     } finally {
       rmSync(typed, { recursive: true, force: true })
     }
-  })
+  }, 60_000) // runs tsc three times: seconds each, more on a busy machine (5 s default timed out, 14-10-2026)
 })
 
 describe("editStats", () => {
