@@ -81,3 +81,16 @@ defecto `explain-concept`. `diagram-mermaid` acompaña (tope de 2 skills) cuando
 **Medición:** primero el enrutado (≈60 peticiones etiquetadas ES/EN con casos ambiguos → acierto y matriz de confusión,
 sin modelo); después calidad por skill (comprobaciones deterministas + juez con rúbrica calibrado por el usuario) y A/B
 cada skill frente a ninguno con el mismo modelo gratuito: solo se queda si mejora.
+
+## Skill para escribir Mermaid (idea del usuario, 19-10-2026)
+- **Problema:** dibujar (0.19) solo sirve si el código Mermaid es válido, y los modelos lo rompen a menudo: comillas o
+  paréntesis en las etiquetas sin escapar, la palabra `end` como nombre de nodo, tipos de diagrama que el dibujante no
+  admite, diagramas que superan los topes de 0.19.
+- **Skill `mermaid`** en `packages/shared-skills/skills/`, cargada con la herramienta `skill` solo cuando un agente va a
+  dibujar (`@explainer`, planes visuales de Prometheus): los tipos que `beautiful-mermaid` dibuja, la sintaxis segura de
+  cada uno, los errores típicos con su arreglo y los topes de tamaño de 0.19.
+- **Comprobación por código:** cada bloque se valida al terminar el texto; si no se puede dibujar, el modelo recibe el
+  error exacto (línea y motivo) para corregirlo una vez, sin bucles.
+- **Medición:** porcentaje de diagramas válidos a la primera con y sin la skill, en las mismas tareas del banco, y el
+  contexto que añade la skill cuando se carga.
+
