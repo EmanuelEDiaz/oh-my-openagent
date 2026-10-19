@@ -19,7 +19,7 @@ señales de OpenCode, casi nulo cuando está plegado.**
 - **Espacio:** la barra lateral tiene ~38 columnas útiles y solo aparece con más de 120 columnas de terminal `[V]`; caben
   2 personajes de 16×16 por fila (16 columnas × 8 filas cada uno).
 - **La app de escritorio no admite paneles de plugins** `[V]`: solo terminal.
-- **Proyectos de referencia:** `campy` (mascota en la barra lateral de OpenCode, solo eventos, MIT), `pixel-agents`
+- **Proyectos de referencia:** `agents-pixel-dungeon` (Rust + egui, MIT, añadido 19-10-2026 por el usuario: una sala por agente que cambia con su estado, chat con aceptar/rechazar permisos, diff y terminal por agente, subagentes como personajes pequeños, un "Laboratory" de hipótesis y experimentos; lee los agentes por Herdr, sin OpenCode; solo referencia: el usuario elige qué ideas conservar y prefiere un laboratorio a una mazmorra), `campy` (mascota en la barra lateral de OpenCode, solo eventos, MIT), `pixel-agents`
   (oficina de agentes en VS Code, MIT), `term-pet` (medios bloques, MIT); `clawd-on-desk` es AGPL: solo ideas.
 
 ## Diseño
