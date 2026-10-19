@@ -151,7 +151,7 @@ export function classifyRuntimeFallbackError(error: unknown): RuntimeFallbackErr
     /exceeded.*quota/i.test(message) ||
     /usage\s*quota/i.test(message) ||
     /subscription.?(?:quota|limit)/i.test(message) ||
-    /insufficient.?(?:quota|balance|funds?)/i.test(message) ||
+    /insufficient[\s_-]*(?:account[\s_-]+)?(?:quota|balance|funds?|credits?)/i.test(message) ||
     /billing.?(?:hard.?)?limit/i.test(message) ||
     /exhausted\s+your\s+capacity/i.test(message) ||
     /resource.?exhausted/i.test(message) ||
