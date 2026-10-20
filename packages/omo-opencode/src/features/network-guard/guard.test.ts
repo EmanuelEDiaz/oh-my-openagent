@@ -784,6 +784,67 @@ describe("review fixes (fork 0.15)", () => {
     guard.dispose()
   })
 
+  // Fork incidents H26 (20-10-2026): a cut while an `explore` subagent worked; when the network came back the guard
+  // stopped the subagent's turn to continue it, which ended the caller's `task` call with an empty answer, and the
+  // continuation then worked for nobody.
+  describe("subagents: their caller waits for the turn", () => {
+    const CHILD = "ses_child"
+
+    test("a subagent awaited by its caller is never stopped nor continued; OpenCode's own retry goes on", async () => {
+      // given
+      const { guard, calls, advance } = setup([OFF, ON], { owner: async () => "caller" })
+      guard.event(busy(CHILD))
+      advance(60_001)
+
+      // when
+      await guard.tick()
+      await settle()
+
+      // then
+      expect(calls.aborted).toEqual([])
+      expect(calls.continued).toEqual([])
+      guard.dispose()
+    })
+
+    test("when OpenCode gave up on an awaited subagent, the caller already has the error: no orphan continuation", async () => {
+      const { guard, calls } = setup([OFF, ON], { owner: async () => "caller" })
+      guard.event(sessionError(NETWORK_ERROR, CHILD))
+      await settle()
+      expect(calls.continued).toEqual([])
+      expect(calls.handedOff).toEqual([])
+      guard.dispose()
+    })
+
+    test("a background subagent that OpenCode gave up on is continued: its manager keeps waiting for the session", async () => {
+      const { guard, calls } = setup([OFF, ON], { owner: async () => "background" })
+      guard.event(sessionError(NETWORK_ERROR, CHILD))
+      await settle()
+      expect(calls.continued.map((call) => call.sessionID)).toEqual([CHILD])
+      guard.dispose()
+    })
+
+    test("a background subagent whose turn still runs is not stopped either", async () => {
+      const { guard, calls, advance } = setup([OFF, ON], { owner: async () => "background" })
+      guard.event(busy(CHILD))
+      advance(60_001)
+      await guard.tick()
+      await settle()
+      expect(calls.aborted).toEqual([])
+      expect(calls.continued).toEqual([])
+      guard.dispose()
+    })
+
+    test("a subagent at the probe limit is not stopped", async () => {
+      const { guard, calls, advance } = setup([OFF], { owner: async () => "caller" }, { probeLimit: 2 })
+      guard.event(busy(CHILD))
+      advance(60_001)
+      await guard.tick()
+      await settle()
+      expect(calls.aborted).toEqual([])
+      guard.dispose()
+    })
+  })
+
   test("the freeze mark ends with the turn: a later turn is not shown as frozen", async () => {
     const { guard } = setup([ON])
     guard.event(busy())

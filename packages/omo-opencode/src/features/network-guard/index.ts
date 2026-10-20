@@ -4,7 +4,7 @@ import { createInstanceRegistry } from "../../shared/instance-registry"
 import type { NetworkGuard } from "./guard"
 
 export { createNetworkGuard, formatDuration, restoredText, retryAfterMs, unfrozenText } from "./guard"
-export type { NetworkGuard, NetworkGuardDeps, NetworkGuardOptions, NetworkGuardSessionView, ProbeVerdict } from "./guard"
+export type { NetworkGuard, NetworkGuardDeps, NetworkGuardOptions, NetworkGuardSessionView, ProbeVerdict, SessionOwner } from "./guard"
 
 // One guard per OpenCode instance (project folder), read by the fallback paths (which step aside on network errors)
 // and the stall watchdog. Several folders can share one server (fork incidents H13).

@@ -40,6 +40,11 @@ export type NetworkGuardDeps = {
   readonly abort: (sessionID: string) => Promise<void>
   /** The provider is down but our network is fine: the normal fallback path takes over. */
   readonly handOff: (sessionID: string, detail: string) => Promise<void>
+  /**
+   * Who waits for the session's turn: the user (`main`), a delegating agent's `task` call (`caller`), or the
+   * background manager (`background`). Undefined: every session is a main one.
+   */
+  readonly owner?: (sessionID: string) => Promise<SessionOwner>
   readonly recordInterruption: (sessionID: string, detail: string) => void
   /**
    * Reports network changes at once (Linux `ip monitor`); undefined when unavailable. Runs while a session is busy or
@@ -59,6 +64,8 @@ export type NetworkGuardDeps = {
 }
 
 type Phase = "online" | "retrying" | "offline"
+
+export type SessionOwner = "main" | "caller" | "background"
 
 /** Per-session view for logs and the sidebar; only sessions that wait on the network or a freeze. */
 export type NetworkGuardSessionView = {
@@ -301,7 +308,21 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
     return undefined
   }
 
+  /**
+   * Fork incidents H26: whoever delegated a subagent waits for its turn to end. Stopping that turn ends the caller's
+   * `task` call with an empty answer, and a continuation then works for nobody; OpenCode's own retry and chunk timeout
+   * recover the stream instead. Only the background manager keeps waiting on the session after its turn ended, so a
+   * background subagent is continued once OpenCode gave up.
+   */
+  async function mayIntervene(sessionID: string, gaveUp: boolean): Promise<boolean> {
+    const owner = deps.owner ? await deps.owner(sessionID).catch((): SessionOwner => "main") : "main"
+    if (owner === "main" || (owner === "background" && gaveUp)) return true
+    log("[network-guard] subagent left to its turn; the caller waits for it", { sessionID, owner, gaveUp })
+    return false
+  }
+
   async function handOff(sessionID: string, current: SessionState, gaveUp: boolean, since: number, detail: string, charge: boolean): Promise<void> {
+    if (!(await mayIntervene(sessionID, gaveUp))) return
     current.resumesWithoutData = 0
     if (!gaveUp && stillHung(current, since)) await deps.abort(sessionID).catch(() => undefined)
     const budget = charge ? deps.chargeBudget?.(sessionID) : undefined
@@ -320,6 +341,7 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
    */
   async function resumeSameModel(sessionID: string, current: SessionState, gaveUp: boolean, since: number, text: string): Promise<void> {
     if (!gaveUp && !stillHung(current, since)) return
+    if (!(await mayIntervene(sessionID, gaveUp))) return
     if (current.resumesWithoutData >= MAX_RESUMES_WITHOUT_DATA) {
       log("[network-guard] the provider keeps failing although the network works; handing off to the fallback path", { sessionID, resumes: current.resumesWithoutData })
       await handOff(sessionID, current, gaveUp, since, `provider failed ${current.resumesWithoutData + 1} times in a row while the network works`, true)
@@ -395,7 +417,7 @@ export function createNetworkGuard(options: NetworkGuardOptions, deps: NetworkGu
       log("[network-guard] probe limit spent; work saved for resumption", { sessionID, detail })
       current.phase = "online"
       cycle.cancelled = true
-      if (!cycle.gaveUp && stillHung(current, cycle.since)) await deps.abort(sessionID).catch(() => undefined)
+      if (!cycle.gaveUp && stillHung(current, cycle.since) && (await mayIntervene(sessionID, false))) await deps.abort(sessionID).catch(() => undefined)
       deps.recordInterruption(sessionID, detail)
       await deps.toast(`Sin conexión durante ${formatDuration(now() - cycle.since)}. El trabajo está guardado: cuando vuelva la red, escribe cualquier mensaje para continuar.`, "error")
     } finally {

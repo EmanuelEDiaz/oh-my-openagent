@@ -63,6 +63,11 @@ function createSwitchableProxy(upstream: string) {
   const freeModels = loadFreeZenModels()
   const blockedPaid: string[] = []
   const requests: Array<{ at: number; path: string; model?: string; tools?: boolean }> = []
+  // "Dark" network (fork incidents H26): connections are accepted but nothing gets through. A connection opened while
+  // dark stays dead after the network comes back, like a real socket after a drop: it never answers, and only a
+  // timeout on OpenCode's side (the 2 min header timeout) or a stop ends it. Connections opened later work.
+  let light: Promise<void> | undefined
+  let relight = () => {}
   const start = () => {
     server = Bun.serve({
       port,
@@ -70,6 +75,10 @@ function createSwitchableProxy(upstream: string) {
       idleTimeout: 0,
       async fetch(request) {
         const url = new URL(request.url)
+        if (light) {
+          await light
+          return new Promise<Response>(() => {})
+        }
         if (url.pathname.startsWith("/neutral")) return new Response(null, { status: 204 })
         const body = request.method === "GET" || request.method === "HEAD" ? undefined : await request.text()
         let model: string | undefined
@@ -120,6 +129,15 @@ function createSwitchableProxy(upstream: string) {
     },
     hold: (ms: number) => {
       holdMs = ms
+    },
+    dark: () => {
+      light ??= new Promise<void>((resolve) => {
+        relight = resolve
+      })
+    },
+    lit: () => {
+      light = undefined
+      relight()
     },
   }
 }
@@ -368,24 +386,80 @@ const SCENARIOS: Scenario[] = [
 const HEADER_SCENARIO: Scenario = {
   id: "header-hold",
   async run(context) {
-    const { workdir, client, sessionID } = await startTask(context, "header-hold")
-    await waitFor(async () => (await completedTools(client, sessionID)) >= 1, 300_000, "first tool")
-    const started = Date.now()
-    context.proxy.hold(60_000)
-    await Bun.sleep(40_000)
-    context.proxy.hold(0)
-    await waitSettled(client, sessionID, 900_000)
-    const list = await messages(client, sessionID)
-    const log = readFileSync(join(context.sandbox.root, "data/opencode/log", readdirSync(join(context.sandbox.root, "data/opencode/log")).sort().at(-1) ?? ""), "utf8")
+    // Its own short header timeout, undone afterwards: with it, a request held by cut-subagent would fail before the
+    // guard sees the silence.
+    setSection(context.sandbox, "stall", { header_timeout_ms: 15_000 })
+    context.server.stop()
+    await context.restart()
+    try {
+      return await runHeaderHold(context)
+    } finally {
+      setSection(context.sandbox, "stall", { header_timeout_ms: undefined })
+      context.server.stop()
+      await context.restart()
+    }
+  },
+}
+
+async function runHeaderHold(context: Context): Promise<Check[]> {
+  const { workdir, client, sessionID } = await startTask(context, "header-hold")
+  await waitFor(async () => (await completedTools(client, sessionID)) >= 1, 300_000, "first tool")
+  const started = Date.now()
+  context.proxy.hold(60_000)
+  await Bun.sleep(40_000)
+  context.proxy.hold(0)
+  await waitSettled(client, sessionID, 900_000)
+  const list = await messages(client, sessionID)
+  const log = readFileSync(join(context.sandbox.root, "data/opencode/log", readdirSync(join(context.sandbox.root, "data/opencode/log")).sort().at(-1) ?? ""), "utf8")
+  return [
+    check("header timeout raised and retried", /HeaderTimeout|header timeout|timed out waiting for response headers/i.test(log)),
+    check("same model throughout", modelsUsed(list).length === 1, modelsUsed(list).join(", ")),
+    check("task finished (tests pass)", testsPass(workdir)),
+    check("recovered well before the 4 min watchdog", Date.now() - started < 900_000),
+  ]
+}
+SCENARIOS.push(HEADER_SCENARIO)
+
+// Fork incidents H26 (20-10-2026): the network went dark while an `explore` subagent answered a `task` call. When it
+// came back the guard stopped the subagent's turn to continue it, which ended the caller's call with an empty answer.
+// The caller must get the subagent's real answer. The subtask part runs OpenCode's own `task` tool, as `@explore` does.
+const SUBAGENT_CUT_SCENARIO: Scenario = {
+  id: "cut-subagent",
+  async run(context) {
+    const workdir = prepareWorkdir(context.sandbox, FIXTURE, "cut-subagent")
+    const client = context.client(workdir)
+    const parentID = ((await client.session.create({ title: "qa cut-subagent" })).data as { id: string }).id
+    const prompt = "Which function in this repo computes the page slice, and which test file covers it? Read the code before answering and cite file:line."
+    await client.session.promptAsync({ sessionID: parentID, parts: [{ type: "subtask", agent: "explore", description: "find the pagination code", prompt }] })
+    let childID = ""
+    await waitFor(async () => {
+      childID = (((await client.session.children({ sessionID: parentID })).data ?? []) as Array<{ id: string }>)[0]?.id ?? ""
+      return childID !== "" && (await completedTools(client, childID)) >= 1
+    }, 300_000, "subagent's first tool")
+    context.proxy.dark()
+    const cutSeen = () => pluginLog(context.sandbox).split("\n").some((line) => line.includes("[network-guard]") && line.includes(childID) && /treating it as a cut|retrying a network error/.test(line))
+    await waitFor(async () => cutSeen(), 180_000, "guard sees the cut on the subagent")
+    await Bun.sleep(8_000)
+    context.proxy.lit()
+    // With the fix the subagent's dead request ends on its 2 min header timeout and OpenCode retries it.
+    await waitSettled(client, parentID, 900_000)
+    const taskPart = (await messages(client, parentID)).flatMap((message) => message.parts).find((part) => part["type"] === "tool" && part["tool"] === "task")
+    const output = String((taskPart?.["state"] as { output?: string } | undefined)?.output ?? "")
+    const answer = output.replace(/<\/?task_result>|task_id: \S+[^\n]*/g, "").trim()
+    // OpenCode does not keep a cancelled turn that had no output yet: its own log is the record of the cancel.
+    const logs = join(context.sandbox.root, "data/opencode/log")
+    const serverLog = readdirSync(logs).map((file) => readFileSync(join(logs, file), "utf8")).join("\n")
+    const cancels = serverLog.split("\n").filter((line) => line.includes("message=cancel") && line.includes(childID)).length
+    const log = pluginLog(context.sandbox)
     return [
-      check("header timeout raised and retried", /HeaderTimeout|header timeout|timed out waiting for response headers/i.test(log)),
-      check("same model throughout", modelsUsed(list).length === 1, modelsUsed(list).join(", ")),
-      check("task finished (tests pass)", testsPass(workdir)),
-      check("recovered well before the 4 min watchdog", Date.now() - started < 900_000),
+      check("the guard saw the cut on the subagent", cutSeen()),
+      check("the guard left the subagent's turn alone", log.split("\n").some((line) => line.includes("subagent left to its turn") && line.includes(childID))),
+      check("the subagent's turn was never cancelled", cancels === 0, `${cancels} cancel(s) in OpenCode's log`),
+      check("the caller got the subagent's real answer", /\.(ts|js):\d+/.test(answer), answer.slice(0, 160) || "(empty)"),
     ]
   },
 }
-SCENARIOS.push(HEADER_SCENARIO)
+SCENARIOS.push(SUBAGENT_CUT_SCENARIO)
 
 // /omo-models applies from the next message, without a restart (incident 07-10-2026). The prompt carries the startup
 // model explicitly, as the TUI does.
@@ -564,7 +638,6 @@ async function main(): Promise<void> {
   routeZen(sandbox, proxy.url)
   // Short limits so "the work is left for resumption" happens within minutes; the neutral probe dies with the proxy.
   setResilience(sandbox, { network_probe_limit: 3, network_backoff_s: [5, 10], neutral_probe_url: proxy.neutral, silent_stream_s: 30 })
-  setSection(sandbox, "stall", { header_timeout_ms: 15_000 })
 
   let server = await startServer(sandbox)
   const port = Number(new URL(server.baseUrl).port)
