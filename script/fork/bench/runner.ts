@@ -7,6 +7,7 @@ import { existsSync, readFileSync, rmSync, statSync } from "node:fs"
 import { join } from "node:path"
 
 import { prepareWorkdir, type Sandbox } from "./sandbox"
+import { disposeWorkdirInstance } from "./dispose-instance"
 import { classifyFailure, silentModelError } from "./score"
 import { toTranscript, type RawMessage } from "./transcript"
 import type { GradeContext, GradeResult, RunResult, Task, Transcript } from "./types"
@@ -251,11 +252,14 @@ export type RunOptions = {
 
 export async function runTask(task: Task, options: RunOptions): Promise<RunResult> {
   const workdirName = `${task.id.replaceAll("/", "_")}-r${options.repeat}-a${options.attempt}`
+  const workdir = join(options.sandbox.root, "work", workdirName)
   try {
     return await runInWorkdir(task, options, workdirName)
   } finally {
+    // OpenCode keeps an instance (plugin, LSP proxy, language server) per folder until disposed (incidents H4).
+    await disposeWorkdirInstance(options.baseUrl, workdir)
     // Large fixtures (a whole repo) fill a RAM-backed /tmp fast; regrade.ts uses a fresh copy, so nothing is lost.
-    rmSync(join(options.sandbox.root, "work", workdirName), { recursive: true, force: true })
+    rmSync(workdir, { recursive: true, force: true })
   }
 }
 
