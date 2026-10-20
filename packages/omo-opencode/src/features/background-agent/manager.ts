@@ -588,7 +588,7 @@ export class BackgroundManager {
     task.concurrencyGroup = snapshot.concurrencyGroup
     this.updateTaskParent(task, snapshot.parentSessionId)
 
-    removeTaskToastTracking(task.id)
+    removeTaskToastTracking(task.id, this.directory)
     if (task.status !== "running" && task.status !== "pending") {
       this.scheduleTaskRemoval(task.id)
     }
@@ -687,7 +687,7 @@ export class BackgroundManager {
 
       log("[background-agent] Task queued:", { taskId: task.id, key, queueLength: queue.length })
 
-      const toastManager = getTaskToastManager()
+      const toastManager = getTaskToastManager(this.directory)
       if (toastManager) {
         toastManager.addTask({
           id: task.id,
@@ -775,7 +775,7 @@ export class BackgroundManager {
             this.concurrencyManager.release(key)
           }
 
-          removeTaskToastTracking(item.task.id)
+          removeTaskToastTracking(item.task.id, this.directory)
 
           // Abort the orphaned session if one was created before the error
           if (item.task.sessionId) {
@@ -978,7 +978,7 @@ The fallback retry session is now created and can be inspected directly.
       modelFallbackControllerAccessor: this.modelFallbackControllerAccessor,
     })
 
-    const toastManager = getTaskToastManager()
+    const toastManager = getTaskToastManager(this.directory)
     if (toastManager) {
       toastManager.updateTask(task.id, "running")
     }
@@ -1078,7 +1078,7 @@ The fallback retry session is now created and can be inspected directly.
           existingTask.concurrencyKey = undefined
         }
 
-        removeTaskToastTracking(existingTask.id)
+        removeTaskToastTracking(existingTask.id, this.directory)
 
         // Abort the session to prevent infinite polling hang
         // Awaited to prevent dangling promise during subagent teardown (Bun/WebKit SIGABRT)
@@ -1431,7 +1431,7 @@ The fallback retry session is now created and can be inspected directly.
       this.pendingByParent.set(input.parentSessionId, pending)
     }
 
-    const toastManager = getTaskToastManager()
+    const toastManager = getTaskToastManager(this.directory)
     if (toastManager) {
       toastManager.addTask({
         id: existingTask.id,
@@ -1546,7 +1546,7 @@ The fallback retry session is now created and can be inspected directly.
         existingTask.concurrencyKey = undefined
       }
 
-      removeTaskToastTracking(existingTask.id)
+      removeTaskToastTracking(existingTask.id, this.directory)
 
       // Abort the session to prevent infinite polling hang
       // Awaited to prevent dangling promise during subagent teardown (Bun/WebKit SIGABRT)
@@ -2073,7 +2073,7 @@ The fallback retry session is now created and can be inspected directly.
 
     this.cleanupPendingByParent(task)
     this.clearNotificationsForTask(task.id)
-    removeTaskToastTracking(task.id)
+    removeTaskToastTracking(task.id, this.directory)
     this.scheduleTaskRemoval(task.id)
 
     if (task.sessionId) {
@@ -2186,7 +2186,7 @@ The fallback retry session is now created and can be inspected directly.
 
     this.cleanupPendingByParent(task)
     this.clearNotificationsForTask(task.id)
-    const toastManager = getTaskToastManager()
+    const toastManager = getTaskToastManager(this.directory)
     if (toastManager) {
       toastManager.removeTask(task.id)
     }
@@ -2215,6 +2215,7 @@ The fallback retry session is now created and can be inspected directly.
     const previousSessionID = task.sessionId
     let retryingNotification: string | undefined
     const result = tryFallbackRetry({
+      directory: this.directory,
       task,
       errorInfo,
       source,
@@ -2509,7 +2510,7 @@ The task was re-queued on a fallback model after a retryable failure.
       this.idleDeferralTimers.delete(task.id)
     }
 
-    removeTaskToastTracking(task.id)
+    removeTaskToastTracking(task.id, this.directory)
 
     // Update continuation marker for CLI run mode
     if (task.parentSessionId) {
@@ -2624,7 +2625,7 @@ The task was re-queued on a fallback model after a retryable failure.
         this.unregisterRootDescendant(task.rootSessionId)
       }
 
-      removeTaskToastTracking(task.id)
+      removeTaskToastTracking(task.id, this.directory)
 
       // Release concurrency BEFORE any async operations to prevent slot leaks
       if (task.concurrencyKey) {
@@ -2685,7 +2686,7 @@ The task was re-queued on a fallback model after a retryable failure.
     log("[background-agent] notifyParentSession called for task:", task.id)
 
     // Show toast notification
-    const toastManager = getTaskToastManager()
+    const toastManager = getTaskToastManager(this.directory)
     if (toastManager) {
       toastManager.showCompletionToast({
         id: task.id,
@@ -2940,6 +2941,7 @@ The task was re-queued on a fallback model after a retryable failure.
 
   private pruneStaleTasksAndNotifications(allStatuses?: SessionStatusMap): void {
     pruneStaleTasksAndNotifications({
+      directory: this.directory,
       tasks: this.tasks,
       notifications: this.notifications,
       taskTtlMs: this.config?.taskTtlMs,
@@ -2958,7 +2960,7 @@ The task was re-queued on a fallback model after a retryable failure.
           this.concurrencyManager.release(task.concurrencyKey)
           task.concurrencyKey = undefined
         }
-        removeTaskToastTracking(task.id)
+        removeTaskToastTracking(task.id, this.directory)
         const existingTimer = this.completionTimers.get(taskId)
         if (existingTimer) {
           clearTimeout(existingTimer)
@@ -3043,7 +3045,7 @@ The task was re-queued on a fallback model after a retryable failure.
 
     this.cleanupPendingByParent(task)
     this.clearNotificationsForTask(task.id)
-    removeTaskToastTracking(task.id)
+    removeTaskToastTracking(task.id, this.directory)
     this.scheduleTaskRemoval(task.id)
     if (task.sessionId) {
       clearDelegatedChildSessionBootstrap(task.sessionId)
@@ -3066,7 +3068,7 @@ The task was re-queued on a fallback model after a retryable failure.
    * over the per-task stall budget or with no fallback left, cancel with a reason the parent and the user can act on.
    */
   private async recoverStalledTask(task: BackgroundTask, sessionID: string): Promise<boolean> {
-    const watchdog = getStallWatchdog()
+    const watchdog = getStallWatchdog(this.directory)
     if (!watchdog?.isStalled(sessionID)) return false
     const stalls = watchdog.recordStall(task.id)
     watchdog.forget(sessionID)

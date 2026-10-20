@@ -16,11 +16,11 @@ export async function reportWorkStopped(sessionID: string, reason: string, deps:
   await deps.toast(`Automatic continuation stopped: ${reason}. The work is saved; say "reanuda" or run /omo-resume to continue.`).catch(() => undefined)
 }
 
-export function reportWorkStoppedWithClient(client: ToastClient, sessionID: string, reason: string): Promise<void> {
+export function reportWorkStoppedWithClient(client: ToastClient, sessionID: string, reason: string, directory?: string): Promise<void> {
   return reportWorkStopped(sessionID, reason, {
     toast: async (message) => {
       await client.tui?.showToast?.({ body: { title: "Work stopped", message, variant: "warning", duration: 15_000 } })
     },
-    pause: (id, why) => getActiveResumeService()?.pause(id, why) ?? Promise.resolve(),
+    pause: (id, why) => getActiveResumeService(directory)?.pause(id, why) ?? Promise.resolve(),
   })
 }

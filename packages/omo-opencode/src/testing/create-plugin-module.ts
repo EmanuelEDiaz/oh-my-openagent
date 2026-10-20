@@ -41,6 +41,9 @@ import {
 } from "../shared/live-server-route"
 import { startBackgroundCheck as startTmuxCheck } from "../tools/interactive-bash"
 import { runOpenCodeStartupMigration } from "../startup-migration"
+import { releasePluginProcessManager } from "../features/managed-process/plugin"
+import { releasePluginWebResearch } from "../features/web-research/plugin"
+import { releaseTaskToastManager } from "../features/task-toast-manager"
 
 type StartupToastClient = {
   readonly tui?: {
@@ -328,6 +331,7 @@ export function createPluginModule(overrides: Partial<PluginModuleDeps> = {}): P
       skillMcpManager: managers.skillMcpManager,
       tuiStateMirror: managers.tuiStateMirror,
       ...(managers.resumeService ? { resumeService: managers.resumeService } : {}),
+      ...(managers.resilience ? { resilience: managers.resilience } : {}),
       disposeHooks: hooks.disposeHooks,
     })
 
@@ -341,6 +345,10 @@ export function createPluginModule(overrides: Partial<PluginModuleDeps> = {}): P
       dispose: async (): Promise<void> => {
         runtimeSkillSource?.stop()
         await dispose()
+        // Per-folder objects that have no timer of their own (fork incidents H12/H13).
+        releasePluginProcessManager(input.directory)
+        releasePluginWebResearch(input.directory)
+        releaseTaskToastManager(input.directory)
       },
     }
 

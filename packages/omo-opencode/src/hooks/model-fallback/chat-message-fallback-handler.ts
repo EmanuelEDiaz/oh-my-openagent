@@ -20,6 +20,8 @@ export async function applyFallbackToChatMessage(params: {
     variant?: string
   }) => void | Promise<void>
   lastToastKey: Map<string, string>
+  /** Project folder of the calling instance, for its toast manager (fork incidents H13). */
+  directory?: string
 }): Promise<void> {
   const { input, output, fallback, toast, onApplied, lastToastKey } = params
   const { sessionID } = input
@@ -63,7 +65,7 @@ export async function applyFallbackToChatMessage(params: {
     )
   }
 
-  const toastManager = getTaskToastManager()
+  const toastManager = getTaskToastManager(params.directory)
   if (toastManager) {
     const variantLabel = fallback.variant ? ` (${fallback.variant})` : ""
     toastManager.updateTaskModelBySession(sessionID, {

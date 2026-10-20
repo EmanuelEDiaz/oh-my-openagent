@@ -8,7 +8,7 @@ import type { OhMyOpenCodeConfig } from "../../config"
 import { createChatMessageHandler } from "../../plugin/chat-message"
 import type { PluginContext } from "../../plugin/types"
 import { _resetForTesting } from "../background-agent/process-cleanup"
-import { createPluginResilience, type PluginResilience } from "./plugin"
+import { createPluginResilience, getInterruptionNotes, type PluginResilience } from "./plugin"
 import { INTERRUPTED_WORK_TAG } from "./resume-note"
 import { loadInterruption } from "./store"
 import { readWipMarkers, writeWipMarker } from "./wip-marker"
@@ -83,4 +83,28 @@ describe("killed-process recovery wiring (fork 0.15 C/D)", () => {
     dirs.push(directory)
     expect(createPluginResilience(context(directory).ctx, { enabled: false })).toBeUndefined()
   })
+
+  test("two project folders in one server: each has its own notes, and disposing the old one keeps the live one's (incidents H12/H13)", () => {
+    // given
+    const oldDir = mkdtempSync(join(tmpdir(), "omo-resilience-old-"))
+    const liveDir = mkdtempSync(join(tmpdir(), "omo-resilience-live-"))
+    dirs.push(oldDir, liveDir)
+    const old = createPluginResilience(context(oldDir).ctx, undefined)
+    const live = createPluginResilience(context(liveDir).ctx, undefined)
+    if (!old || !live) throw new Error("resilience not created")
+    active = live
+
+    // then each folder reads its own notes
+    expect(getInterruptionNotes(oldDir)).toBe(old.notes)
+    expect(getInterruptionNotes(liveDir)).toBe(live.notes)
+
+    // when OpenCode disposes the old instance
+    old.dispose()
+
+    // then the old folder's marker is gone and the live instance is untouched
+    expect(readWipMarkers(oldDir)).toEqual([])
+    expect(getInterruptionNotes(liveDir)).toBe(live.notes)
+    expect(getInterruptionNotes()).toBe(live.notes)
+  })
 })
+

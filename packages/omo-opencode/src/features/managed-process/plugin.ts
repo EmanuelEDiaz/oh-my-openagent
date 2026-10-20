@@ -14,12 +14,24 @@ import type { PluginContext } from "../../plugin/types"
 import { createProcessManager, type ProcessManager } from "./manager"
 import { shellArgv } from "./shell"
 import { isPortOpen } from "./wait-for"
+import { createInstanceRegistry } from "../../shared/instance-registry"
 
-let active: ProcessManager | undefined
+// One process manager per OpenCode instance (project folder); several can share one server (fork incidents H13).
+const managers = createInstanceRegistry<ProcessManager>()
+const releases = new Map<string, () => void>()
 
-/** The process manager of this plugin instance, for the stall watchdog (a session waiting on a process is not stalled). */
-export function getActiveProcessManager(): ProcessManager | undefined {
-  return active
+/**
+ * OpenCode disposed the instance of `directory` (fork incidents H12): forget its manager. Its processes keep running:
+ * they may be the user's dev servers, and process shutdown still stops what the plugin started.
+ */
+export function releasePluginProcessManager(directory: string): void {
+  releases.get(directory)?.()
+  releases.delete(directory)
+}
+
+/** The process manager of the instance of `directory`, for the stall watchdog (a session waiting on a process is not stalled). */
+export function getActiveProcessManager(directory?: string): ProcessManager | undefined {
+  return managers.get(directory)
 }
 
 function resolveBash(): string | null {
@@ -101,6 +113,6 @@ export function createPluginProcessManager(ctx: PluginContext, config: Partial<P
   // Logs and the registry are runtime state, never project files.
   const gitignore = join(stateDir, ".gitignore")
   if (!existsSync(gitignore)) writeFileSync(gitignore, "*\n")
-  active = manager
+  releases.set(ctx.directory, managers.register(ctx.directory, manager))
   return manager
 }

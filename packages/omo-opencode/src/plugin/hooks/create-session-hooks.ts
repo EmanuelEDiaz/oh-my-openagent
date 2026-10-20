@@ -113,6 +113,7 @@ export function createSessionHooks(args: {
   const modelFallback = isModelFallbackConfigEnabled && isHookEnabled("model-fallback")
     ? safeHook("model-fallback", () =>
       createModelFallbackHook({
+        directory: ctx.directory,
         toast: async ({ title, message, variant, duration }) => {
           await ctx.client.tui
             .showToast({

@@ -151,6 +151,7 @@ export async function runSyncTaskLoop(input: SyncTaskRunnerInput): Promise<strin
       taskId,
       hasActiveChildBackgroundTasks,
       hasPendingParentWake,
+      directory,
     }, syncPollTimeoutMs)
     if (pollError) {
       if (shouldAttemptPollErrorRecovery(pollError)) {
@@ -172,7 +173,7 @@ export async function runSyncTaskLoop(input: SyncTaskRunnerInput): Promise<strin
       }
 
       // A stalled model is retried on the next one at most `stall.max_stalls_per_task` times (fork roadmap 0.8a).
-      if (stallBudgetExceeded(pollError, taskId ?? input.sessionID)) {
+      if (stallBudgetExceeded(pollError, taskId ?? input.sessionID, directory)) {
         return `${pollError}. Stopped after repeated stalls instead of retrying forever: retry with another model or ask the user.`
       }
 

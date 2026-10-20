@@ -41,7 +41,7 @@ export async function dispatchFallbackRetry(
     return
   }
   // Timeouts can fire while the session waits for the network; a fallback then would only burn the chain.
-  if (getNetworkGuard()?.isWaiting(options.sessionID)) {
+  if (getNetworkGuard(deps.ctx.directory)?.isWaiting(options.sessionID)) {
     log(`[${HOOK_NAME}] Fallback skipped - session is waiting for the network`, { sessionID: options.sessionID, source: options.source })
     return
   }

@@ -219,7 +219,7 @@ export function createEventHandler(deps: HookDeps, helpers: AutoRetryHelpers) {
 
     // A network cut is not a model failure (fork roadmap 0.15): no model switch, no attempt, no cooldown. The network
     // guard waits for the connection and continues the session on the same model.
-    if (stepAsideForNetwork(sessionID, error, true)) {
+    if (stepAsideForNetwork(sessionID, error, true, deps.ctx.directory)) {
       sessionAwaitingFallbackResult.delete(sessionID)
       helpers.clearSessionFallbackTimeout(sessionID)
       log(`[${HOOK_NAME}] session.error is a network cut; leaving it to the network guard`, { sessionID })

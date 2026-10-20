@@ -82,7 +82,7 @@ export function createMessageUpdateHandler(deps: HookDeps, helpers: AutoRetryHel
 
     if (sessionID && role === "assistant" && error) {
       // A network cut is not a model failure (fork roadmap 0.15): the network guard waits and continues on the same model.
-      if (info?.error && stepAsideForNetwork(sessionID, info.error, true)) {
+      if (info?.error && stepAsideForNetwork(sessionID, info.error, true, ctx.directory)) {
         sessionAwaitingFallbackResult.delete(sessionID)
         helpers.clearSessionFallbackTimeout(sessionID)
         log(`[${HOOK_NAME}] message.updated error is a network cut; leaving it to the network guard`, { sessionID, model })

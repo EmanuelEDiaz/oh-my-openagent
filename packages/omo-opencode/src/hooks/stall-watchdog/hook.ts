@@ -13,6 +13,8 @@ export type StallWatchdogHookOptions = {
   readonly inactivityMs: number
   readonly checkIntervalMs: number
   readonly maxStallsPerTask: number
+  /** Project folder of this OpenCode instance; several can share one server (fork incidents H13). */
+  readonly directory?: string
   /** A monotonic-clock jump of more than this over the check interval is a freeze (0.15 B); undefined disables it. */
   readonly freezeThresholdMs?: number
 }
@@ -70,7 +72,7 @@ export function createStallWatchdogHook(options: StallWatchdogHookOptions, deps:
     ...(deps.isWaiting ? { isWaiting: deps.isWaiting } : {}),
     ...(deps.isNetworkRetry ? { isNetworkRetry: deps.isNetworkRetry } : {}),
   })
-  setStallWatchdog(watchdog)
+  const unregister = setStallWatchdog(watchdog, options.directory)
 
   async function recoverMainSession(sessionID: string, silentMs: number, alreadyStopped = false): Promise<void> {
     const networkCut = await deps.takeOverStall?.(sessionID, { stopped: alreadyStopped }).catch((error) => {
@@ -164,7 +166,8 @@ export function createStallWatchdogHook(options: StallWatchdogHookOptions, deps:
     check,
     dispose(): void {
       clearInterval(timer)
-      setStallWatchdog(undefined)
+      // Only this instance's watchdog: another folder's live instance keeps its own.
+      unregister()
     },
   }
 }

@@ -16,9 +16,13 @@ export function createPluginDispose(args: {
   resumeService?: {
     dispose: () => void
   }
+  /** Its heartbeat timer, the same (fork incidents H12). */
+  resilience?: {
+    dispose: () => void
+  }
   disposeHooks: () => void
 }): PluginDispose {
-  const { backgroundManager, skillMcpManager, tuiStateMirror, resumeService, disposeHooks } = args
+  const { backgroundManager, skillMcpManager, tuiStateMirror, resumeService, resilience, disposeHooks } = args
   let disposePromise: Promise<void> | null = null
 
   return async (): Promise<void> => {
@@ -37,6 +41,11 @@ export function createPluginDispose(args: {
         resumeService?.dispose()
       } catch (error) {
         log("[plugin-dispose] resumeService.dispose() error:", error)
+      }
+      try {
+        resilience?.dispose()
+      } catch (error) {
+        log("[plugin-dispose] resilience.dispose() error:", error)
       }
       try {
         await backgroundManager.shutdown()

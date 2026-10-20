@@ -125,7 +125,7 @@ export function createModelFallbackEventHandler(args: {
     if (lastHandled === assistantMessageID) return true;
 
     // A network cut is waited out on the same model by the network guard (fork roadmap 0.15).
-    if (stepAsideForNetwork(params.sessionID, assistantError, true)) return false;
+    if (stepAsideForNetwork(params.sessionID, assistantError, true, args.pluginContext.directory)) return false;
 
     const errorName = extractErrorName(assistantError);
     const errorMessage = extractErrorMessage(assistantError);
@@ -175,7 +175,7 @@ export function createModelFallbackEventHandler(args: {
     lastHandledRetryStatusKey.set(params.sessionID, retryKey);
 
     // OpenCode is retrying a network cut itself: let it, without switching models.
-    if (stepAsideForNetwork(params.sessionID, retryMessage, false)) return false;
+    if (stepAsideForNetwork(params.sessionID, retryMessage, false, args.pluginContext.directory)) return false;
     if (!shouldRetryError({ name: undefined, message: retryMessage })) return false;
 
     const agentName = resolveFallbackAgentName({
@@ -214,7 +214,7 @@ export function createModelFallbackEventHandler(args: {
     props?: Record<string, unknown>;
   }): Promise<void> => {
     if (!shouldHandleModelFallback()) return;
-    if (stepAsideForNetwork(params.sessionID, params.props?.error ?? { name: params.errorName, message: params.errorMessage }, true)) return;
+    if (stepAsideForNetwork(params.sessionID, params.props?.error ?? { name: params.errorName, message: params.errorMessage }, true, args.pluginContext.directory)) return;
     if (!shouldRetryError({ name: params.errorName, message: params.errorMessage })) return;
 
     const agentName = resolveFallbackAgentName({

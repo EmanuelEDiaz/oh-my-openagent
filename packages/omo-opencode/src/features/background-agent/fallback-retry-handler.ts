@@ -55,6 +55,8 @@ const defaultFallbackRetryHandlerDeps: FallbackRetryHandlerDeps = {
 }
 
 export async function tryFallbackRetry(args: {
+  /** Project folder of the calling instance, for its network guard (fork incidents H13). */
+  directory?: string
   task: BackgroundTask
   errorInfo: { name?: string; message?: string; statusCode?: number }
   source: string
@@ -79,7 +81,7 @@ export async function tryFallbackRetry(args: {
   // own retry status is left alone; once OpenCode gives up, the network guard continues the same session. Prompt
   // dispatch failures (promptAsync.*) talk to the local OpenCode server and keep their own handling.
   const networkSource = NETWORK_GAVE_UP_SOURCES.has(source) || NETWORK_RETRYING_SOURCES.has(source)
-  if (networkSource && stepAsideForNetwork(task.sessionId, errorInfo, NETWORK_GAVE_UP_SOURCES.has(source))) {
+  if (networkSource && stepAsideForNetwork(task.sessionId, errorInfo, NETWORK_GAVE_UP_SOURCES.has(source), args.directory)) {
     deps.log("[background-agent] Network cut; no fallback", { taskId: task.id, source, errorMessage: errorInfo.message?.slice(0, 100) })
     return false
   }

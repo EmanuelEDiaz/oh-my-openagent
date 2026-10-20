@@ -34,6 +34,27 @@ describe("stall watchdog hook (fork 0.8a)", () => {
     hook.dispose()
   })
 
+  test("two project folders in one server: disposing the old instance keeps the live one's watchdog (incidents H13)", () => {
+    const deps: StallWatchdogHookDeps = {
+      isSubagentSession: () => false,
+      abort: async () => {},
+      toast: async () => {},
+      resolveTarget: async () => ({}),
+      fallbackModels: () => [],
+      continueSession: async () => {},
+    }
+    const options = { inactivityMs: 1000, checkIntervalMs: 60_000, maxStallsPerTask: 2 }
+    const oldHook = createStallWatchdogHook({ ...options, directory: "/old" }, deps)
+    const liveHook = createStallWatchdogHook({ ...options, directory: "/live" }, deps)
+    const live = getStallWatchdog("/live")
+    expect(getStallWatchdog("/old")).not.toBe(live)
+    oldHook.dispose()
+    expect(getStallWatchdog("/live")).toBe(live)
+    expect(getStallWatchdog()).toBe(live)
+    liveHook.dispose()
+    expect(getStallWatchdog()).toBeUndefined()
+  })
+
   test("a stalled main session is stopped, the user is told, and it continues on the next fallback model", async () => {
     // given
     const { hook, calls, advance } = setup()

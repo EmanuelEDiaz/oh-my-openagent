@@ -252,7 +252,7 @@ export function createManagers(args: {
     tuiStateMirror.start()
   }
 
-  deps.initTaskToastManagerFn(ctx.client)
+  deps.initTaskToastManagerFn(ctx.client, undefined, ctx.directory)
 
   const skillMcpManager = new deps.SkillMcpManagerClass()
 

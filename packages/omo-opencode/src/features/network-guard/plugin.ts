@@ -10,7 +10,7 @@ import { log } from "../../shared/logger"
 import { parseModel, resolveSessionTarget } from "../../shared/session-target"
 import type { PluginContext } from "../../plugin/types"
 import { abortWithTimeout } from "../background-agent/abort-with-timeout"
-import { registerManagerForCleanup } from "../background-agent/process-cleanup"
+import { registerManagerForCleanup, unregisterManagerForCleanup } from "../background-agent/process-cleanup"
 import { clearInterruption, recordInterruption } from "../interruption/store"
 import { getActiveLoopBreaker } from "../loop-breaker/plugin"
 import { createNetworkGuard, notifyNetworkGuardChange, setNetworkGuard, setNetworkResilienceEnabled, type NetworkGuard } from "./index"
@@ -163,12 +163,20 @@ export function createPluginNetworkGuard(ctx: PluginContext, pluginConfig: OhMyO
       },
       watchLink: (onChange) => watchLinkChanges(onChange, log),
       networkFingerprint: () => networkFingerprint(),
-      chargeBudget: (sessionID) => getActiveLoopBreaker()?.charge(sessionID, "provider failing while the network works"),
+      chargeBudget: (sessionID) => getActiveLoopBreaker(ctx.directory)?.charge(sessionID, "provider failing while the network works"),
       log,
       onChange: notifyNetworkGuardChange,
     },
   )
-  setNetworkGuard(guard)
-  registerManagerForCleanup({ shutdown: async () => guard.dispose() })
+  const unregister = setNetworkGuard(guard, ctx.directory)
+  const cleanup = { shutdown: async () => guard.dispose() }
+  registerManagerForCleanup(cleanup)
+  // When OpenCode disposes this instance (fork incidents H12): stop its timers and leave the other folders' guards.
+  const stopTimers = guard.dispose
+  guard.dispose = () => {
+    stopTimers()
+    unregister()
+    unregisterManagerForCleanup(cleanup)
+  }
   return guard
 }

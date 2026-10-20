@@ -106,7 +106,7 @@ export async function handleAtlasSessionIdle(input: {
       reason: sessionState.stalledContinuationReason,
     })
     // Tell the user and save the work instead of stopping silently (fork roadmap 0.8c).
-    void reportWorkStoppedWithClient(ctx.client as never, sessionID, `plan "${boulderState.plan_name}" made no progress after ${noProgressIterations} continuations`)
+    void reportWorkStoppedWithClient(ctx.client as never, sessionID, `plan "${boulderState.plan_name}" made no progress after ${noProgressIterations} continuations`, ctx.directory)
     return
   }
 

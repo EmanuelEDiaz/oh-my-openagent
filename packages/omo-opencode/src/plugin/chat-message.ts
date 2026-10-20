@@ -141,7 +141,7 @@ export function createChatMessageHandler(args: {
     const userTextPart = output.parts.find(isRealUserTextPart) as { text: string } | undefined
     const hasText = output.parts.some(isTextPartLike)
     if (pluginConfig.resilience?.enabled !== false && (userTextPart || !hasText)) {
-      const note = await getInterruptionNotes()?.noteFor(input.sessionID).catch((error: unknown) => {
+      const note = await getInterruptionNotes(typeof ctx.directory === "string" ? ctx.directory : undefined)?.noteFor(input.sessionID).catch((error: unknown) => {
         log("[chat-message] interruption note failed", { sessionID: input.sessionID, error: String(error) })
         return undefined
       })
