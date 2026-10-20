@@ -2,7 +2,7 @@
 import { isMainThread } from "node:worker_threads"
 
 import type { ResumeConfig } from "../../config/schema/resume"
-import { registerManagerForCleanup } from "../background-agent/process-cleanup"
+import { registerManagerForCleanup, unregisterManagerForCleanup } from "../background-agent/process-cleanup"
 import { opencodeDbPath } from "../knowledge/service"
 import { openSessionReader } from "../knowledge/session-reader"
 import { getStallWatchdog } from "../stall-watchdog"
@@ -28,6 +28,11 @@ export function createPluginResumeService(ctx: PluginContext, config: Partial<Re
     },
     // Only sessions that were working: an idle conversation is already safe in OpenCode's database.
     activeSessions: () => getStallWatchdog()?.busySessions() ?? [],
+    ownsSession: async (sessionID) => {
+      const response = await ctx.client.session.get({ path: { id: sessionID } })
+      const directory = (response as { data?: { directory?: string } }).data?.directory
+      return directory === undefined || directory === ctx.directory
+    },
     memory: {
       processLimitBytes: (config?.memory_limit_mb ?? 1228) * 1024 * 1024,
       systemUsedRatio: (config?.system_memory_percent ?? 85) / 100,
@@ -38,8 +43,18 @@ export function createPluginResumeService(ctx: PluginContext, config: Partial<Re
   service.start()
   registerRetentionDirectory(ctx.directory)
   // Ordered shutdown: the plugin's cleanup waits for every registered manager before exiting.
-  registerManagerForCleanup({ shutdown: () => service.saveOnShutdown() })
+  const cleanup = { shutdown: () => service.saveOnShutdown() }
+  registerManagerForCleanup(cleanup)
   log("[resume] service started", { directory: ctx.directory, mainThread: isMainThread, pid: process.pid, sigtermListeners: process.listenerCount("SIGTERM") })
-  active = service
-  return service
+  // When OpenCode disposes this instance, its timer and its shutdown save go too.
+  const instance: ResumeService = {
+    ...service,
+    dispose() {
+      service.dispose()
+      unregisterManagerForCleanup(cleanup)
+      if (active === instance) active = undefined
+    },
+  }
+  active = instance
+  return instance
 }

@@ -327,6 +327,7 @@ export function createPluginModule(overrides: Partial<PluginModuleDeps> = {}): P
       backgroundManager: managers.backgroundManager,
       skillMcpManager: managers.skillMcpManager,
       tuiStateMirror: managers.tuiStateMirror,
+      ...(managers.resumeService ? { resumeService: managers.resumeService } : {}),
       disposeHooks: hooks.disposeHooks,
     })
 

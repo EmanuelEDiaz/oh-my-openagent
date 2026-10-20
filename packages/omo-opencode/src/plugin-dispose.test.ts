@@ -208,4 +208,23 @@ describe("createPluginDispose", () => {
     expect(shutdownSpy).toHaveBeenCalledTimes(1)
     expect(disposeHooksCalls).toHaveLength(1)
   })
+
+  test("#given a resume service #when OpenCode disposes the instance #then its memory timer stops (bench 19-10-2026)", async () => {
+    // given
+    const resumeService = { dispose: (): void => {} }
+    const disposeSpy = spyOn(resumeService, "dispose")
+    const dispose = createPluginDispose({
+      backgroundManager: { shutdown: async (): Promise<void> => {} },
+      skillMcpManager: { disconnectAll: async (): Promise<void> => {} },
+      resumeService,
+      disposeHooks: (): void => {},
+    })
+
+    // when
+    await dispose()
+
+    // then
+    expect(disposeSpy).toHaveBeenCalledTimes(1)
+  })
 })
+
