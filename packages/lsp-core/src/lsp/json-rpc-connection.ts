@@ -29,6 +29,7 @@ export class JsonRpcConnection {
 	private nextRequestId = 1;
 	private listening = false;
 	private disposed = false;
+	private closed = false;
 
 	constructor(
 		private readonly reader: NodeJS.ReadableStream,
@@ -63,6 +64,7 @@ export class JsonRpcConnection {
 
 	async sendRequest<T>(method: string, params?: unknown, options: JsonRpcRequestOptions = {}): Promise<T> {
 		if (this.disposed) throw new Error("JSON-RPC connection is disposed");
+		if (this.closed) throw new Error("JSON-RPC connection closed by the peer");
 
 		const id = this.nextRequestId;
 		this.nextRequestId += 1;
@@ -171,6 +173,14 @@ export class JsonRpcConnection {
 	};
 
 	private readonly handleClose = (): void => {
+		this.closed = true;
+		// The peer is gone (a server that exits at startup, fork incidents H17): nothing will answer, so pending
+		// requests fail now instead of waiting for their timeout.
+		for (const pending of this.pendingRequests.values()) {
+			pending.cleanup();
+			pending.reject(new Error("JSON-RPC connection closed by the peer"));
+		}
+		this.pendingRequests.clear();
 		for (const handler of this.closeHandlers) {
 			handler();
 		}
