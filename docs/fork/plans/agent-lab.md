@@ -51,5 +51,22 @@ señales de OpenCode, casi nulo cuando está plegado.**
 - Mismas reglas de coste: solo eventos, nada si está plegado.
 - **Revisión en Pencil antes de construir 7.1 y 7.2: pedírsela al usuario cuando llegue el momento.**
 
+## Herramientas activas y su consumo (7.3, usuario 20-10-2026)
+Petición: "aparte de los agentes, me gustaría ver qué herramientas tiene activas, qué visores y demás cosas, y cuánto
+gastan en el equipo".
+- **Qué se muestra:** todo lo que el plugin tiene en marcha, no solo los agentes: servidores de lenguaje (`lsp-daemon`,
+  su proxy por carpeta y cada servidor como `typescript-language-server` o `deno lsp`), servidores MCP (los del plugin, los
+  de `.mcp.json` y los de las skills), procesos gestionados (`process_start`), tareas en segundo plano, instancias de
+  OpenCode abiertas por carpeta y visores (navegador de `ui-tester`, capturas…).
+- **Cuánto gasta cada uno:** RAM y CPU por proceso y en total, más la RAM libre del equipo. Lo medido el 19-10-2026
+  muestra por qué importa: cada carpeta añade un proxy de ~60 MB y un servidor de lenguaje de 30–45 MB (H4).
+- **Acciones:** desde el detalle, cerrar lo que no se usa (por ejemplo, un servidor de lenguaje de una carpeta cerrada),
+  siempre preguntando antes y nunca procesos que no sean del plugin (0.21).
+- **Coste de mirar:** el sondeo de `/proc` (Linux) o del sistema (Windows) solo con el panel abierto y como mucho cada
+  pocos segundos; plegado, nada. El plugin ya conoce sus procesos (registro por carpeta de H13), así que no hay que
+  buscarlos por todo el sistema.
+- **Referencia:** `agents-pixel-dungeon` muestra el consumo de cuota por agente ("HP del gremio"); aquí se añade el de
+  recursos del equipo.
+
 ## Medición
 CPU y memoria con el panel plegado, abierto en reposo y abierto con 3–12 agentes trabajando; respuesta al clic.

@@ -340,11 +340,14 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 |---|---|---|
 | 7.2 | **Lista de subagentes trabajando** (petición del usuario, 05-10-2026; modo diseño de la vista gráfica) | en el panel lateral, lista de los subagentes que trabajan en ese momento (agente, tarea, herramienta actual, tiempo); tocar uno abre su sesión para ver qué hace. Es la parte de lista del panel Jobs de 0.10 integrada en la vista gráfica de 7.1. **Antes de construir 7.1 y 7.2, el diseño se revisa con el usuario en Pencil: pedírselo cuando llegue el momento** | pendiente — `plans/agent-lab.md` |
 | 7.1 | **Laboratorio visual** (petición del usuario, 04-10-2026): modo visual del panel "Jobs" de 0.10 en la barra lateral; cada agente un personaje en su puesto y el orquestador el jefe; clic → bocadillo con qué hace (herramienta, tarea, modelo, tiempo, tokens); solo eventos de OpenCode, dibujado con medios bloques, casi nulo plegado, 2–4 fps solo con agentes trabajando; assets CC0 MurphysDad Robot Lab (+ Sci-Fi Facility). Maqueta HTML hecha (https://claude.ai/artifact/WcChKoF5BysxboKW8KzcLw); **el usuario quiere verla también en Pencil** (cuando el MCP de Pencil conecte: hoy falla porque la ruta de la AppImage cambia en cada arranque) antes de construir | pendiente — `plans/agent-lab.md` |
+| 7.3 | **Herramientas activas y su consumo** (petición del usuario, 20-10-2026) | además de los agentes, ver todo lo que el plugin tiene en marcha (servidores de lenguaje y su daemon, servidores MCP, procesos gestionados, tareas en segundo plano, instancias de OpenCode por carpeta, visores como el navegador de `ui-tester`) con la RAM y CPU de cada uno, el total y la RAM libre; cerrar desde ahí lo que no se use, preguntando antes y solo procesos del plugin (0.21); sondeo solo con el panel abierto. Se mide su propio coste (RAM, CPU, contexto cero) | pendiente — `plans/agent-lab.md` |
 
 ## Aparcado (decidido no hacer por ahora)
 - ~~Reglas de lenguaje/framework cargadas bajo demanda~~ — absorbido en 4.5 (antes 2.9), 29-09-2026.
 
 ## Registro de decisiones del roadmap
+- 20-10-2026 — 7.3 (usuario): el laboratorio visual también mostrará las herramientas activas del plugin (servidores de
+  lenguaje, MCP, procesos, visores) y cuánta RAM y CPU gasta cada una, a raíz de lo medido en H4.
 - 20-10-2026 — `context-mode` (propuesta del usuario): se mide como homólogo en 5.3, no se instala junto al plugin. Motivos:
   se solapa con la compactación sin pérdidas, las tarjetas de reanudación, la búsqueda en sesiones y el recorte de
   salidas que ya tiene el plugin, usa los mismos hooks de OpenCode, añade su bloque al prompt de cada sesión y su
