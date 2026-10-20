@@ -9,6 +9,7 @@ import { join } from "node:path"
 import { prepareWorkdir, type Sandbox } from "./sandbox"
 import { disposeWorkdirInstance } from "./dispose-instance"
 import { classifyFailure, silentModelError } from "./score"
+import { sessionTreeBusy, type SessionStatuses } from "./session-tree"
 import { toTranscript, type RawMessage } from "./transcript"
 import type { GradeContext, GradeResult, RunResult, Task, Transcript } from "./types"
 
@@ -34,6 +35,12 @@ async function delegatedAgents(client: Client, sessionID: string): Promise<strin
     agents.push(...(await delegatedAgents(client, child)))
   }
   return agents
+}
+
+/** A primary agent waiting on its background subagents is idle but not done: the plugin wakes it when they finish. */
+async function subagentsBusy(client: Client, sessionID: string): Promise<boolean> {
+  const statuses = ((await client.session.status({})).data ?? {}) as SessionStatuses
+  return sessionTreeBusy(statuses, (id) => childrenOf(client, id), sessionID)
 }
 
 async function isIdle(client: Client, sessionID: string): Promise<boolean> {
@@ -203,7 +210,7 @@ async function execute(client: Client, task: Task, workdir: string, stats: RunSt
       const quiet = createIdleDebounce(IDLE_SETTLE_MS)
       await waitUntil(async () => {
         const asked = (await answerQuestions(client)) + (await answerPermissions(client, stats.permissions))
-        const idle = asked === 0 && (await isIdle(client, parentID)) && !managedProcessesBusy(workdir)
+        const idle = asked === 0 && (await isIdle(client, parentID)) && !managedProcessesBusy(workdir) && !(await subagentsBusy(client, parentID))
         return quiet.settled(idle)
       }, () => sessionProgress(client, parentID), task.budget.timeoutMs, task.id)
     } finally {
