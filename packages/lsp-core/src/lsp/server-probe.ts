@@ -30,6 +30,15 @@ class ProbeConnection extends LspClientConnection {
 	stderrTail(): string {
 		return this.stderrBuffer.join("").trim().slice(-400);
 	}
+
+	/** Stops the server; one that already died gets no shutdown request, which would only fail and log to stderr. */
+	async close(): Promise<void> {
+		if (this.processExited && this.connection) {
+			this.connection.dispose();
+			this.connection = null;
+		}
+		await this.stop();
+	}
 }
 
 export async function probeLanguageServer(root: string, server: ResolvedServer, timeoutMs = 20_000): Promise<ProbeResult> {
@@ -49,7 +58,7 @@ export async function probeLanguageServer(root: string, server: ResolvedServer, 
 		const stderr = probe.stderrTail();
 		return { status: "fails", ms: Date.now() - started, detail: stderr ? `${message} — ${stderr}` : message };
 	} finally {
-		await probe.stop().catch(() => undefined);
+		await probe.close().catch(() => undefined);
 	}
 }
 

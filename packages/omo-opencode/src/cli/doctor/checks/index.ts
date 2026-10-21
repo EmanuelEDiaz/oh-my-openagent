@@ -5,6 +5,7 @@ import { checkConfig } from "./config"
 import { checkBrowserProvider } from "./browser-provider"
 import { checkDeprecatedReasoningKeys } from "./deprecated-reasoning-keys"
 import { checkTools, gatherToolsSummary } from "./tools"
+import { EXTERNAL_TOOLS_CHECK_ID, EXTERNAL_TOOLS_CHECK_NAME, checkExternalToolsForDoctor } from "./external-tools"
 import { checkModels } from "./model-resolution"
 import { checkTelemetry } from "./telemetry"
 import { checkTeamMode } from "./team-mode"
@@ -48,6 +49,11 @@ export function getAllCheckDefinitions(): CheckDefinition[] {
       id: CHECK_IDS.TOOLS,
       name: CHECK_NAMES[CHECK_IDS.TOOLS],
       check: checkTools,
+    },
+    {
+      id: EXTERNAL_TOOLS_CHECK_ID,
+      name: EXTERNAL_TOOLS_CHECK_NAME,
+      check: () => checkExternalToolsForDoctor(),
     },
     {
       id: CHECK_IDS.MODELS,

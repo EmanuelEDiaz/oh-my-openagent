@@ -1,0 +1,8 @@
+export { cachedCheck, externalToolsCacheFile, fingerprint } from "./cache"
+export { checkExternalTools, projectLanguages, toolsFor } from "./check"
+export type { CheckDeps, ToolReport, ToolStatus } from "./check"
+export { EXTERNAL_TOOLS } from "./inventory"
+export type { ExternalTool, ProjectLanguage } from "./inventory"
+export { runExternalToolsNotice, scheduleExternalToolsNotice } from "./plugin"
+export { createCheckDeps } from "./real-deps"
+export { doctorIssues, doctorLines, installCommand, startupNotice } from "./report"
