@@ -55,6 +55,21 @@ setDefaultTimeout(process.platform === "win32" ? 30_000 : 20_000)
 const HERMETIC_HOME = mkdtempSync(join(tmpdir(), "omo-test-home-"))
 process.env.HOME = HERMETIC_HOME
 process.env.USERPROFILE = HERMETIC_HOME
+// Tools the tests spawn (git above all) answer in the user's language: on a Spanish system git says "el parche no
+// aplica" where tests expect "patch does not apply". CI runs in English, so this only failed on such machines (fork
+// finding H33). C.UTF-8 keeps UTF-8 handling; LANGUAGE would override it for gettext, so it goes.
+process.env.LC_ALL = "C.UTF-8"
+delete process.env.LANGUAGE
+// Variables the user's session may export that point at their real config (fork finding H34: XDG_CONFIG_HOME made
+// tests read the user's OpenCode config and write fake OAuth tokens into it). Deleting is not enough for these three:
+// unset, code falls back to os.homedir(), which Bun fixes at process start and does not take from HOME, so it is the
+// real home again (the Senpi engine wrote ~/.senpi/agent/logs/session.log that way). They point into the hermetic HOME.
+process.env.XDG_CONFIG_HOME = join(HERMETIC_HOME, ".config")
+process.env.XDG_STATE_HOME = join(HERMETIC_HOME, ".local", "state")
+process.env.SENPI_CODING_AGENT_DIR = join(HERMETIC_HOME, ".senpi", "agent")
+for (const name of ["OPENCODE_CONFIG_DIR", "OPENCODE_CONFIG", "CLAUDE_CONFIG_DIR", "CODEX_HOME", "OMO_CODING_AGENT_DIR", "PI_CODING_AGENT_DIR"]) {
+  delete process.env[name]
+}
 delete process.env.OPENCODE_SERVER_PASSWORD
 
 let isGlobalMockCleanup = false

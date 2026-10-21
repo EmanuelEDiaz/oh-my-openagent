@@ -114,5 +114,20 @@ describe("shell writes to existing tests (fork 0.9a, found by the bench 19-10-20
       expect(undoTestChanges(snapshot, allowNone)).toEqual(["tests/round.test.ts"])
       expect(readFileSync(testPath(), "utf8")).toBe(ORIGINAL)
     })
+
+    test("#when tests sit in nested folders, node_modules or hidden folders #then only the project's own are guarded", () => {
+      // given
+      for (const folder of ["src/deep/er", "node_modules/pkg", ".cache"]) mkdirSync(join(dir, folder), { recursive: true })
+      for (const path of ["src/deep/er/nested.test.ts", "node_modules/pkg/vendor.test.ts", ".cache/hidden.test.ts"]) writeFileSync(join(dir, path), ORIGINAL)
+      const snapshot = snapshotTests(dir)
+
+      // when
+      sh("sed -i 's/toBe(6)/toBe(2)/' src/deep/er/nested.test.ts node_modules/pkg/vendor.test.ts .cache/hidden.test.ts")
+
+      // then
+      expect(undoTestChanges(snapshot, allowNone)).toEqual(["src/deep/er/nested.test.ts"])
+      expect(readFileSync(join(dir, "src/deep/er/nested.test.ts"), "utf8")).toBe(ORIGINAL)
+      expect(readFileSync(join(dir, "node_modules/pkg/vendor.test.ts"), "utf8")).not.toBe(ORIGINAL)
+    })
   })
 })

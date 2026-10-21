@@ -198,8 +198,39 @@ function boundedTable(header, rows) {
   const byteDropped = Buffer.byteLength(all.slice(count).join("\n") + (all.length > count ? "\n" : ""));
   if (rowDropped > 0 || byteDropped > 0) line(`TRUNCATED: rows dropped=${rowDropped} bytes dropped=${byteDropped}`);
 }
+// Splits a command line like a shell: double or single quotes keep spaces in one argument (an adapter or program
+// path such as "/home/me/my projects/app.py"), and a backslash escapes the next character outside single quotes.
+export function splitCommand(input) {
+  const parts = [];
+  let current = "";
+  let quote = null;
+  let started = false;
+  for (let index = 0; index < input.length; index++) {
+    const char = input[index];
+    if (quote === "'") {
+      if (char === "'") quote = null; else current += char;
+    } else if (char === "\\" && index + 1 < input.length) {
+      current += input[++index];
+      started = true;
+    } else if (quote === '"') {
+      if (char === '"') quote = null; else current += char;
+    } else if (char === '"' || char === "'") {
+      quote = char;
+      started = true;
+    } else if (/\s/.test(char)) {
+      if (started) parts.push(current);
+      current = "";
+      started = false;
+    } else {
+      current += char;
+      started = true;
+    }
+  }
+  if (started) parts.push(current);
+  return parts;
+}
 async function command(input) {
-  const parts = input.trim().split(/\s+/);
+  const parts = splitCommand(input);
   const cmd = parts.shift();
   if (!cmd) return;
   if (cmd === "quit") { transport?.destroy?.(); process.exit(0); }
