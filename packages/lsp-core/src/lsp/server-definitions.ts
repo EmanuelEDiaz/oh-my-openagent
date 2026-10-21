@@ -1,7 +1,7 @@
 import type { LspServerConfig } from "./types.js";
 
 export const LSP_INSTALL_HINTS: Record<string, string> = {
-	typescript: "npm install -g typescript-language-server typescript",
+	typescript: "npm install -g typescript-language-server@6 typescript@6",
 	deno: "Install Deno from https://deno.land",
 	vue: "npm install -g @vue/language-server",
 	eslint: "npm install -g vscode-langservers-extracted",
@@ -58,7 +58,7 @@ export const LSP_INSTALL_HINTS: Record<string, string> = {
  * gopls, clangd, ...) keep their global hint alone.
  */
 export const LSP_LOCAL_INSTALL_HINTS: Record<string, string> = {
-	typescript: "bun add -d typescript-language-server typescript",
+	typescript: "bun add -d typescript-language-server@6 typescript@6",
 	vue: "bun add -d @vue/language-server",
 	eslint: "bun add -d vscode-langservers-extracted",
 	oxlint: "bun add -d oxlint",
@@ -181,7 +181,7 @@ export const BUILTIN_SERVERS: Record<string, Omit<LspServerConfig, "id">> = {
 };
 
 export const AUTO_INSTALLABLE_SERVERS: Record<string, string[]> = {
-	typescript: ["npm", "install", "-g", "typescript-language-server", "typescript"],
+	typescript: ["npm", "install", "-g", "typescript-language-server@6", "typescript@6"],
 	vue: ["npm", "install", "-g", "@vue/language-server"],
 	eslint: ["npm", "install", "-g", "vscode-langservers-extracted"],
 	oxlint: ["npm", "install", "-g", "oxlint"],
