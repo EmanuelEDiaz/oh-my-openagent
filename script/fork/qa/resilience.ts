@@ -18,6 +18,7 @@ import { parseJsonc } from "../../../packages/utils/src/jsonc-parser"
 import {
   createSandbox,
   destroySandbox,
+  onStopSignal,
   overridePluginConfig,
   prepareWorkdir,
   saveServerLogs,
@@ -372,7 +373,9 @@ const SCENARIOS: Scenario[] = [
       await waitSettled(client, sessionID, 600_000)
       const list = await messages(client, sessionID)
       const answer = list.filter((message) => message.info.role === "assistant").flatMap((message) => message.parts).filter((part) => part["type"] === "text").map((part) => String(part["text"] ?? "")).join("\n")
+      const asked = userTexts(list).find((text) => text.startsWith("Olvida eso")) ?? ""
       return [
+        check("resume note rode on the user's message", asked.includes("<omo-interrupted-work>"), asked.slice(0, 160)),
         check("answered the new request", /\d/.test(answer), answer.slice(-200)),
         check("mentioned the cut work", /interrump|cort|interrupt|cut|pendiente|previous|anterior/i.test(answer), answer.slice(-200)),
         check("did not silently resume the old task", !testsPass(workdir) || /interrump|cort|interrupt|cut/i.test(answer)),
@@ -489,11 +492,21 @@ const OMO_LIVE_SCENARIO: Scenario = {
 SCENARIOS.push(OMO_LIVE_SCENARIO)
 
 // A model Zen lists but does not serve (404 "Cannot find any route"): the plugin must switch to the next model in the
-// chain, say so, and remember the model as not served (incident 07-10-2026).
-const DEAD_MODEL = "ling-3.0-flash-fin-free"
+// chain, say so, and remember the model as not served (incident 07-10-2026). The model is a free one the catalogue
+// still offers: the 07-10 one (ling-3.0-flash-fin-free) was retired later, and the plugin rightly replaces retired
+// models before any request (fork 0.7), so it no longer exercised this path (fork incidents H29).
+function liveFreeModel(sandbox: Sandbox): string | undefined {
+  const file = join(sandbox.root, "cache/opencode/models.json")
+  if (!existsSync(file)) return undefined
+  const models = (JSON.parse(readFileSync(file, "utf8")) as Record<string, { models?: Record<string, { status?: string }> }>)["opencode"]?.models ?? {}
+  return Object.entries(models).filter(([id, info]) => id.endsWith("-free") && info.status !== "deprecated").map(([id]) => id).sort()[0]
+}
+
 const NOT_SERVED_SCENARIO: Scenario = {
   id: "model-not-served",
   async run(context) {
+    const DEAD_MODEL = liveFreeModel(context.sandbox)
+    if (!DEAD_MODEL) return [check("a free model the catalogue still offers", false, "none in the sandbox's models.json")]
     setAgentChain(context.sandbox, "sisyphus", [`opencode/${DEAD_MODEL}`, "opencode/big-pickle"])
     context.proxy.deadModels.add(DEAD_MODEL)
     context.server.stop()
@@ -654,6 +667,11 @@ async function main(): Promise<void> {
       return server
     },
   }
+  const stopped = onStopSignal(() => {
+    server.stop()
+    proxy.down()
+    destroySandbox(sandbox)
+  })
   let failed = 0
   try {
     for (const scenario of SCENARIOS.filter((entry) => !only || only.includes(entry.id))) {
@@ -682,6 +700,7 @@ async function main(): Promise<void> {
   } finally {
     saveServerLogs(sandbox, join(evidence, "server-logs"))
     console.log(`requests through the proxy: ${proxy.requests.length}; models: ${[...new Set(proxy.requests.map((entry) => entry.model))].join(", ")}`)
+    stopped()
     server.stop()
     proxy.down()
     destroySandbox(sandbox)

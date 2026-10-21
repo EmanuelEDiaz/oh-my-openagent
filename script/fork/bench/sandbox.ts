@@ -188,6 +188,30 @@ export function sandboxProcesses(root: string, procDir = "/proc"): number[] {
   return found
 }
 
+/**
+ * Runs `cleanup` once when the run is stopped by SIGINT or SIGTERM (Ctrl+C, or `systemctl stop` of its scope by the RAM
+ * guard), then exits 130. Without it a stopped run dies before its `finally` and leaves its sandbox, with its copy of
+ * auth.json, in /tmp (fork incidents H27). Returns a function that removes the handlers.
+ */
+export function onStopSignal(cleanup: () => void): () => void {
+  let done = false
+  const handler = (): void => {
+    if (!done) {
+      done = true
+      try {
+        cleanup()
+      } catch (error) {
+        console.error(`cleanup on stop failed: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+    process.exit(130)
+  }
+  for (const signal of ["SIGINT", "SIGTERM"] as const) process.on(signal, handler)
+  return () => {
+    for (const signal of ["SIGINT", "SIGTERM"] as const) process.off(signal, handler)
+  }
+}
+
 export function destroySandbox(sandbox: Sandbox): void {
   for (const pid of sandboxProcesses(sandbox.root)) {
     try {

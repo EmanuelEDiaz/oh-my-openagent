@@ -17,7 +17,7 @@ import { homedir, tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 
 import { analyseRequest, approxTokens, type ContextRecord } from "../bench/context-proxy"
-import { createSandbox, destroySandbox, overridePluginConfig, saveServerLogs, startServer, warmUp, type Sandbox, type Server } from "../bench/sandbox"
+import { createSandbox, destroySandbox, onStopSignal, overridePluginConfig, saveServerLogs, startServer, warmUp, type Sandbox, type Server } from "../bench/sandbox"
 
 const HOME = homedir()
 const REAL_CONFIG = join(process.env.XDG_CONFIG_HOME ?? join(HOME, ".config"), "opencode")
@@ -184,6 +184,11 @@ async function runOnce(label: string, pluginEntry: string, minRamMb: number, kee
   const mock = startMockZen()
   let sandbox: Sandbox | undefined
   let server: Server | undefined
+  const stopped = onStopSignal(() => {
+    server?.stop()
+    mock.stop()
+    if (sandbox) destroySandbox(sandbox)
+  })
   try {
     sandbox = createSandbox(root, pluginEntry)
     const notes = installRealSetup(sandbox, pluginEntry, mock.url)
@@ -235,6 +240,7 @@ async function runOnce(label: string, pluginEntry: string, minRamMb: number, kee
     }
     throw error
   } finally {
+    stopped()
     server?.stop()
     mock.stop()
     if (sandbox) destroySandbox(sandbox)

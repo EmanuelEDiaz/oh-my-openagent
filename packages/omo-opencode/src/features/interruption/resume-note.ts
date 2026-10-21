@@ -223,7 +223,7 @@ export function buildResumeNote(input: {
     lines.push(`Subagents running at the cut: ${interruption.subtasks.join(", ")}. Their work may be partial; check their output (background_output or their session) before launching them again.`)
   }
   lines.push(
-    "Rule: if the user's message asks to continue or is ambiguous, resume from the last completed step. If it asks for something else, do that and mention the cut work in one line.",
+    "Rule: if the user's message asks to continue or is ambiguous, resume from the last completed step. If it asks for something else, do that, then add one line saying the earlier work was cut and can be resumed, even when the user asks for a short answer: they need to know it is unfinished.",
     "Only if the cut work changed files, you may tell the user that OpenCode's /undo reverts a step's file changes (it undoes; it does not resume anything).",
     "</omo-interrupted-work>",
   )

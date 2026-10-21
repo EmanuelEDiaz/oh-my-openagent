@@ -23,6 +23,37 @@ function createContext(messagesResponse: unknown): RuntimeFallbackPluginInput {
 }
 
 describe("hasVisibleAssistantResponse", () => {
+  // Fork incidents H30 (21-10-2026): the fallback model worked through tools for 30 s without writing text yet; the
+  // fallback timeout took that as "no response", aborted it and, with no model left, left the task half done.
+  it("#given the fallback model's reply so far is finished tool calls #when visibility is checked #then it counts as a response", async () => {
+    // given
+    const checkVisibleResponse = hasVisibleAssistantResponse(() => undefined)
+    const ctx = createContext({
+      data: [
+        { info: { role: "user" }, parts: [{ type: "text", text: "fix the failing tests" }] },
+        { info: { role: "assistant" }, parts: [{ type: "tool", state: { status: "completed" } }] },
+        { info: { role: "assistant" }, parts: [{ type: "tool", state: { status: "error" } }, { type: "tool", state: { status: "running" } }] },
+      ],
+    })
+
+    // when
+    const result = await checkVisibleResponse(ctx, "session-tools-only", undefined)
+
+    // then
+    expect(result).toBe(true)
+  })
+
+  it("#given only a tool call still pending #when visibility is checked #then it is not a response yet", async () => {
+    const checkVisibleResponse = hasVisibleAssistantResponse(() => undefined)
+    const ctx = createContext({
+      data: [
+        { info: { role: "user" }, parts: [{ type: "text", text: "fix the failing tests" }] },
+        { info: { role: "assistant" }, parts: [{ type: "tool", state: { status: "pending" } }] },
+      ],
+    })
+    expect(await checkVisibleResponse(ctx, "session-pending-tool", undefined)).toBe(false)
+  })
+
   it("#given only an old assistant reply before the latest user turn #when visibility is checked #then the stale reply is ignored", async () => {
     // given
     const checkVisibleResponse = hasVisibleAssistantResponse(() => undefined)

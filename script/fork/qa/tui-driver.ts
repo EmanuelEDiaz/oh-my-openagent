@@ -14,7 +14,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 
 import { tmpdir } from "node:os"
 import { dirname, join } from "node:path"
 
-import { createSandbox, destroySandbox, prepareWorkdir, type Sandbox } from "../bench/sandbox"
+import { createSandbox, destroySandbox, onStopSignal, prepareWorkdir, type Sandbox } from "../bench/sandbox"
 
 const REPO = join(import.meta.dir, "../../..")
 /** RAM kept free for the user's other work; OMO_QA_RESERVE_MB overrides it when the user agrees to less. */
@@ -78,6 +78,10 @@ export async function startTui(options: StartTuiOptions): Promise<TuiSession> {
   const socket = `omo-qa-${process.pid}`
   const env = Object.entries(sandbox.env).map(([key, value]) => `${key}=${value}`)
   tmux(socket, "new-session", "-d", "-s", "qa", "-x", "200", "-y", "55", "-c", workdir, "env", ...env, "TERM=xterm-256color", "opencode", ...(options.args ?? []))
+  const stopped = onStopSignal(() => {
+    tmux(socket, "kill-server")
+    destroySandbox(sandbox)
+  })
   const session: TuiSession = {
     sandbox,
     workdir,
@@ -100,6 +104,7 @@ export async function startTui(options: StartTuiOptions): Promise<TuiSession> {
       return latest ? readFileSync(join(dir, latest), "utf8") : ""
     },
     stop: (stopOptions) => {
+      stopped()
       tmux(socket, "kill-server")
       if (!stopOptions?.keepSandbox) destroySandbox(sandbox)
     },
