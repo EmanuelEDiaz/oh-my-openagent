@@ -9,27 +9,30 @@ Generado por `script/fork/bench/run.ts` (plan: `docs/fork/plans/test-bench.md`).
 |---|---|---|---|---|---|---|---|
 | 2026-10-01 | baseline | dev | opencode/big-pickle | 100 % | 100 % | 10671 | 2 |
 | 2026-10-02 | baseline explore actual (dev) | dev | opencode/big-pickle | 98 % | 94 % | 35352 | 11 |
+| 2026-10-20 | before | dev | opencode/big-pickle | 80 % | 59 % | 25681 | 1 |
+| 2026-10-21 | after (con las 2 ejecuciones rotas por H26) | dev | opencode/big-pickle | 86 % | 65 % | 27981 | 0 |
+| 2026-10-21 | after (final, H26 repetidas con el arreglo) | dev | opencode/big-pickle | 88 % | 71 % | 29354 | 0 |
 <!-- history:end -->
 
-## Última ejecución — 2026-10-02, baseline explore actual (dev)
-- k = 3; turnos medios 6.9; tiempo medio 91 s.
+## Última ejecución — 2026-10-21, after
+- k = 3; turnos medios 5.8; tiempo medio 92 s.
 
 | Tarea | Pasa | pass^k | Fallos infra | Correctores que fallan |
 |---|---|---|---|---|
 | explore/retry-delay | 3/3 | 100 % | 0 | — |
 | explore/api-token-readers | 3/3 | 100 % | 0 | — |
 | explore/email-callers | 3/3 | 100 % | 0 | — |
-| explore/fork-paid-model | 3/3 | 100 % | 1 | — |
-| explore/fork-known-missing-callers | 3/3 | 100 % | 1 | — |
-| explore/fork-compaction-flow | 2/2 | — | 4 | — |
-| explore/fork-postgres | 2/3 | 0 % | 1 | citationsExist ×1 |
+| explore/fork-paid-model | 3/3 | 100 % | 0 | — |
+| explore/fork-known-missing-callers | 3/3 | 100 % | 0 | — |
+| explore/fork-compaction-flow | 2/3 | 0 % | 0 | citationsExist ×1 |
+| explore/fork-postgres | 3/3 | 100 % | 0 | — |
 | explore/fork-lsp-timeout | 3/3 | 100 % | 0 | — |
-| explore/codegen-generate-flow | 3/3 | 100 % | 0 | — |
-| explore/codegen-plugin-discovery | 3/3 | 100 % | 1 | — |
-| explore/codegen-dependency-rule | 3/3 | 100 % | 0 | — |
+| explore/codegen-generate-flow | 2/3 | 0 % | 0 | citationsExist ×1 |
+| explore/codegen-plugin-discovery | 3/3 | 100 % | 0 | — |
+| explore/codegen-dependency-rule | 1/3 | 0 % | 0 | saysAbsent ×2 |
 | explore/click-help-width | 3/3 | 100 % | 0 | — |
 | explore/click-shell-completion-caller | 3/3 | 100 % | 0 | — |
-| explore/click-version-flow | 3/3 | 100 % | 1 | — |
-| explore/chi-insert-route | 3/3 | 100 % | 1 | — |
-| explore/chi-request-flow | 3/3 | 100 % | 0 | — |
-| explore/chi-websocket | 3/3 | 100 % | 1 | — |
+| explore/click-version-flow | 2/3 | 0 % | 0 | citationsExist ×1 |
+| explore/chi-insert-route | 3/3 | 100 % | 0 | — |
+| explore/chi-request-flow | 2/3 | 0 % | 0 | citationsExist ×1 |
+| explore/chi-websocket | 3/3 | 100 % | 0 | — |

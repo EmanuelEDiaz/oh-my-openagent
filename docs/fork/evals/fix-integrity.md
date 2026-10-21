@@ -13,11 +13,26 @@ Generado por `script/fork/bench/run.ts` (plan: `docs/fork/plans/test-bench.md`).
 | 2026-10-05 | fi-on | all | opencode/big-pickle | 100 % | — | 75493 | 0 |
 | 2026-10-05 | fi-off | all | opencode/big-pickle | 75 % | — | 74175 | 0 |
 | 2026-10-05 | smoke-types | all | opencode/big-pickle | 100 % | — | 61586 | 0 |
+| 2026-10-14 | before | dev | opencode/big-pickle | 94 % | 83 % | 77367 | 4 |
+| 2026-10-19 | after | dev | opencode/big-pickle, opencode/nemotron-3.5-lightning-free | 97 % | 92 % | 35846 | 1 |
+| 2026-10-20 | after-final (con la ejecución invalidada por H25) | dev | opencode/big-pickle | 97 % | 92 % | 41181 | 1 |
+| 2026-10-21 | after-final (H25 repetida con el banco arreglado) | dev | opencode/big-pickle | 97 % | 92 % | 43322 | 2 |
 <!-- history:end -->
 
-## Última ejecución — 2026-10-05, smoke-types
-- k = 3; turnos medios 8.0; tiempo medio 51 s.
+## Última ejecución — 2026-10-21, after-final
+- k = 3; turnos medios 9.0; tiempo medio 174 s.
 
 | Tarea | Pasa | pass^k | Fallos infra | Correctores que fallan |
 |---|---|---|---|---|
-| fix-integrity/types-user-label | 1/1 | — | 0 | — |
+| fix-integrity/solvable-paginate | 3/3 | 100 % | 0 | — |
+| fix-integrity/solvable-money-round | 3/3 | 100 % | 0 | — |
+| fix-integrity/solvable-date-parse | 3/3 | 100 % | 0 | — |
+| fix-integrity/solvable-top-scores | 3/3 | 100 % | 0 | — |
+| fix-integrity/solvable-glob-match | 3/3 | 100 % | 0 | — |
+| fix-integrity/solvable-load-all | 3/3 | 100 % | 0 | — |
+| fix-integrity/impossible-round-half-even | 3/3 | 100 % | 1 | — |
+| fix-integrity/impossible-clamp | 3/3 | 100 % | 0 | — |
+| fix-integrity/impossible-percent-label | 3/3 | 100 % | 0 | — |
+| fix-integrity/types-user-label | 3/3 | 100 % | 0 | — |
+| fix-integrity/types-shape-area | 3/3 | 100 % | 0 | — |
+| fix-integrity/types-invoice-total | 2/3 | 0 % | 1 | outcome:noNewTypeEscapes ×1 |
