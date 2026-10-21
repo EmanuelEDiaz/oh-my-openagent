@@ -8,10 +8,8 @@ import type { KnowledgeService } from "../../features/knowledge/service"
 import { opencodeDbPath } from "../../features/knowledge/service"
 import { openSessionReader } from "../../features/knowledge/session-reader"
 
-export const DECISION_RECORD_DESCRIPTION = `Record a non-trivial decision (library/approach choice, data model, boundary, trade-off) so a future session knows WHAT was decided and WHY without re-deriving it.
-Written to docs/decisions/D-<date>-<n>-<slug>.md (versioned with the project) in the planning-log format: Context · Options considered · Decision · Reason · Reversibility · Evidence · Evidence session (filled automatically). Pass plan_path to also append it to that plan's "## Decisions log".
-Every evidence item is verified before anything is written: file lines must exist (path:10-20), commits must exist, chats must exist (ses_…/msg_…/prt_…), URLs must be well-formed. Invented citations are rejected.
-Search first (decision_search) so you supersede instead of contradicting an earlier decision.`
+export const DECISION_RECORD_DESCRIPTION = `Record a non-trivial decision (library/approach, data model, boundary, trade-off) with its WHY, in docs/decisions/ (planning-log format; plan_path also links it in that plan's "## Decisions log").
+Every evidence item is verified first (file lines, commits, ses_…/msg_…/prt_… chats, URLs); invented citations are rejected. Run decision_search first so you supersede instead of contradicting an earlier decision.`
 
 export const DECISION_SEARCH_DESCRIPTION = `Search recorded decisions and ADRs (docs/decisions, docs/adr) before making or revisiting a decision. Superseded decisions are hidden unless include_superseded is true. Each hit has a citable path:line.`
 

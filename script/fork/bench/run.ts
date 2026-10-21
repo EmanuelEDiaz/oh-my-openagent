@@ -13,13 +13,14 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync, statSync, writeFil
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
+import { hostAnswers, waitForConnection } from "./connectivity"
 import { renderContextTable, startContextProxy, summarizeContext, type ContextRecord, type ContextWindow } from "./context-proxy"
 import { defaultFixtureCache, resolveFixture } from "./fixtures"
 import { renderReport } from "./report"
 import { pendingRuns } from "./resume"
 import { runTask } from "./runner"
 import { createSandbox, destroySandbox, isHealthy, overrideAgentModels, overridePluginConfig, saveServerLogs, startServer, warmUp, type Sandbox, type Server } from "./sandbox"
-import { isConfigError, summarize } from "./score"
+import { isConfigError, isConnectivityError, summarize } from "./score"
 import { EXPLORE_TASKS } from "./tasks/explore"
 import { FIX_INTEGRITY_TASKS } from "./tasks/fix-integrity"
 import { LOOP_TASKS } from "./tasks/loops"
@@ -31,6 +32,9 @@ import type { RunResult, Task } from "./types"
 const REPO = join(import.meta.dir, "../../..")
 const SUITES: Record<string, readonly Task[]> = { explore: EXPLORE_TASKS, "web-researcher": WEB_RESEARCHER_TASKS, "librarian-web": LIBRARIAN_WEB_TASKS, "web-researcher-hard": WEB_RESEARCHER_HARD_TASKS, "librarian-hard": LIBRARIAN_HARD_TASKS, "fix-integrity": FIX_INTEGRITY_TASKS, loops: LOOP_TASKS, "loops-hard": LOOP_HARD_TASKS }
 const INFRA_RETRIES = 2
+// A lost connection is waited out and retried without using up INFRA_RETRIES, a few times per run at most.
+const CONNECTION_RETRIES = 5
+const CONNECTION_WAIT_MS = 30 * 60_000
 const FIXTURE_CACHE = defaultFixtureCache()
 
 function flag(name: string): boolean {
@@ -114,7 +118,8 @@ async function main(): Promise<void> {
   let server: Server | undefined
   // Every run records the context each request carries (fork roadmap 0.13); --no-context turns it off.
   const contextFile = rawFile.replace(/\.jsonl$/, ".context.jsonl")
-  const proxy = flag("no-context") ? undefined : startContextProxy(option("zen-url", "https://opencode.ai/zen/v1") ?? "", contextFile)
+  const zenUrl = option("zen-url", "https://opencode.ai/zen/v1") ?? ""
+  const proxy = flag("no-context") ? undefined : startContextProxy(zenUrl, contextFile)
   const windows: ContextWindow[] = []
   const cleanup = () => {
     proxy?.stop()
@@ -154,6 +159,7 @@ async function main(): Promise<void> {
     for (const { taskId, repeat, nextAttempt } of pending) {
       const task = tasks.find((candidate) => candidate.id === taskId)!
       {
+        let connectionRetries = 0
         for (let attempt = nextAttempt; attempt <= INFRA_RETRIES; attempt++) {
           // A stalled model can leave the server unresponsive: restart it rather than failing every later task.
           if (!(await isHealthy(server))) {
@@ -179,6 +185,14 @@ async function main(): Promise<void> {
             throw new Error(`configuration problem, not the agent's: ${result.error}\nFix the models with /omo-models and run again.`)
           }
           if (result.failure !== "infra") break
+          if (result.error !== undefined && isConnectivityError(result.error) && connectionRetries < CONNECTION_RETRIES) {
+            connectionRetries++
+            console.log("connection lost; waiting for it to come back before retrying")
+            const waited = await waitForConnection({ reachable: hostAnswers(zenUrl), sleep: (ms) => Bun.sleep(ms), intervalMs: 15_000, maxWaitMs: CONNECTION_WAIT_MS })
+            if (!waited.connected) throw new Error(`no connection for ${CONNECTION_WAIT_MS / 60_000} min; resume this run later with --resume ${rawFile}`)
+            console.log(`connection back after ${Math.round(waited.waitedMs / 1000)}s`)
+            attempt--
+          }
         }
       }
     }

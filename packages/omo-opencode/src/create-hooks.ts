@@ -23,6 +23,9 @@ export type DisposableCreatedHooks = {
   todoContinuationEnforcer?: DisposableHook
   autoSlashCommand?: DisposableHook
   anthropicContextWindowLimitRecovery?: DisposableHook
+  stallWatchdog?: DisposableHook
+  networkGuard?: DisposableHook
+  loopBreaker?: DisposableHook
 }
 
 export function disposeCreatedHooks(hooks: DisposableCreatedHooks): void {
@@ -33,6 +36,10 @@ export function disposeCreatedHooks(hooks: DisposableCreatedHooks): void {
   hooks.todoContinuationEnforcer?.dispose?.()
   hooks.autoSlashCommand?.dispose?.()
   hooks.anthropicContextWindowLimitRecovery?.dispose?.()
+  // Their timers would keep a disposed instance alive (fork incidents H12).
+  hooks.stallWatchdog?.dispose?.()
+  hooks.networkGuard?.dispose?.()
+  hooks.loopBreaker?.dispose?.()
 }
 
 export function createHooks(args: {

@@ -1,3 +1,6 @@
+import { existsSync } from "node:fs";
+import { dirname, join } from "node:path";
+
 import { contextCwd } from "../request-context.js";
 import { getDisabledServerIds, getMergedServers } from "./config-loader.js";
 import { BUILTIN_SERVERS, LSP_INSTALL_HINTS } from "./server-definitions.js";
@@ -12,12 +15,34 @@ function withResolvedCommand(command: string[], binaryPath: string): string[] {
 	return [binaryPath, ...command.slice(1)];
 }
 
+/**
+ * Servers that only make sense inside their own kind of project. `deno lsp` checks .ts files with Deno's module rules,
+ * which mislead the agent in a Node or Bun project (fork incidents H15: chosen there because Deno was installed and
+ * typescript-language-server was not).
+ */
+const PROJECT_MARKERS: Record<string, readonly string[]> = {
+	deno: ["deno.json", "deno.jsonc"],
+};
+
+function hasMarkerUpwards(directory: string, markers: readonly string[]): boolean {
+	for (let current = directory; ; current = dirname(current)) {
+		if (markers.some((marker) => existsSync(join(current, marker)))) return true;
+		if (dirname(current) === current) return false;
+	}
+}
+
+function appliesToProject(serverId: string, workingDirectory: string): boolean {
+	const markers = PROJECT_MARKERS[serverId];
+	return markers === undefined || hasMarkerUpwards(workingDirectory, markers);
+}
+
 export function findServerForExtension(ext: string): ServerLookupResult {
 	const servers = getMergedServers();
 	const workingDirectory = contextCwd();
 
 	for (const server of servers) {
 		if (!server.extensions.includes(ext)) continue;
+		if (!appliesToProject(server.id, workingDirectory)) continue;
 		const binaryPath = resolveServerBinary(server.command, workingDirectory);
 		if (binaryPath !== null) {
 			const resolvedServer = {
@@ -47,7 +72,7 @@ export function findServerForExtension(ext: string): ServerLookupResult {
 	}
 
 	for (const server of servers) {
-		if (server.extensions.includes(ext)) {
+		if (server.extensions.includes(ext) && appliesToProject(server.id, workingDirectory)) {
 			const installHint =
 				LSP_INSTALL_HINTS[server.id] ?? `Install '${server.command[0]}' and ensure it's in your PATH`;
 			return {

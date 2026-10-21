@@ -51,6 +51,8 @@ export type ModelFallbackHook = ModelFallbackControllerWithState & {
 }
 
 type ModelFallbackHookArgs = {
+  /** Project folder of this OpenCode instance (fork incidents H13). */
+  directory?: string
   toast?: FallbackToast
   onApplied?: FallbackCallback
   controllerAccessor?: ModelFallbackControllerAccessor
@@ -186,6 +188,7 @@ export function createModelFallbackHook(args?: ModelFallbackHookArgs): ModelFall
         toast,
         onApplied,
         lastToastKey: controller.lastToastKey,
+        ...(args?.directory ? { directory: args.directory } : {}),
       })
     },
   }

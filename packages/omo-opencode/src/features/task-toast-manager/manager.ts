@@ -2,6 +2,7 @@ import type { PluginInput } from "@opencode-ai/plugin"
 import { t } from "../../shared/i18n"
 import type { ConcurrencyManager } from "../background-agent/concurrency"
 import type { ModelFallbackInfo, TaskStatus, TrackedTask } from "./types"
+import { createInstanceRegistry } from "../../shared/instance-registry"
 
 type OpencodeClient = PluginInput["client"]
 
@@ -209,20 +210,32 @@ export class TaskToastManager {
   }
 }
 
-let instance: TaskToastManager | null = null
+// One toast manager per OpenCode instance (project folder): its client shows toasts in that folder's TUI. Several
+// folders can share one server (fork incidents H13).
+const managers = createInstanceRegistry<TaskToastManager>()
+const releases = new Map<string, () => void>()
 
-export function getTaskToastManager(): TaskToastManager | null {
-  return instance
+export function getTaskToastManager(directory?: string): TaskToastManager | null {
+  return managers.get(directory) ?? null
 }
 
 export function initTaskToastManager(
   client: OpencodeClient,
-  concurrencyManager?: ConcurrencyManager
+  concurrencyManager?: ConcurrencyManager,
+  directory = "",
 ): TaskToastManager {
-  instance = new TaskToastManager(client, concurrencyManager)
-  return instance
+  const manager = new TaskToastManager(client, concurrencyManager)
+  releases.set(directory, managers.register(directory, manager))
+  return manager
+}
+
+/** OpenCode disposed the instance of `directory` (fork incidents H12). */
+export function releaseTaskToastManager(directory: string): void {
+  releases.get(directory)?.()
+  releases.delete(directory)
 }
 
 export function _resetTaskToastManagerForTesting(): void {
-  instance = null
+  for (const release of releases.values()) release()
+  releases.clear()
 }

@@ -19,7 +19,7 @@ import { createStallWatchdogHook, type StallWatchdogHookDeps } from "./hook"
 export function createPluginStallWatchdogHook(ctx: PluginContext, pluginConfig: OhMyOpenCodeConfig) {
   const stall = pluginConfig.stall
   const deps: StallWatchdogHookDeps = {
-    hasManagedProcess: (sessionID) => getActiveProcessManager()?.isWaiting(sessionID) ?? false,
+    hasManagedProcess: (sessionID) => getActiveProcessManager(ctx.directory)?.isWaiting(sessionID) ?? false,
     isSubagentSession: (sessionID) => subagentSessions.has(sessionID) || syncSubagentSessions.has(sessionID),
     abort: async (sessionID) => {
       // Raced against a timeout: aborting a stalled stream can hang inside OpenCode.
@@ -32,15 +32,15 @@ export function createPluginStallWatchdogHook(ctx: PluginContext, pluginConfig: 
     },
     resolveTarget: (sessionID) => resolveSessionTarget(ctx.client as never, sessionID),
     pause: async (sessionID, reason, attempts) => {
-      await getActiveResumeService()?.pause(sessionID, reason, attempts)
+      await getActiveResumeService(ctx.directory)?.pause(sessionID, reason, attempts)
     },
     fallbackModels: (sessionID, agent) => getFallbackModelsForSession(sessionID, agent, pluginConfig),
-    chargeBudget: (sessionID) => getActiveLoopBreaker()?.charge(sessionID, "stall recovery"),
+    chargeBudget: (sessionID) => getActiveLoopBreaker(ctx.directory)?.charge(sessionID, "stall recovery"),
     // Network cuts and freezes (fork roadmap 0.15): read lazily, the guard may be created after this hook.
-    isWaiting: (sessionID) => getNetworkGuard()?.isWaiting(sessionID) ?? false,
+    isWaiting: (sessionID) => getNetworkGuard(ctx.directory)?.isWaiting(sessionID) ?? false,
     isNetworkRetry: (message) => isNetworkResilienceEnabled() && isNetworkError(message),
-    takeOverStall: async (sessionID, opts) => (await getNetworkGuard()?.takeOverStall(sessionID, opts)) ?? false,
-    onFreeze: (sessionIDs, seconds) => getNetworkGuard()?.afterFreeze(sessionIDs, seconds),
+    takeOverStall: async (sessionID, opts) => (await getNetworkGuard(ctx.directory)?.takeOverStall(sessionID, opts)) ?? false,
+    onFreeze: (sessionIDs, seconds) => getNetworkGuard(ctx.directory)?.afterFreeze(sessionIDs, seconds),
     continueSession: async (sessionID, input) => {
       const model = input.model ? parseModel(input.model) : undefined
       const result = await dispatchInternalPrompt({
@@ -68,6 +68,7 @@ export function createPluginStallWatchdogHook(ctx: PluginContext, pluginConfig: 
       inactivityMs: stall?.inactivity_ms ?? 240_000,
       checkIntervalMs: stall?.check_interval_ms ?? 15_000,
       maxStallsPerTask: stall?.max_stalls_per_task ?? 2,
+      directory: ctx.directory,
       ...(pluginConfig.resilience?.enabled === false ? {} : { freezeThresholdMs: (pluginConfig.resilience?.freeze_threshold_s ?? 10) * 1000 }),
     },
     deps,

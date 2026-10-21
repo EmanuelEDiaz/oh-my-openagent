@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test"
 
 import { setNetworkGuard, setNetworkResilienceEnabled, stepAsideForNetwork } from "./index"
 import { findIpBinary } from "./link-monitor"
-import { createPluginNetworkGuard, networkFingerprint, probeUrl, providerBaseUrl } from "./plugin"
+import { createPluginNetworkGuard, networkFingerprint, probeUrl, providerBaseUrl, sessionOwner } from "./plugin"
 
 afterEach(() => {
   setNetworkGuard(undefined)
@@ -57,6 +57,19 @@ describe("network guard wiring (fork 0.15)", () => {
     const b = networkFingerprint({ eth0: [entry("10.0.0.2")], wlan0: [entry("192.168.1.5")] })
     expect(a).toBe(b)
     expect(networkFingerprint({ wlan0: [entry("192.168.1.6")] })).not.toBe(a)
+  })
+
+  test("a session's owner: the background manager's task, a delegated subagent, or the user's own session", async () => {
+    // given
+    const parents: Record<string, string | undefined> = { "ses-bg": "ses-main", "ses-child": "ses-main", "ses-main": undefined }
+    const client = { session: { get: async ({ path }: { path: { id: string } }) => ({ data: { id: path.id, parentID: parents[path.id] } }) } }
+    const background = { findBySession: (id: string) => (id === "ses-bg" ? { id: "bg_1" } : undefined) }
+
+    // then
+    expect(await sessionOwner(client, background, "ses-bg")).toBe("background")
+    expect(await sessionOwner(client, background, "ses-child")).toBe("caller")
+    expect(await sessionOwner(client, background, "ses-main")).toBe("main")
+    expect(await sessionOwner(client, undefined, "ses-bg")).toBe("caller")
   })
 
   test("the link monitor is Linux-only and needs iproute2", () => {

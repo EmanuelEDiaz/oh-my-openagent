@@ -8,6 +8,7 @@ import { BrowserAutomationConfigSchema } from "./browser-automation"
 import { CategoriesConfigSchema } from "./categories"
 import { ClaudeCodeConfigSchema } from "./claude-code"
 import { CommentCheckerConfigSchema } from "./comment-checker"
+import { ContextBudgetConfigSchema } from "./context-budget"
 import { BuiltinCommandNameSchema } from "./commands"
 import { DefaultModeConfigSchema } from "./default-mode"
 import { ExperimentalConfigSchema } from "./experimental"
@@ -69,6 +70,7 @@ export const OhMyOpenCodeConfigSchema = z.object({
   /** Enable anonymous telemetry. Default: enabled when omitted. Set to false to disable. */
   telemetry: z.boolean().optional().describe("Enable or disable anonymous telemetry. Default: enabled when omitted. Set to false to disable."),
   /** Enable model fallback on API errors (default: false). Set to true to enable automatic model switching when model errors occur. */
+  /** Default true; standby path, active only when runtime_fallback is off (fork plan real-use-incidents A3). */
   model_fallback: z.boolean().optional(),
   agents: AgentOverridesSchema.optional(),
   categories: CategoriesConfigSchema.optional(),
@@ -119,6 +121,8 @@ export const OhMyOpenCodeConfigSchema = z.object({
   retry_budget: RetryBudgetConfigSchema.optional(),
   /** Keep bash/read listed (every use denied) for agents that hide them when their model is a free Zen model, whose free tier rejects requests without them (default: true) */
   zen_free_gate: z.boolean().optional(),
+  /** Tools hidden from the tab orchestrators to shrink every request (incidents of 07-10-2026) */
+  context_budget: ContextBudgetConfigSchema.optional(),
   team_mode: TeamModeConfigSchema.optional(),
   keyword_detector: KeywordDetectorConfigSchema.optional(),
   babysitting: BabysittingConfigSchema.optional(),

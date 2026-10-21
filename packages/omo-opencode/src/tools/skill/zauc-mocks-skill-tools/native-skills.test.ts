@@ -5,7 +5,9 @@ import type { LoadedSkill } from "../../../features/opencode-skill-loader/types"
 import { createMockSkill, createSkillTool, mockContext } from "./test-support"
 
 describe("skill tool - nativeSkills integration", () => {
-  it("includes native skills in the description even when skills are pre-seeded", async () => {
+  // Native skills are already in OpenCode's own <available_skills>: the description does not repeat them (user
+  // decision 07-10-2026, context cut), but the tool still loads them. These two tests asserted the old repetition.
+  it("does not repeat native skills in the description, and still loads them, when skills are pre-seeded", async () => {
     const tool = createSkillTool({
       skills: [createMockSkill("seeded-skill")],
       includeSkillsInDescription: true,
@@ -24,14 +26,15 @@ describe("skill tool - nativeSkills integration", () => {
     })
 
     expect(tool.description).toContain("seeded-skill")
-    expect(tool.description).toContain("native-visible-skill")
-    await tool.execute({ name: "native-visible-skill" }, mockContext)
+    expect(tool.description).not.toContain("native-visible-skill")
+    expect(tool.description).toContain("not repeated here")
+    expect(String(await tool.execute({ name: "native-visible-skill" }, mockContext))).toContain("Native visible skill body")
 
     expect(tool.description).toContain("seeded-skill")
-    expect(tool.description).toContain("native-visible-skill")
+    expect(tool.description).not.toContain("native-visible-skill")
   })
 
-  it("keeps OpenCode-injected native skills in the description after the shared/ prefix cutover", () => {
+  it("does not repeat OpenCode-injected native skills after the shared/ prefix cutover", () => {
     const tool = createSkillTool({
       skills: [],
       includeSkillsInDescription: true,
@@ -59,8 +62,8 @@ describe("skill tool - nativeSkills integration", () => {
 
     const description = tool.description
 
-    expect(description).toContain("<name>/customize-opencode</name>")
-    expect(description).toContain("Customize OpenCode")
+    expect(description).not.toContain("<name>/customize-opencode</name>")
+    expect(description).toContain("not repeated here")
   })
 
   it("merges native skills exposed by PluginInput.skills.all()", async () => {

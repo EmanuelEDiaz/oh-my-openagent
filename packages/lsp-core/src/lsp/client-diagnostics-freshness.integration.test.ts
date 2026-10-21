@@ -316,11 +316,13 @@ describe("LspClient diagnostics freshness", () => {
 		expect(cancel?.params).toEqual({ id: request?.id });
 	});
 
+	// These cases test the freshness-window logic for a server that is not young anymore: the startup grace for a
+	// freshly started server (fork incidents H22, client-diagnostics-busy-server.test.ts) is set to 0 here.
 	it("#given a server without pull support that never publishes diagnostics #when diagnostics run on a clean file #then the request resolves clean after the freshness window instead of reporting a timeout", async () => {
 		const clock = new ControlledClock();
 		const context = await harness.makeClient(
 			{},
-			{ diagnosticsFreshnessTimeoutMs: 60, versionlessPublishQuiescenceMs: 5, timerProvider: clock },
+			{ diagnosticsFreshnessTimeoutMs: 60, versionlessPublishQuiescenceMs: 5, silentStartupGraceMs: 0, timerProvider: clock },
 		);
 
 		const pending = context.client.diagnostics(context.source);
@@ -343,7 +345,7 @@ describe("LspClient diagnostics freshness", () => {
 					{ error: { code: -32601, message: "Method not found" } },
 				],
 			},
-			{ diagnosticsFreshnessTimeoutMs: 500, versionlessPublishQuiescenceMs: 5, timerProvider: clock },
+			{ diagnosticsFreshnessTimeoutMs: 500, versionlessPublishQuiescenceMs: 5, silentStartupGraceMs: 0, timerProvider: clock },
 		);
 
 		const first = await context.client.diagnostics(context.source);
@@ -367,7 +369,7 @@ describe("LspClient diagnostics freshness", () => {
 					{ error: { code: -32601, message: "Method not found" } },
 				],
 			},
-			{ diagnosticsFreshnessTimeoutMs: 500, versionlessPublishQuiescenceMs: 5, timerProvider: clock },
+			{ diagnosticsFreshnessTimeoutMs: 500, versionlessPublishQuiescenceMs: 5, silentStartupGraceMs: 0, timerProvider: clock },
 		);
 
 		const first = await context.client.diagnostics(context.source);

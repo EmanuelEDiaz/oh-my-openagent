@@ -218,19 +218,18 @@ describe("mock.module lifecycle hygiene", () => {
   test("#given test files using mock.module #when audited #then each must pair with cleanup", async () => {
     // given
     const files = [...await listTestFiles(SOURCE_ROOT), ...await listPackageTestFiles()]
-    const parsedSourceFiles = await parser.parse(files)
+    // Only files that mention mock.module can offend: parse just those (the rest were skipped below anyway).
+    // Parsing all ~1,200 test files at once held every syntax tree in memory (> 2 GB, 12-10-2026).
+    const candidates: string[] = []
+    for (const filePath of files) {
+      if (MOCK_MODULE_LIFECYCLE_ALLOWLIST.has(filePath)) continue
+      if ((await readFile(filePath, "utf8")).includes(MOCK_MODULE_TOKEN)) candidates.push(filePath)
+    }
+    const parsedSourceFiles = await parser.parse(candidates)
     const offenders: string[] = []
 
     // when
-    for (const filePath of files) {
-      if (MOCK_MODULE_LIFECYCLE_ALLOWLIST.has(filePath)) {
-        continue
-      }
-
-      const contents = await readFile(filePath, "utf8")
-      if (!contents.includes(MOCK_MODULE_TOKEN)) {
-        continue
-      }
+    for (const filePath of candidates) {
       const sourceFile = parsedSourceFiles.get(filePath)
       if (!sourceFile) {
         throw new Error(`TypeScript did not parse ${filePath}`)

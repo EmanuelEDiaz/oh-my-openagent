@@ -1,8 +1,16 @@
 /** Failure classification and pass@1 / pass^k aggregation for the agent test bench. */
-import type { FailureKind, RunResult } from "./types"
+import type { FailureKind, RunResult, Transcript } from "./types"
+
+// The machine lost its connection (DNS or route gone): worth waiting for, not just retrying at once.
+const CONNECTIVITY_PATTERN = /upstream unreachable|EAI_AGAIN|ENOTFOUND|ENETUNREACH|EHOSTUNREACH|ECONNREFUSED|ECONNRESET|ETIMEDOUT|fetch failed|socket hang up/i
+
+export function isConnectivityError(error: string): boolean {
+  return CONNECTIVITY_PATTERN.test(error)
+}
 
 // Problems of the provider or the transport, not of the agent: they are retried and never scored.
 const INFRA_PATTERNS = [
+  CONNECTIVITY_PATTERN,
   /\b403\b/,
   /\b429\b/,
   /\b50[0-4]\b/,
@@ -14,9 +22,9 @@ const INFRA_PATTERNS = [
   // Zen's own gateway when a free model's endpoint is down (seen with ling-3.1-flash-free, 07-10-2026).
   /Upstream request failed|Endpoint is unavailable|service unavailable/i,
   /timed out|stalled|never started|no assistant message in the session|MessageAbortedError/i,
-  /ECONNREFUSED|ECONNRESET|ETIMEDOUT|fetch failed|socket hang up/i,
   /ProviderAuthError/i,
   /server did not start|server error|server unresponsive/i,
+  /model produced no output/i,
 ]
 
 // The setup is wrong (e.g. a model OpenCode retired is still configured): retrying cannot help, the run stops.
@@ -24,6 +32,16 @@ const CONFIG_PATTERNS = [/model not found/i, /agent not found/i, /ProviderModelN
 
 export function isConfigError(error: string): boolean {
   return CONFIG_PATTERNS.some((pattern) => pattern.test(error))
+}
+
+/**
+ * A turn where the model never answered: no tokens, no tool call, no text, and no error from OpenCode either (seen
+ * on 14-10-2026 while the connection was down). There is nothing of the agent's to score.
+ */
+export function silentModelError(transcript: Transcript): string | undefined {
+  const tokens = Object.values(transcript.tokens).reduce((sum, value) => sum + value, 0)
+  if (tokens > 0 || transcript.tools.length > 0 || transcript.answer.trim() !== "") return undefined
+  return `model produced no output (0 tokens, no tool calls, empty answer after ${Math.round(transcript.durationMs / 1000)}s)`
 }
 
 export function classifyFailure(error: string): FailureKind {

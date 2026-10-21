@@ -5,6 +5,11 @@ import type { CommandInfo } from "../slashcommand/types"
 
 interface CombinedDescriptionOptions {
   includeSkills?: boolean
+  /**
+   * Skills OpenCode itself already lists to the model in the system prompt's <available_skills> (its native skill
+   * discovery). Listing them here again cost every request their descriptions twice (incidents of 07-10-2026).
+   */
+  excludeSkillNames?: ReadonlySet<string>
 }
 
 function formatSkillCommand(skill: SkillInfo): string {
@@ -72,12 +77,20 @@ export function formatCombinedDescription(
   commands?: CommandInfo[],
   options: CombinedDescriptionOptions = {}
 ): string {
-  const availableSkills = options.includeSkills ? deduplicatePathAliasedSkills(skills ?? []) : []
-  const availableCommands = deduplicateCommandsForPathAliasedSkills(commands ?? [], availableSkills)
+  const allSkills = options.includeSkills ? deduplicatePathAliasedSkills(skills ?? []) : []
+  const excluded = new Set(Array.from(options.excludeSkillNames ?? [], normalizeSkillName))
+  // `synced/<id>/<name>` (skills synced from claude.ai into ~/.claude/skills) repeats <name> when that exists too.
+  const bareNames = new Set([...excluded, ...allSkills.filter((skill) => !skill.name.includes("/")).map((skill) => normalizeSkillName(skill.name))])
+  const isSyncedCopy = (name: string) => /^synced\//i.test(name) && bareNames.has(normalizeSkillName(name.slice(name.lastIndexOf("/") + 1)))
+  const availableSkills = allSkills.filter((skill) => !excluded.has(normalizeSkillName(skill.name)) && !isSyncedCopy(skill.name))
+  const availableCommands = deduplicateCommandsForPathAliasedSkills(commands ?? [], allSkills)
+  const nativeListNote = availableSkills.length < allSkills.length
+    ? "\nSkills already in <available_skills> (system prompt) are not repeated here; load them with this tool too."
+    : ""
 
   if (availableSkills.length === 0 && availableCommands.length === 0) {
     if ((skills?.length ?? 0) > 0) {
-      return TOOL_DESCRIPTION_PREFIX
+      return `${TOOL_DESCRIPTION_PREFIX}${nativeListNote}`
     }
 
     return TOOL_DESCRIPTION_NO_SKILLS
@@ -92,7 +105,7 @@ export function formatCombinedDescription(
     return TOOL_DESCRIPTION_PREFIX
   }
 
-  return `${TOOL_DESCRIPTION_PREFIX}
+  return `${TOOL_DESCRIPTION_PREFIX}${nativeListNote}
 <available_items>
 Priority: project > user > opencode > builtin/plugin${options.includeSkills ? " | Skills listed before commands" : ""}
 Invoke via: skill(name="item-name") - omit leading slash for commands.

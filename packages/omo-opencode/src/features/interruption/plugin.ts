@@ -1,6 +1,8 @@
 /** Real OpenCode wiring for killed-process recovery and the one-shot resume note (fork roadmap 0.15 C/D). */
 import type { ResilienceConfig } from "../../config/schema/resilience"
-import { registerManagerForCleanup } from "../background-agent/process-cleanup"
+import { registerManagerForCleanup, unregisterManagerForCleanup } from "../background-agent/process-cleanup"
+import { getNetworkGuard } from "../network-guard"
+import { createInstanceRegistry } from "../../shared/instance-registry"
 import { sampleMemory } from "../resume/memory-watch"
 import { log } from "../../shared/logger"
 import { normalizeSDKResponse } from "../../shared/normalize-sdk-response"
@@ -13,17 +15,20 @@ import { createWipTracker, type WipTracker } from "./wip-tracker"
 
 const ORPHAN_TOAST_DELAY_MS = 3000
 
-let activeNotes: InterruptionNotes | undefined
-let activeTracker: WipTracker | undefined
+// One tracker and one note service per OpenCode instance (project folder); several can share a server (incidents H13).
+const trackers = createInstanceRegistry<WipTracker>()
+const notesByDirectory = createInstanceRegistry<InterruptionNotes>()
+let unregisterTestNotes: (() => void) | undefined
 let sigtermListenerInstalled = false
 
-/** The one-shot note service of the running plugin (read by the chat.message handler). */
-export function getInterruptionNotes(): InterruptionNotes | undefined {
-  return activeNotes
+/** The one-shot note service of the instance of `directory` (read by its chat.message handler). */
+export function getInterruptionNotes(directory?: string): InterruptionNotes | undefined {
+  return notesByDirectory.get(directory)
 }
 
 export function _setInterruptionNotesForTesting(notes: InterruptionNotes | undefined): void {
-  activeNotes = notes
+  unregisterTestNotes?.()
+  unregisterTestNotes = notes ? notesByDirectory.register("", notes) : undefined
 }
 
 export type PluginResilience = {
@@ -31,6 +36,8 @@ export type PluginResilience = {
   readonly notes: InterruptionNotes
   readonly recovered: readonly RecoveredOrphan[]
   onEvent(event: { type: string; properties?: unknown }): void
+  /** OpenCode disposed this instance (incidents H12): stop the heartbeat and leave the other folders alone. */
+  dispose(): void
 }
 
 type SessionClient = {
@@ -104,16 +111,20 @@ export function createPluginResilience(ctx: PluginContext, config: Partial<Resil
     write: (marker) => writeWipMarker(projectDir, marker),
     remove: () => deleteWipMarker(projectDir, process.pid),
     record: (interruption) => recordInterruption(projectDir, interruption),
+    isWaiting: (sessionID) => getNetworkGuard(projectDir)?.isWaiting(sessionID) ?? false,
     log,
   })
   tracker.start()
   // Ordered shutdown first: its SIGTERM listener exits the process, so ours below never keeps it alive.
-  registerManagerForCleanup({ shutdown: () => void tracker.shutdown() })
-  activeTracker = tracker
+  const cleanup = { shutdown: () => void tracker.shutdown() }
+  registerManagerForCleanup(cleanup)
+  const unregisterTracker = trackers.register(projectDir, tracker)
   if (!sigtermListenerInstalled) {
     sigtermListenerInstalled = true
-    // Runs before the cleanup listener, so the marker knows about the SIGTERM before shutdown reads it.
-    process.prependListener("SIGTERM", () => activeTracker?.onSigterm())
+    // Runs before the cleanup listener, so every live instance's marker knows about the SIGTERM before shutdown reads it.
+    process.prependListener("SIGTERM", () => {
+      for (const live of trackers.values()) live.onSigterm()
+    })
   }
 
   const notes = createInterruptionNotes({
@@ -121,7 +132,7 @@ export function createPluginResilience(ctx: PluginContext, config: Partial<Resil
     fetchMessages: async (sessionID) => normalizeSDKResponse<SessionMessage[]>(await client.session.messages({ path: { id: sessionID } }), []),
     log,
   })
-  activeNotes = notes
+  const unregisterNotes = notesByDirectory.register(projectDir, notes)
 
   return {
     tracker,
@@ -130,6 +141,12 @@ export function createPluginResilience(ctx: PluginContext, config: Partial<Resil
     onEvent(event) {
       tracker.onEvent(event)
       notes.onEvent(event)
+    },
+    dispose() {
+      void tracker.shutdown()
+      unregisterTracker()
+      unregisterNotes()
+      unregisterManagerForCleanup(cleanup)
     },
   }
 }

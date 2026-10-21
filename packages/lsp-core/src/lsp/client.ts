@@ -24,6 +24,17 @@ import type { LspRenameResult, WorkspaceEditCommitIo } from "./workspace-edit-ty
 import { WorkspaceMutationController } from "./workspace-mutation-controller.js";
 
 const DIAGNOSTICS_FRESHNESS_TIMEOUT_MS = 3_000;
+/** How long diagnostics keep waiting, from the request, for a server that reports it is still loading (H22). */
+const BUSY_SERVER_MAX_WAIT_MS = 60_000;
+const BUSY_SERVER_POLL_MS = 250;
+/** typescript-language-server ends its progress ~100 ms before it publishes: wait this long for that publish. */
+const POST_BUSY_PUBLISH_GRACE_MS = 1_000;
+/**
+ * A server younger than this that has never published may still be about to announce its work: under load a cold
+ * typescript-language-server sent its first progress more than 3 s after didOpen (H22). Its silence is not "clean"
+ * yet. Servers that stay silent for clean files (Marksman) pay this once per server start.
+ */
+const SILENT_STARTUP_GRACE_MS = 10_000;
 const VERSIONLESS_PUBLISH_QUIESCENCE_MS = 250;
 
 export interface LspDiagnosticsResult {
@@ -38,6 +49,9 @@ export interface LspClientOptions extends LspClientTimeoutOptions {
 	readonly diagnosticsFreshnessTimeoutMs?: number;
 	readonly versionlessPublishQuiescenceMs?: number;
 	readonly timerProvider?: TimerProvider;
+	readonly busyServerMaxWaitMs?: number;
+	/** How long a young, never-published, push-only server's silence is not taken as clean (default 10 s, H22). */
+	readonly silentStartupGraceMs?: number;
 }
 
 export class LspClient extends LspClientConnection {
@@ -45,11 +59,15 @@ export class LspClient extends LspClientConnection {
 	private readonly documents: WorkspaceDocumentState;
 	private readonly workspaceMutations: WorkspaceMutationController;
 	private readonly diagnosticsFreshnessTimeoutMs: number;
+	private readonly busyServerMaxWaitMs: number;
+	private readonly silentStartupGraceMs: number;
 
 	constructor(root: string, server: ResolvedServer, options: LspClientOptions = {}) {
 		super(root, server, options);
 		this.diagnosticsFreshnessTimeoutMs =
 			options.diagnosticsFreshnessTimeoutMs ?? DIAGNOSTICS_FRESHNESS_TIMEOUT_MS;
+		this.busyServerMaxWaitMs = options.busyServerMaxWaitMs ?? BUSY_SERVER_MAX_WAIT_MS;
+		this.silentStartupGraceMs = options.silentStartupGraceMs ?? SILENT_STARTUP_GRACE_MS;
 		this.documents = new WorkspaceDocumentState(
 			(method, params) => this.sendNotification(method, params),
 			(uri) => this.diagnosticsStore.delete(uri),
@@ -211,6 +229,9 @@ export class LspClient extends LspClientConnection {
 		const uri = pathToFileURL(absPath).href;
 		await this.openFile(absPath);
 		const deadlineAt = this.timerProvider.now() + this.diagnosticsFreshnessTimeoutMs;
+		const busyDeadlineAt = this.timerProvider.now() + Math.max(this.diagnosticsFreshnessTimeoutMs, this.busyServerMaxWaitMs);
+		let waitedForBusyServer = false;
+		let postBusyGraceUntil: number | undefined;
 
 		for (;;) {
 			signal?.throwIfAborted();
@@ -266,6 +287,58 @@ export class LspClient extends LspClientConnection {
 			if (!pushFallbackOnly) continue;
 
 			const remainingMs = deadlineAt - this.timerProvider.now();
+			// The publish that ends a busy period may be versionless: give it its quiescence window too.
+			if (remainingMs <= 0 && waitedForBusyServer && push.status === "wait") {
+				const busyRemainingMs = busyDeadlineAt - this.timerProvider.now();
+				if (busyRemainingMs <= 0) return this.freshnessTimeout(absPath);
+				await waitForDiagnosticsActivity(
+					this.documents.waitForDiagnosticsActivity(snapshot, Math.min(push.waitMs, busyRemainingMs)),
+					signal,
+				);
+				continue;
+			}
+			// The busy period just ended and nothing is published yet: the publish usually follows the end of the
+			// progress by a moment, so silence here is not "clean" yet.
+			if (remainingMs <= 0 && waitedForBusyServer && !this.isServerBusy() && snapshot.publishGeneration === 0) {
+				postBusyGraceUntil ??= Math.min(this.timerProvider.now() + POST_BUSY_PUBLISH_GRACE_MS, busyDeadlineAt);
+				const graceRemainingMs = postBusyGraceUntil - this.timerProvider.now();
+				if (graceRemainingMs > 0) {
+					await waitForDiagnosticsActivity(this.documents.waitForDiagnosticsActivity(snapshot, graceRemainingMs), signal);
+					continue;
+				}
+			}
+			if (
+				remainingMs <= 0 &&
+				!this.isServerBusy() &&
+				!this.isDiagnosticPullSupported() &&
+				snapshot.publishGeneration === 0 &&
+				this.serverAgeMs() < this.silentStartupGraceMs
+			) {
+				const startupRemainingMs = Math.min(
+					this.silentStartupGraceMs - this.serverAgeMs(),
+					busyDeadlineAt - this.timerProvider.now(),
+				);
+				if (startupRemainingMs > 0) {
+					waitedForBusyServer = true;
+					await waitForDiagnosticsActivity(
+						this.documents.waitForDiagnosticsActivity(snapshot, Math.min(BUSY_SERVER_POLL_MS, startupRemainingMs)),
+						signal,
+					);
+					continue;
+				}
+			}
+			if (remainingMs <= 0 && this.isServerBusy()) {
+				waitedForBusyServer = true;
+				// Still loading (a cold typescript-language-server reports progress for ~5 s before its first publish):
+				// silence now means "not done", never "clean". Wait for a publish or the end of the work, up to a cap.
+				const busyRemainingMs = busyDeadlineAt - this.timerProvider.now();
+				if (busyRemainingMs <= 0) return this.freshnessTimeout(absPath);
+				await waitForDiagnosticsActivity(
+					this.documents.waitForDiagnosticsActivity(snapshot, Math.min(BUSY_SERVER_POLL_MS, busyRemainingMs)),
+					signal,
+				);
+				continue;
+			}
 			if (remainingMs <= 0) {
 				// A server that never advertised pull diagnostics (or rejected the pull
 				// method) and has never published for this document stays silent for a

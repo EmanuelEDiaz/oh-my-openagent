@@ -33,7 +33,7 @@ export function createLoopBreakerHook(ctx: PluginInput, config: LoopBreakerConfi
     maxPerTask,
     thresholds: { nudge: config?.nudge_after ?? 2, research: config?.research_after ?? 3, block: config?.block_after ?? 4 },
   })
-  setActiveLoopBreaker(breaker)
+  const unregisterBreaker = setActiveLoopBreaker(breaker, ctx.directory)
   const roots = createSessionRootResolver(ctx)
   const argsByCall = new Map<string, Record<string, unknown>>()
   /** Last failing command per task, so the same command passing clears the error. */
@@ -44,7 +44,7 @@ export function createLoopBreakerHook(ctx: PluginInput, config: LoopBreakerConfi
   const reportedIdle = new Set<string>()
 
   async function research(summary: string): Promise<string> {
-    const service = getActiveWebResearch()
+    const service = getActiveWebResearch(ctx.directory)
     if (!service) return ""
     try {
       const card = await service.search(`loop_${Date.now()}`, summary.split(" | ")[0] ?? summary)
@@ -59,7 +59,7 @@ export function createLoopBreakerHook(ctx: PluginInput, config: LoopBreakerConfi
     const attempts = breaker.attemptsSummary(root, escalation.key).map((line) => `  - ${line}`).join("\n")
     const budget = `Retry budget for this task: ${escalation.budget.used}/${escalation.budget.max}.`
     if (escalation.budget.exhausted) {
-      await reportWorkStoppedWithClient(ctx.client as never, root, `the same error kept coming back (${escalation.summary.slice(0, 80)}) and the retry budget is spent`)
+      await reportWorkStoppedWithClient(ctx.client as never, root, `the same error kept coming back (${escalation.summary.slice(0, 80)}) and the retry budget is spent`, ctx.directory)
       return `[loop-breaker] STOP. The retry budget for this task is spent (${escalation.budget.used}/${escalation.budget.max}). Do not try another fix: tell the user what you tried and what you suspect, and wait. The work is saved; they can resume it.`
     }
     if (escalation.level === 2) {
@@ -107,6 +107,11 @@ export function createLoopBreakerHook(ctx: PluginInput, config: LoopBreakerConfi
 
   return {
     breaker,
+
+    /** OpenCode disposed this instance (fork incidents H12): leave the other folders' breakers alone. */
+    dispose(): void {
+      unregisterBreaker()
+    },
 
     /** For edit-diagnostics: new type errors count as sightings of an error. */
     async recordTypeErrors(sessionID: string, errors: readonly NewError[]): Promise<void> {
@@ -181,7 +186,7 @@ export function createLoopBreakerHook(ctx: PluginInput, config: LoopBreakerConfi
         const blocked = breaker.blockedFor(root)
         if (blocked?.level === 4 && !reportedIdle.has(`${root}:${blocked.key}`)) {
           reportedIdle.add(`${root}:${blocked.key}`)
-          await reportWorkStoppedWithClient(ctx.client as never, root, "the same error kept coming back and the agent needs your decision (files are blocked until you answer)")
+          await reportWorkStoppedWithClient(ctx.client as never, root, "the same error kept coming back and the agent needs your decision (files are blocked until you answer)", ctx.directory)
         }
         return
       }

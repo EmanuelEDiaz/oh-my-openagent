@@ -7,7 +7,9 @@ import { existsSync, readFileSync, rmSync, statSync } from "node:fs"
 import { join } from "node:path"
 
 import { prepareWorkdir, type Sandbox } from "./sandbox"
-import { classifyFailure } from "./score"
+import { disposeWorkdirInstance } from "./dispose-instance"
+import { classifyFailure, silentModelError } from "./score"
+import { sessionTreeBusy, type SessionStatuses } from "./session-tree"
 import { toTranscript, type RawMessage } from "./transcript"
 import type { GradeContext, GradeResult, RunResult, Task, Transcript } from "./types"
 
@@ -33,6 +35,12 @@ async function delegatedAgents(client: Client, sessionID: string): Promise<strin
     agents.push(...(await delegatedAgents(client, child)))
   }
   return agents
+}
+
+/** A primary agent waiting on its background subagents is idle but not done: the plugin wakes it when they finish. */
+async function subagentsBusy(client: Client, sessionID: string): Promise<boolean> {
+  const statuses = ((await client.session.status({})).data ?? {}) as SessionStatuses
+  return sessionTreeBusy(statuses, (id) => childrenOf(client, id), sessionID)
 }
 
 async function isIdle(client: Client, sessionID: string): Promise<boolean> {
@@ -202,7 +210,7 @@ async function execute(client: Client, task: Task, workdir: string, stats: RunSt
       const quiet = createIdleDebounce(IDLE_SETTLE_MS)
       await waitUntil(async () => {
         const asked = (await answerQuestions(client)) + (await answerPermissions(client, stats.permissions))
-        const idle = asked === 0 && (await isIdle(client, parentID)) && !managedProcessesBusy(workdir)
+        const idle = asked === 0 && (await isIdle(client, parentID)) && !managedProcessesBusy(workdir) && !(await subagentsBusy(client, parentID))
         return quiet.settled(idle)
       }, () => sessionProgress(client, parentID), task.budget.timeoutMs, task.id)
     } finally {
@@ -251,11 +259,14 @@ export type RunOptions = {
 
 export async function runTask(task: Task, options: RunOptions): Promise<RunResult> {
   const workdirName = `${task.id.replaceAll("/", "_")}-r${options.repeat}-a${options.attempt}`
+  const workdir = join(options.sandbox.root, "work", workdirName)
   try {
     return await runInWorkdir(task, options, workdirName)
   } finally {
+    // OpenCode keeps an instance (plugin, LSP proxy, language server) per folder until disposed (incidents H4).
+    await disposeWorkdirInstance(options.baseUrl, workdir)
     // Large fixtures (a whole repo) fill a RAM-backed /tmp fast; regrade.ts uses a fresh copy, so nothing is lost.
-    rmSync(join(options.sandbox.root, "work", workdirName), { recursive: true, force: true })
+    rmSync(workdir, { recursive: true, force: true })
   }
 }
 
@@ -282,6 +293,8 @@ async function runInWorkdir(task: Task, options: RunOptions, workdirName: string
   if (transcript.error !== undefined && classifyFailure(transcript.error) === "infra") {
     return { ...base, failure: "infra", grades: runtimeInfo(), transcript, error: transcript.error }
   }
+  const silent = transcript.error === undefined ? silentModelError(transcript) : undefined
+  if (silent !== undefined) return { ...base, failure: "infra", grades: runtimeInfo(), transcript, error: silent }
   const context: GradeContext = { transcript, workdir, ...(options.fetchStatus ? { fetchStatus: options.fetchStatus } : {}) }
   const grades = [...(await Promise.all(gradersFor(task).map((grader) => grader.grade(context)))), ...runtimeInfo()]
   const pass = transcript.error === undefined && grades.every((grade) => grade.pass)

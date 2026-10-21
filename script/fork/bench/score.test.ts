@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
-import { classifyFailure, isConfigError, passHatK, summarize } from "./score"
-import type { RunResult } from "./types"
+import { classifyFailure, isConfigError, isConnectivityError, passHatK, silentModelError, summarize } from "./score"
+import type { RunResult, Transcript } from "./types"
 
 describe("classifyFailure", () => {
   test("provider and transport problems are infrastructure", () => {
@@ -17,6 +17,11 @@ describe("classifyFailure", () => {
       "server error creating session: {}",
       "server unresponsive",
       "APIError: Upstream request failed: Endpoint is unavailable.",
+      // The bench's own proxy when the machine loses its connection (14-10-2026).
+      "APIError: upstream unreachable: getaddrinfo EAI_AGAIN opencode.ai",
+      "getaddrinfo ENOTFOUND opencode.ai",
+      "connect ENETUNREACH 1.2.3.4:443",
+      "connect EHOSTUNREACH 1.2.3.4:443",
     ]) {
       expect(classifyFailure(error)).toBe("infra")
     }
@@ -25,6 +30,42 @@ describe("classifyFailure", () => {
   test("anything else is a task failure", () => {
     expect(classifyFailure("ContextOverflowError")).toBe("task")
     expect(classifyFailure("MessageOutputLengthError")).toBe("task")
+  })
+})
+
+describe("isConnectivityError", () => {
+  test("a lost connection is told apart from a provider refusing the request", () => {
+    expect(isConnectivityError("APIError: upstream unreachable: getaddrinfo EAI_AGAIN opencode.ai")).toBe(true)
+    expect(isConnectivityError("fetch failed: ECONNREFUSED")).toBe(true)
+    expect(isConnectivityError("connect ENETUNREACH 1.2.3.4:443")).toBe(true)
+    expect(isConnectivityError("429 Too Many Requests")).toBe(false)
+    expect(isConnectivityError("turn timed out after 240s")).toBe(false)
+  })
+})
+
+describe("silentModelError", () => {
+  const transcript = (overrides: Partial<Transcript>): Transcript => ({
+    agent: "Sisyphus - ultraworker",
+    model: "opencode/big-pickle",
+    answer: "",
+    tools: [],
+    tokens: { input: 0, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 },
+    cost: 0,
+    turns: 1,
+    durationMs: 135_141,
+    delegatedAgents: [],
+    ...overrides,
+  })
+
+  test("#given a turn where the model never answered (seen 14-10-2026, connection down) #then it is an infrastructure error", () => {
+    expect(silentModelError(transcript({}))).toMatch(/no output/)
+    expect(classifyFailure(silentModelError(transcript({})) ?? "")).toBe("infra")
+  })
+
+  test("#given the model spent tokens, called a tool, or wrote an answer #then the run is the agent's to score", () => {
+    expect(silentModelError(transcript({ tokens: { input: 900, output: 0, reasoning: 0, cacheRead: 0, cacheWrite: 0 } }))).toBeUndefined()
+    expect(silentModelError(transcript({ answer: "The spec and the test contradict each other." }))).toBeUndefined()
+    expect(silentModelError(transcript({ tools: [{ tool: "read", status: "error", input: {} }] }))).toBeUndefined()
   })
 })
 

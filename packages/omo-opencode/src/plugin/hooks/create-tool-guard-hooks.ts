@@ -176,7 +176,7 @@ export function createToolGuardHooks(args: {
     : null
 
   const webResearchVerdict = isHookEnabled("web-research-verdict") && pluginConfig.web_research?.enabled !== false
-    ? safeHook("web-research-verdict", () => createWebResearchVerdictHook())
+    ? safeHook("web-research-verdict", () => createWebResearchVerdictHook(ctx.directory))
     : null
 
   const bashFileReadGuard = isHookEnabled("bash-file-read-guard")

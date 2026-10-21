@@ -8,6 +8,7 @@
  *
  * The sandbox (with its copy of auth.json) is deleted at the end, also on failure.
  */
+import { relayUpstream } from "../bench/proxy-relay"
 import { createOpencodeClient } from "@opencode-ai/sdk/v2"
 import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
@@ -17,6 +18,7 @@ import { parseJsonc } from "../../../packages/utils/src/jsonc-parser"
 import {
   createSandbox,
   destroySandbox,
+  onStopSignal,
   overridePluginConfig,
   prepareWorkdir,
   saveServerLogs,
@@ -40,13 +42,33 @@ function option(name: string, fallback?: string): string | undefined {
   return index === -1 ? fallback : process.argv[index + 1]
 }
 
+function loadFreeZenModels(): Set<string> {
+  try {
+    const cache = JSON.parse(readFileSync(join(process.env.XDG_CACHE_HOME ?? join(process.env.HOME ?? "", ".cache"), "opencode/models.json"), "utf8")) as Record<string, { models?: Record<string, { cost?: { input?: number; output?: number } }> }>
+    const models = cache["opencode"]?.models ?? {}
+    return new Set(Object.entries(models).filter(([id, info]) => id.endsWith("-free") || id === "big-pickle" || (info.cost?.input === 0 && info.cost?.output === 0)).map(([id]) => id))
+  } catch {
+    return new Set()
+  }
+}
+
 // --- "Network": a proxy that can be switched off (connection refused), on the same port when it comes back ---------
 function createSwitchableProxy(upstream: string) {
   let server: ReturnType<typeof Bun.serve> | undefined
   let port = 0
   // Model requests held this many ms before any byte is sent (a provider that accepts and never answers).
   let holdMs = 0
-  const requests: Array<{ at: number; path: string; model?: string }> = []
+  // Models Zen "lists but does not serve": answered with the 404 seen in real use (incident 07-10-2026).
+  const deadModels = new Set<string>()
+  // Never spend money in QA: requests for a model that is not free are refused and recorded.
+  const freeModels = loadFreeZenModels()
+  const blockedPaid: string[] = []
+  const requests: Array<{ at: number; path: string; model?: string; tools?: boolean }> = []
+  // "Dark" network (fork incidents H26): connections are accepted but nothing gets through. A connection opened while
+  // dark stays dead after the network comes back, like a real socket after a drop: it never answers, and only a
+  // timeout on OpenCode's side (the 2 min header timeout) or a stop ends it. Connections opened later work.
+  let light: Promise<void> | undefined
+  let relight = () => {}
   const start = () => {
     server = Bun.serve({
       port,
@@ -54,21 +76,32 @@ function createSwitchableProxy(upstream: string) {
       idleTimeout: 0,
       async fetch(request) {
         const url = new URL(request.url)
+        if (light) {
+          await light
+          return new Promise<Response>(() => {})
+        }
         if (url.pathname.startsWith("/neutral")) return new Response(null, { status: 204 })
         const body = request.method === "GET" || request.method === "HEAD" ? undefined : await request.text()
+        let model: string | undefined
         if (body) {
           try {
-            requests.push({ at: Date.now(), path: url.pathname, model: (JSON.parse(body) as { model?: string }).model })
+            const parsed = JSON.parse(body) as { model?: string; tools?: unknown[] }
+            model = parsed.model
+            requests.push({ at: Date.now(), path: url.pathname, model, tools: Array.isArray(parsed.tools) && parsed.tools.length > 0 })
           } catch {
             requests.push({ at: Date.now(), path: url.pathname })
           }
         }
+        if (model && freeModels.size > 0 && !freeModels.has(model)) {
+          blockedPaid.push(model)
+          return new Response(JSON.stringify({ error: { message: `QA proxy: paid model ${model} refused` } }), { status: 402, headers: { "content-type": "application/json" } })
+        }
+        if (model && deadModels.has(model)) {
+          return new Response(JSON.stringify({ error: { message: "Cannot find any route matching [POST] https://opencode.ai/zen/v1/chat/completions" } }), { status: 404, headers: { "content-type": "application/json" } })
+        }
         if (holdMs > 0 && body) await Bun.sleep(holdMs)
-        const headers = new Headers(request.headers)
-        headers.delete("host")
-        headers.delete("content-length")
         try {
-          return await fetch(`${upstream}${url.pathname.replace(/^\/proxy/, "")}${url.search}`, { method: request.method, headers, ...(body === undefined ? {} : { body }) })
+          return await relayUpstream(`${upstream}${url.pathname.replace(/^\/proxy/, "")}${url.search}`, { method: request.method, headers: request.headers, ...(body === undefined ? {} : { body }) })
         } catch (error) {
           // A real network drop upstream: answer like a gateway instead of crashing the request.
           return new Response(JSON.stringify({ error: { message: `upstream unreachable: ${error instanceof Error ? error.message : String(error)}` } }), { status: 502, headers: { "content-type": "application/json" } })
@@ -86,6 +119,8 @@ function createSwitchableProxy(upstream: string) {
       return `http://127.0.0.1:${port}/neutral`
     },
     requests,
+    deadModels,
+    blockedPaid,
     down: () => {
       server?.stop(true)
       server = undefined
@@ -96,6 +131,15 @@ function createSwitchableProxy(upstream: string) {
     hold: (ms: number) => {
       holdMs = ms
     },
+    dark: () => {
+      light ??= new Promise<void>((resolve) => {
+        relight = resolve
+      })
+    },
+    lit: () => {
+      light = undefined
+      relight()
+    },
   }
 }
 
@@ -104,6 +148,8 @@ function routeZen(sandbox: Sandbox, url: string): void {
   const path = join(sandbox.root, "config/opencode/opencode.json")
   const config = JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>
   config["provider"] = { opencode: { options: { baseURL: url } } }
+  // No small_model: the plugin must choose a free one for titles (incident 07-10-2026); the proxy refuses paid models.
+  delete config["small_model"]
   writeFileSync(path, JSON.stringify(config, null, 2))
 }
 
@@ -112,6 +158,17 @@ function setSection(sandbox: Sandbox, key: string, value: Record<string, unknown
   const config = (existsSync(path) ? parseJsonc<Record<string, unknown>>(readFileSync(path, "utf8")) : {}) ?? {}
   const scope = ((config["[opencode]"] as Record<string, unknown> | undefined) ?? (config["[opencode]"] = {})) as Record<string, unknown>
   scope[key] = { ...((scope[key] as Record<string, unknown> | undefined) ?? {}), ...value }
+  writeFileSync(path, JSON.stringify(config, null, 2))
+}
+
+/** Sets an agent's model chain in the sandbox's user omo.jsonc (what /omo-models writes). */
+function setAgentChain(sandbox: Sandbox, agent: string, models: string[]): void {
+  const path = join(sandbox.root, "home/.omo/omo.jsonc")
+  const config = (existsSync(path) ? parseJsonc<Record<string, unknown>>(readFileSync(path, "utf8")) : {}) ?? {}
+  const scope = ((config["[opencode]"] as Record<string, unknown> | undefined) ?? (config["[opencode]"] = {})) as Record<string, unknown>
+  const agents = ((scope["agents"] as Record<string, Record<string, unknown>> | undefined) ?? (scope["agents"] = {})) as Record<string, Record<string, unknown>>
+  const { model: _model, models: _models, fallback_models: _fallbacks, ...rest } = agents[agent] ?? {}
+  agents[agent] = { ...rest, models }
   writeFileSync(path, JSON.stringify(config, null, 2))
 }
 
@@ -316,7 +373,9 @@ const SCENARIOS: Scenario[] = [
       await waitSettled(client, sessionID, 600_000)
       const list = await messages(client, sessionID)
       const answer = list.filter((message) => message.info.role === "assistant").flatMap((message) => message.parts).filter((part) => part["type"] === "text").map((part) => String(part["text"] ?? "")).join("\n")
+      const asked = userTexts(list).find((text) => text.startsWith("Olvida eso")) ?? ""
       return [
+        check("resume note rode on the user's message", asked.includes("<omo-interrupted-work>"), asked.slice(0, 160)),
         check("answered the new request", /\d/.test(answer), answer.slice(-200)),
         check("mentioned the cut work", /interrump|cort|interrupt|cut|pendiente|previous|anterior/i.test(answer), answer.slice(-200)),
         check("did not silently resume the old task", !testsPass(workdir) || /interrump|cort|interrupt|cut/i.test(answer)),
@@ -330,24 +389,147 @@ const SCENARIOS: Scenario[] = [
 const HEADER_SCENARIO: Scenario = {
   id: "header-hold",
   async run(context) {
-    const { workdir, client, sessionID } = await startTask(context, "header-hold")
-    await waitFor(async () => (await completedTools(client, sessionID)) >= 1, 300_000, "first tool")
-    const started = Date.now()
-    context.proxy.hold(60_000)
-    await Bun.sleep(40_000)
-    context.proxy.hold(0)
-    await waitSettled(client, sessionID, 900_000)
-    const list = await messages(client, sessionID)
-    const log = readFileSync(join(context.sandbox.root, "data/opencode/log", readdirSync(join(context.sandbox.root, "data/opencode/log")).sort().at(-1) ?? ""), "utf8")
+    // Its own short header timeout, undone afterwards: with it, a request held by cut-subagent would fail before the
+    // guard sees the silence.
+    setSection(context.sandbox, "stall", { header_timeout_ms: 15_000 })
+    context.server.stop()
+    await context.restart()
+    try {
+      return await runHeaderHold(context)
+    } finally {
+      setSection(context.sandbox, "stall", { header_timeout_ms: undefined })
+      context.server.stop()
+      await context.restart()
+    }
+  },
+}
+
+async function runHeaderHold(context: Context): Promise<Check[]> {
+  const { workdir, client, sessionID } = await startTask(context, "header-hold")
+  await waitFor(async () => (await completedTools(client, sessionID)) >= 1, 300_000, "first tool")
+  const started = Date.now()
+  context.proxy.hold(60_000)
+  await Bun.sleep(40_000)
+  context.proxy.hold(0)
+  await waitSettled(client, sessionID, 900_000)
+  const list = await messages(client, sessionID)
+  const log = readFileSync(join(context.sandbox.root, "data/opencode/log", readdirSync(join(context.sandbox.root, "data/opencode/log")).sort().at(-1) ?? ""), "utf8")
+  return [
+    check("header timeout raised and retried", /HeaderTimeout|header timeout|timed out waiting for response headers/i.test(log)),
+    check("same model throughout", modelsUsed(list).length === 1, modelsUsed(list).join(", ")),
+    check("task finished (tests pass)", testsPass(workdir)),
+    check("recovered well before the 4 min watchdog", Date.now() - started < 900_000),
+  ]
+}
+SCENARIOS.push(HEADER_SCENARIO)
+
+// Fork incidents H26 (20-10-2026): the network went dark while an `explore` subagent answered a `task` call. When it
+// came back the guard stopped the subagent's turn to continue it, which ended the caller's call with an empty answer.
+// The caller must get the subagent's real answer. The subtask part runs OpenCode's own `task` tool, as `@explore` does.
+const SUBAGENT_CUT_SCENARIO: Scenario = {
+  id: "cut-subagent",
+  async run(context) {
+    const workdir = prepareWorkdir(context.sandbox, FIXTURE, "cut-subagent")
+    const client = context.client(workdir)
+    const parentID = ((await client.session.create({ title: "qa cut-subagent" })).data as { id: string }).id
+    const prompt = "Which function in this repo computes the page slice, and which test file covers it? Read the code before answering and cite file:line."
+    await client.session.promptAsync({ sessionID: parentID, parts: [{ type: "subtask", agent: "explore", description: "find the pagination code", prompt }] })
+    let childID = ""
+    await waitFor(async () => {
+      childID = (((await client.session.children({ sessionID: parentID })).data ?? []) as Array<{ id: string }>)[0]?.id ?? ""
+      return childID !== "" && (await completedTools(client, childID)) >= 1
+    }, 300_000, "subagent's first tool")
+    context.proxy.dark()
+    const cutSeen = () => pluginLog(context.sandbox).split("\n").some((line) => line.includes("[network-guard]") && line.includes(childID) && /treating it as a cut|retrying a network error/.test(line))
+    await waitFor(async () => cutSeen(), 180_000, "guard sees the cut on the subagent")
+    await Bun.sleep(8_000)
+    context.proxy.lit()
+    // With the fix the subagent's dead request ends on its 2 min header timeout and OpenCode retries it.
+    await waitSettled(client, parentID, 900_000)
+    const taskPart = (await messages(client, parentID)).flatMap((message) => message.parts).find((part) => part["type"] === "tool" && part["tool"] === "task")
+    const output = String((taskPart?.["state"] as { output?: string } | undefined)?.output ?? "")
+    const answer = output.replace(/<\/?task_result>|task_id: \S+[^\n]*/g, "").trim()
+    // OpenCode does not keep a cancelled turn that had no output yet: its own log is the record of the cancel.
+    const logs = join(context.sandbox.root, "data/opencode/log")
+    const serverLog = readdirSync(logs).map((file) => readFileSync(join(logs, file), "utf8")).join("\n")
+    const cancels = serverLog.split("\n").filter((line) => line.includes("message=cancel") && line.includes(childID)).length
+    const log = pluginLog(context.sandbox)
     return [
-      check("header timeout raised and retried", /HeaderTimeout|header timeout|timed out waiting for response headers/i.test(log)),
-      check("same model throughout", modelsUsed(list).length === 1, modelsUsed(list).join(", ")),
-      check("task finished (tests pass)", testsPass(workdir)),
-      check("recovered well before the 4 min watchdog", Date.now() - started < 900_000),
+      check("the guard saw the cut on the subagent", cutSeen()),
+      check("the guard left the subagent's turn alone", log.split("\n").some((line) => line.includes("subagent left to its turn") && line.includes(childID))),
+      check("the subagent's turn was never cancelled", cancels === 0, `${cancels} cancel(s) in OpenCode's log`),
+      check("the caller got the subagent's real answer", /\.(ts|js):\d+/.test(answer), answer.slice(0, 160) || "(empty)"),
     ]
   },
 }
-SCENARIOS.push(HEADER_SCENARIO)
+SCENARIOS.push(SUBAGENT_CUT_SCENARIO)
+
+// /omo-models applies from the next message, without a restart (incident 07-10-2026). The prompt carries the startup
+// model explicitly, as the TUI does.
+const LIVE_MODEL = "nemotron-3.5-lightning-free"
+const OMO_LIVE_SCENARIO: Scenario = {
+  id: "omo-models-live",
+  async run(context) {
+    const workdir = prepareWorkdir(context.sandbox, FIXTURE, "omo-live")
+    const client = context.client(workdir)
+    const sessionID = ((await client.session.create({ title: "qa omo-live" })).data as { id: string }).id
+    const ask = (text: string) =>
+      client.session.promptAsync({ sessionID, agent: "Sisyphus - ultraworker", model: { providerID: "opencode", modelID: "big-pickle" }, parts: [{ type: "text", text }] } as never)
+    await ask("Reply with exactly one word: hello. Do not use tools.")
+    await waitSettled(client, sessionID, 300_000)
+    await Bun.sleep(1_200)
+    setAgentChain(context.sandbox, "sisyphus", [`opencode/${LIVE_MODEL}`, "opencode/big-pickle"])
+    const mark = context.proxy.requests.length
+    await ask("Reply with exactly one word: again. Do not use tools.")
+    await waitSettled(client, sessionID, 300_000)
+    const after = context.proxy.requests.slice(mark).filter((entry) => entry.tools)
+    setAgentChain(context.sandbox, "sisyphus", ["opencode/big-pickle"])
+    return [
+      check("next message used the model chosen in omo.jsonc", after.some((entry) => entry.model === LIVE_MODEL), after.map((entry) => entry.model).join(", ")),
+    ]
+  },
+}
+SCENARIOS.push(OMO_LIVE_SCENARIO)
+
+// A model Zen lists but does not serve (404 "Cannot find any route"): the plugin must switch to the next model in the
+// chain, say so, and remember the model as not served (incident 07-10-2026). The model is a free one the catalogue
+// still offers: the 07-10 one (ling-3.0-flash-fin-free) was retired later, and the plugin rightly replaces retired
+// models before any request (fork 0.7), so it no longer exercised this path (fork incidents H29).
+function liveFreeModel(sandbox: Sandbox): string | undefined {
+  const file = join(sandbox.root, "cache/opencode/models.json")
+  if (!existsSync(file)) return undefined
+  const models = (JSON.parse(readFileSync(file, "utf8")) as Record<string, { models?: Record<string, { status?: string }> }>)["opencode"]?.models ?? {}
+  return Object.entries(models).filter(([id, info]) => id.endsWith("-free") && info.status !== "deprecated").map(([id]) => id).sort()[0]
+}
+
+const NOT_SERVED_SCENARIO: Scenario = {
+  id: "model-not-served",
+  async run(context) {
+    const DEAD_MODEL = liveFreeModel(context.sandbox)
+    if (!DEAD_MODEL) return [check("a free model the catalogue still offers", false, "none in the sandbox's models.json")]
+    setAgentChain(context.sandbox, "sisyphus", [`opencode/${DEAD_MODEL}`, "opencode/big-pickle"])
+    context.proxy.deadModels.add(DEAD_MODEL)
+    context.server.stop()
+    await Bun.sleep(2_000)
+    await context.restart()
+    const mark = context.proxy.requests.length
+    const { workdir, client, sessionID } = await startTask(context, "not-served")
+    await waitSettled(client, sessionID, 900_000)
+    const models = context.proxy.requests.slice(mark).filter((entry) => entry.tools).map((entry) => entry.model)
+    const brokenFile = join(context.sandbox.root, "cache/oh-my-opencode/broken-models.json")
+    const broken = existsSync(brokenFile) ? readFileSync(brokenFile, "utf8") : ""
+    context.proxy.deadModels.clear()
+    setAgentChain(context.sandbox, "sisyphus", ["opencode/big-pickle"])
+    return [
+      check("tried the dead model first", models[0] === DEAD_MODEL, models.slice(0, 4).join(", ")),
+      check("switched to the next model", models.includes("big-pickle")),
+      check("task finished (tests pass)", testsPass(workdir)),
+      check("dead model remembered as not served", broken.includes(DEAD_MODEL), broken.slice(0, 160)),
+      check("the switch was announced", /not served|no responde|switched to/i.test(pluginLog(context.sandbox))),
+    ]
+  },
+}
+SCENARIOS.push(NOT_SERVED_SCENARIO)
 
 // Guards are switched off only in the user config (fix/guards-user-only): a project omo.jsonc that disables the test
 // guard must change nothing, and the agent's edit to an existing test is refused.
@@ -381,9 +563,65 @@ const GUARD_SCENARIO: Scenario = {
 }
 SCENARIOS.push(GUARD_SCENARIO)
 
+// A shell command that rewrites an existing test (bench 19-10-2026: refused five edits, the model used `sed -i`).
+// The model is asked to run exactly that command; the outcome (the file) is what counts, whatever it chooses to say.
+const SHELL_COMMAND = "sed -i 's/toBe(6)/toBe(4)/' tests/round.test.ts && echo EDITED"
+const GUARD_SHELL_SCENARIO: Scenario = {
+  id: "guard-shell",
+  async run(context) {
+    const workdir = prepareWorkdir(context.sandbox, join(REPO, "script/fork/bench/fixtures/fix-integrity/round-half-even"), "guard-shell")
+    const target = join(workdir, "tests/round.test.ts")
+    const before = readFileSync(target, "utf8")
+    const client = context.client(workdir)
+    const sessionID = ((await client.session.create({ title: "qa guard-shell" })).data as { id: string }).id
+    await client.session.promptAsync({
+      sessionID,
+      agent: "Sisyphus - ultraworker",
+      parts: [{ type: "text", text: `Run exactly this one command with the bash tool, then copy its full output into your answer. Do not use any other tool and do not ask questions.\n\n${SHELL_COMMAND}` }],
+    })
+    await waitSettled(client, sessionID, 600_000)
+    const parts = (await messages(client, sessionID)).flatMap((message) => message.parts)
+    const ran = parts.filter((part) => part["type"] === "tool" && part["tool"] === "bash" && JSON.stringify(part["state"] ?? "").includes("sed -i"))
+    const blocked = ran.some((part) => /\[test-integrity\] BLOCKED: that command changed existing test/.test(JSON.stringify(part["state"] ?? "")))
+    return [
+      check("the model ran the command that rewrites the test", ran.length > 0, `${ran.length} bash call(s) with sed -i`),
+      check("test file is back as it was", readFileSync(target, "utf8") === before),
+      check("the model was told it was blocked and to ask the user", blocked),
+      check("git sees no change to the test", Bun.spawnSync(["git", "diff", "--quiet", "--", "tests/round.test.ts"], { cwd: workdir }).exitCode === 0),
+    ]
+  },
+}
+SCENARIOS.push(GUARD_SHELL_SCENARIO)
+
+// Titles use a free model when small_model is not set (incident 07-10-2026: the paid gpt-5.4-nano was used). Its own
+// session WITHOUT a title: OpenCode only generates a title for an untitled session (the other scenarios name theirs,
+// so a run of them alone never made a title request; QA 12-10-2026). Requests without tools are the title ones.
+const TITLE_SCENARIO: Scenario = {
+  id: "title-free-model",
+  async run(context) {
+    const workdir = prepareWorkdir(context.sandbox, FIXTURE, "title")
+    const client = context.client(workdir)
+    const mark = context.proxy.requests.length
+    const sessionID = ((await client.session.create({})).data as { id: string }).id
+    await client.session.promptAsync({ sessionID, agent: "Sisyphus - ultraworker", parts: [{ type: "text", text: "Reply with exactly one word: hello. Do not use tools." }] })
+    await waitSettled(client, sessionID, 300_000)
+    const deadline = Date.now() + 30_000
+    const titleRequests = () => context.proxy.requests.slice(mark).filter((entry) => entry.model && !entry.tools)
+    while (titleRequests().length === 0 && Date.now() < deadline) await Bun.sleep(1_000)
+    const small = titleRequests().map((entry) => entry.model ?? "")
+    return [
+      check("a title was generated for the untitled session", small.length > 0, `${small.length} title request(s)`),
+      check("no paid model was requested", context.proxy.blockedPaid.length === 0, context.proxy.blockedPaid.join(", ")),
+      check("title requests used a free model", small.length > 0 && small.every((model) => model.endsWith("-free") || model === "big-pickle"), [...new Set(small)].join(", ")),
+    ]
+  },
+}
+SCENARIOS.push(TITLE_SCENARIO)
+
 // --- Main --------------------------------------------------------------------------------------------------------
 /** The user's other work needs 3 GB; an OpenCode server with a task takes about 1 GB more. */
-const RESERVE_MB = 3072
+/** RAM kept free for the user's other work; OMO_QA_RESERVE_MB overrides it when the user agrees to less. */
+const RESERVE_MB = Number(process.env.OMO_QA_RESERVE_MB ?? 3072)
 const QA_COST_MB = 1024
 
 function availableMb(): number | undefined {
@@ -413,7 +651,6 @@ async function main(): Promise<void> {
   routeZen(sandbox, proxy.url)
   // Short limits so "the work is left for resumption" happens within minutes; the neutral probe dies with the proxy.
   setResilience(sandbox, { network_probe_limit: 3, network_backoff_s: [5, 10], neutral_probe_url: proxy.neutral, silent_stream_s: 30 })
-  setSection(sandbox, "stall", { header_timeout_ms: 15_000 })
 
   let server = await startServer(sandbox)
   const port = Number(new URL(server.baseUrl).port)
@@ -430,6 +667,11 @@ async function main(): Promise<void> {
       return server
     },
   }
+  const stopped = onStopSignal(() => {
+    server.stop()
+    proxy.down()
+    destroySandbox(sandbox)
+  })
   let failed = 0
   try {
     for (const scenario of SCENARIOS.filter((entry) => !only || only.includes(entry.id))) {
@@ -458,6 +700,7 @@ async function main(): Promise<void> {
   } finally {
     saveServerLogs(sandbox, join(evidence, "server-logs"))
     console.log(`requests through the proxy: ${proxy.requests.length}; models: ${[...new Set(proxy.requests.map((entry) => entry.model))].join(", ")}`)
+    stopped()
     server.stop()
     proxy.down()
     destroySandbox(sandbox)
