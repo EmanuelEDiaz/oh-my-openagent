@@ -5,6 +5,7 @@ import { join } from "node:path"
 import * as p from "@clack/prompts"
 import * as configManager from "./config-manager"
 import * as astGrepInstall from "./install-ast-grep-sg"
+import * as externalToolsInstall from "./install-external-tools"
 import * as starRequest from "./star-request"
 import * as tuiInstallPrompts from "./tui-install-prompts"
 import { ULTIMATE_FALLBACK } from "./model-fallback"
@@ -33,6 +34,7 @@ describe("runTuiInstaller", () => {
     Object.defineProperty(process.stdin, "isTTY", { configurable: true, value: true })
     Object.defineProperty(process.stdout, "isTTY", { configurable: true, value: true })
     spyOn(astGrepInstall, "installAstGrepForOpenCode").mockResolvedValue(undefined)
+    spyOn(externalToolsInstall, "reportExternalToolsAtInstall").mockResolvedValue(0)
   })
 
   afterEach(() => {

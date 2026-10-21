@@ -5,6 +5,7 @@ import { contextCwd } from "../request-context.js";
 import { getDisabledServerIds, getMergedServers } from "./config-loader.js";
 import { BUILTIN_SERVERS, LSP_INSTALL_HINTS } from "./server-definitions.js";
 import { isServerInstalled, resolveServerBinary } from "./server-installation.js";
+import { globalTypeScriptDirs, resolveTypeScript6, withTsserverPath } from "./tsserver-resolution.js";
 import type { ServerLookupResult } from "./types.js";
 
 /**
@@ -45,6 +46,10 @@ export function findServerForExtension(ext: string): ServerLookupResult {
 		if (!appliesToProject(server.id, workingDirectory)) continue;
 		const binaryPath = resolveServerBinary(server.command, workingDirectory);
 		if (binaryPath !== null) {
+			// typescript-language-server cannot start on TypeScript 7 (no tsserver.js): give it a TypeScript 6 (fork 0.25).
+			const initialization = server.id === "typescript"
+				? withTsserverPath(server.initialization, resolveTypeScript6({ projectDir: workingDirectory, globalModuleDirs: globalTypeScriptDirs(binaryPath) }))
+				: server.initialization;
 			const resolvedServer = {
 				id: server.id,
 				command: withResolvedCommand(server.command, binaryPath),
@@ -57,7 +62,7 @@ export function findServerForExtension(ext: string): ServerLookupResult {
 					server: {
 						...resolvedServer,
 						env: server.env,
-						...(server.initialization === undefined ? {} : { initialization: server.initialization }),
+						...(initialization === undefined ? {} : { initialization }),
 					},
 				};
 			}
@@ -65,7 +70,7 @@ export function findServerForExtension(ext: string): ServerLookupResult {
 				status: "found",
 				server: {
 					...resolvedServer,
-					...(server.initialization === undefined ? {} : { initialization: server.initialization }),
+					...(initialization === undefined ? {} : { initialization }),
 				},
 			};
 		}
