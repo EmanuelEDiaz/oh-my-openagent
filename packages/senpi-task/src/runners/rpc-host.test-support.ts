@@ -1,4 +1,6 @@
 import type { AgentSessionEvent } from "@code-yeongyu/senpi"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 import { startFakeHost, type FakeHost, type FakeHostOptions } from "./rpc-host/__fixtures__/fake-host"
 import type { EnsuredTaskDaemon } from "./rpc-host/daemon"
@@ -7,7 +9,7 @@ import { RpcHostRunner, type HostSessionChannel, type RpcHostRunnerOptions } fro
 import type { ChildExitOutcome, RpcChildHandle, RpcRunnerSpec } from "./types"
 
 /** The child every suite in this file starts: a plain (non-member, non-DAG) process child. */
-export const CHILD_STATE_DIR = "/tmp/dh-30-state"
+export const CHILD_STATE_DIR = join(tmpdir(), "dh-30-state")
 
 export function childSpec(overrides: Partial<RpcRunnerSpec> = {}): RpcRunnerSpec {
   return {
