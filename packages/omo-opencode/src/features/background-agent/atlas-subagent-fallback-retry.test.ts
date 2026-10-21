@@ -1,6 +1,8 @@
 /// <reference types="bun-types" />
 
 import { afterEach, beforeEach, describe, expect, test } from "bun:test"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import type { PluginInput } from "@opencode-ai/plugin"
 import { _resetMemCacheForTesting as resetConnectedProvidersCacheForTesting } from "../../shared/connected-providers-cache"
 import { releaseAllPromptAsyncReservationsForTesting } from "../../shared/prompt-async-gate"
@@ -22,7 +24,7 @@ type SessionCreateArgs = {
 type PromptCall = { readonly path: { readonly id: string }; readonly body?: unknown }
 
 const originalXdgCacheHome = process.env.XDG_CACHE_HOME
-const testDirectory = "/tmp/omo-atlas-fallback-test"
+const testDirectory = join(tmpdir(), "omo-atlas-fallback-test")
 let cacheCounter = 0
 
 beforeEach(() => {

@@ -419,7 +419,7 @@ describe("BackgroundManager tmux callback ordering", () => {
       session: {
         get: async () => {
           events.push("session.get")
-          return { data: { directory: "/tmp/test" } }
+          return { data: { directory: tmpdir() } }
         },
         create: async () => {
           events.push("session.create")
@@ -439,7 +439,7 @@ describe("BackgroundManager tmux callback ordering", () => {
       events.push("tmux.callback.end")
     })
     const manager = new BackgroundManager({
-      pluginContext: createPluginInput(client, "/tmp/test"),
+      pluginContext: createPluginInput(client, tmpdir()),
       tmuxConfig: {
         enabled: true,
         layout: "main-vertical",

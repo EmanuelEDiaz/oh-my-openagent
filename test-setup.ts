@@ -13,6 +13,7 @@ import { releaseAllPromptAsyncReservationsForTesting } from "./packages/omo-open
 import { resetLiveServerRouteForTesting } from "./packages/omo-opencode/src/shared/live-server-route"
 import { installModuleMockLifecycle } from "./packages/omo-opencode/src/testing/module-mock-lifecycle"
 import { ensureVendoredLspDaemonBuilt } from "./script/ensure-vendored-lsp-daemon"
+import { useProcessTempRoot } from "./test-support/process-temp-root"
 
 // Installer/doctor integration tests need the vendored lsp-daemon dist that CI builds
 // out-of-band before `bun test`; mirror that here so fresh clones/worktrees pass too.
@@ -52,6 +53,8 @@ setDefaultTimeout(process.platform === "win32" ? 30_000 : 20_000)
 // A per-test re-application would clobber HOME for suites that set their own HOME in a
 // beforeAll (e.g. openclaw reply-listener daemon tests) and only reset state — not HOME —
 // in their beforeEach, so it must NOT run every test.
+// Before the hermetic HOME, so HOME and every fixture live in this process's temp root, deleted on exit (fork H31).
+useProcessTempRoot()
 const HERMETIC_HOME = mkdtempSync(join(tmpdir(), "omo-test-home-"))
 process.env.HOME = HERMETIC_HOME
 process.env.USERPROFILE = HERMETIC_HOME
