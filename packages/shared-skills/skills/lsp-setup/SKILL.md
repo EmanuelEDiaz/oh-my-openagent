@@ -1,6 +1,6 @@
 ---
 name: lsp-setup
-description: "Configures a language server so editor/agent tooling (diagnostics, go-to-definition, references, rename) works. Use when a project needs an LSP installed or wired, or a 'no LSP server configured' error appears."
+description: "Configures a language server so editor/agent tooling (diagnostics, go-to-definition, references, rename) works. Use when a project needs an LSP installed or wired, a 'no LSP server configured' error appears, a language server does not start or connect, the user asks how to install what the plugin needs, or the startup notice about external tools appears."
 ---
 
 # LSP Setup
@@ -48,6 +48,15 @@ reference before installing or configuring anything**.
 
 ## WORKFLOW — detect → install → configure → verify
 
+### 0. Ask the plugin first
+
+In OpenCode with oh-my-openagent, `oh-my-openagent doctor` already starts every
+tool the project needs and reports each one as connects, does not connect or not
+installed, with what stops working and the exact install command (including how
+to keep it across Node upgrades). Read its External Tools section before
+anything else. A server that is installed but does not connect is common:
+typescript-language-server installed next to TypeScript 7 cannot start.
+
 ### 1. Detect
 
 Scan the project to see which languages are present and whether each server is
@@ -64,7 +73,13 @@ whether a project config file already references it.
 
 ### 2. Install
 
-Open `references/<language>/README.md` and run the install command for your OS.
+Installing changes the user's system: propose the exact commands and **ask the
+user before running them**. Prefer the durable form the reference gives (for
+TypeScript: pinned to version 6, through the user's Node manager) over a one-off
+global install that disappears with the next Node upgrade.
+
+Open `references/<language>/README.md` and, once the user agrees, run the
+install command for their OS.
 Then confirm the executable resolves:
 
 ```bash

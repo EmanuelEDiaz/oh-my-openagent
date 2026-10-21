@@ -87,7 +87,10 @@ async function checkCommand(tool: ExternalTool, projectDir: string, deps: CheckD
   return { tool, status: "connects", detail: `${binary} (${result.firstLine})` }
 }
 
-export async function checkExternalTools(projectDir: string, deps: CheckDeps, options: { includeOptional: boolean }): Promise<ToolReport[]> {
-  const tools = toolsFor(projectLanguages(projectDir), options.includeOptional)
+export function checkTools(tools: readonly ExternalTool[], projectDir: string, deps: CheckDeps): Promise<ToolReport[]> {
   return Promise.all(tools.map((tool) => (tool.check.kind === "language-server" ? checkLanguageServer(tool, projectDir, deps) : checkCommand(tool, projectDir, deps))))
+}
+
+export async function checkExternalTools(projectDir: string, deps: CheckDeps, options: { includeOptional: boolean }): Promise<ToolReport[]> {
+  return checkTools(toolsFor(projectLanguages(projectDir), options.includeOptional), projectDir, deps)
 }

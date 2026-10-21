@@ -1,5 +1,5 @@
 export { cachedCheck, externalToolsCacheFile, fingerprint } from "./cache"
-export { checkExternalTools, projectLanguages, toolsFor } from "./check"
+export { checkExternalTools, checkTools, projectLanguages, toolsFor } from "./check"
 export type { CheckDeps, ToolReport, ToolStatus } from "./check"
 export { EXTERNAL_TOOLS } from "./inventory"
 export type { ExternalTool, ProjectLanguage } from "./inventory"
