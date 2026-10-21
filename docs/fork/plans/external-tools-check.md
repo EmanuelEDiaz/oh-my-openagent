@@ -139,3 +139,9 @@ nombra; con todo instalado, no hay aviso y el servidor conecta; `doctor` lo da c
 
 **Hallazgo en este equipo**: el repositorio tiene `Cargo.toml` y rustup, pero falta el componente `rust-analyzer`;
 `doctor` lo da como "no conecta" con la orden `rustup component add rust-analyzer`.
+
+**Fusión (21-10-2026, pedida por el usuario)**: en `mis-mejoras` (`a23ecfda6`), `dist/` real reconstruido. Prueba del
+`dist/` fusionado en OpenCode aislado: aviso de herramientas (falta / presente) 2/2 y título con modelo gratuito PASA.
+`cut-subagent` no se pudo medir: la primera vez se cayó internet de verdad (`EAI_AGAIN opencode.ai`) y la segunda Zen
+respondió "Rate limit exceeded" (límite del plan gratuito tras las QA del día). El escenario ya había pasado dos veces
+hoy sobre el mismo código del vigilante de red, que 0.25 no toca; se repite cuando el límite se reinicie.
