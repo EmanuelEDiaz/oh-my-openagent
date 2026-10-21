@@ -3,6 +3,7 @@ export { checkExternalTools, checkTools, projectLanguages, toolsFor } from "./ch
 export type { CheckDeps, ToolReport, ToolStatus } from "./check"
 export { EXTERNAL_TOOLS } from "./inventory"
 export type { ExternalTool, ProjectLanguage } from "./inventory"
-export { runExternalToolsNotice, scheduleExternalToolsNotice } from "./plugin"
+export { createExternalToolsNotice, externalToolsNotice } from "./plugin"
+export type { ExternalToolsNotice } from "./plugin"
 export { createCheckDeps } from "./real-deps"
 export { doctorIssues, doctorLines, installCommand, startupNotice } from "./report"

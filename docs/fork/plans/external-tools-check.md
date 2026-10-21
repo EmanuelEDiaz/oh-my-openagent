@@ -90,3 +90,52 @@ y mason.nvim, Helix `hx --health`, Zed, `flutter doctor`, `brew doctor`, rustup,
 - Dado que el usuario pregunta cómo instalar lo que necesita el plugin, entonces el agente carga la skill de
   instalación, lista lo que falta y pregunta antes de instalar nada.
 - Dado `oh-my-openagent doctor`, entonces lista cada herramienta con "conecta / no conecta / no instalada" y qué deja de funcionar.
+
+## Cierre (21-10-2026): qué se hizo, pruebas, QA real y medición
+
+**Lo hecho** (rama `feat/external-tools-check`):
+1. **Órdenes de instalación fijadas a TypeScript 6** en `lsp-core` (sugerencia global, local y la de instalación automática)
+   y en la skill `lsp-setup`; con `typescript` sin versión se instalaba la 7 y el servidor no arrancaba. Test en rojo
+   (`server-definitions-typescript.test.ts`) y luego en verde.
+2. **TypeScript 6 resuelto por el plugin** (`lsp-core/src/lsp/tsserver-resolution.ts`): el del proyecto si es menor que 7;
+   si no, uno 6 junto al servidor o en un Node de mise; se pasa como `tsserver.path` salvo que el usuario ya haya puesto
+   uno. 8 tests. Caso real: este mismo repositorio tiene TypeScript 7.0.2; el servidor conecta en 271 ms con el 6.0.3
+   global, frente a 1.385 ms cuando busca por su cuenta, y con solo un 7 global no arrancaría.
+3. **Prueba de conexión real** (`lsp-core/src/lsp/server-probe.ts`): arranca el servidor, exige el saludo `initialize`
+   con plazo y lee qué TypeScript cargó (evita el "OK" con otra versión del issue #1110). 3 tests con servidores falsos
+   (contesta, muere al arrancar, no contesta nunca).
+4. **Inventario único** (`omo-opencode/src/features/external-tools/inventory.ts`): servidor de TypeScript con
+   TypeScript 6, de Python, Go y Rust, git, ast-grep y tmux; qué deja de funcionar sin cada uno; cómo instalarlo en
+   Linux y Windows, y de forma duradera el de TypeScript. Solo se revisan los lenguajes del proyecto abierto.
+5. **Dónde avisa**:
+   - `oh-my-openagent doctor`: sección External Tools con cada herramienta (conecta / no conecta / no instalada),
+     lo que se pierde y la orden exacta.
+   - Arranque de OpenCode: la comprobación corre 4 s después de cargar, en segundo plano y con caché (rutas y fechas de
+     los binarios, TypeScript del proyecto, un día como máximo). El aviso (toast) sale con la primera señal de la
+     interfaz (un evento de sesión, mensaje, TUI o comando) o a los 30 s como mucho. Nada llega al prompt del modelo.
+   - Instalador (CLI e interactivo): revisa el servidor de TypeScript, git y los opcionales y avisa con el arreglo.
+6. **Skill `lsp-setup`**: mira primero `doctor`; propone las órdenes y **pregunta antes de instalar**; prefiere la forma
+   duradera.
+7. **Equipo del usuario**: `node` de mise con `postinstall` (`typescript-language-server@6`, `typescript@6`), probado
+   antes en un mise aislado; `~/.default-npm-packages` retirado; guardado en `cachyos-lenovo` (`6cb24d1`).
+
+**Fallo encontrado en la QA real y corregido**: el primer aviso salía a los 4 s fijos y se perdía, porque OpenCode
+seguía arrancando hasta 6 s después de cargar el plugin y la interfaz todavía no escuchaba. Ahora espera a la interfaz;
+4 tests nuevos cubren la espera, el plazo de respaldo y los eventos que no cuentan.
+
+**Pruebas**: external-tools 16, lsp-core 186 más las nuevas, CLI 906, plugin 389, shared-skills 305, script 749,
+tests 28: todo en verde; tipos limpios.
+
+**QA en OpenCode real aislado** (`script/fork/qa/external-tools-tui.ts`, evidencia
+`.omo/evidence/20261021-external-tools/tui/`): con el servidor quitado del PATH, la interfaz muestra el aviso que lo
+nombra; con todo instalado, no hay aviso y el servidor conecta; `doctor` lo da como no instalado con la orden `@6` y el
+`postinstall`. 3/3. Base de datos real de OpenCode: 541 → 541.
+
+**Medición**:
+- Coste en primer plano al arrancar: 0 ms (todo en segundo plano, 4 s después de cargar).
+- Duración de la comprobación: 58 ms si falta el servidor; 2,85 s en frío en el sandbox con el servidor presente; unos
+  300 ms en este equipo; en un arranque con la caché válida no se arranca ningún servidor.
+- Contexto añadido al modelo: 0 tokens (solo un toast).
+
+**Hallazgo en este equipo**: el repositorio tiene `Cargo.toml` y rustup, pero falta el componente `rust-analyzer`;
+`doctor` lo da como "no conecta" con la orden `rustup component add rust-analyzer`.
