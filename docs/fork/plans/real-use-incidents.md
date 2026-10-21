@@ -295,7 +295,10 @@ una tercera repetición, que queda para la próxima QA de esta zona). Base de da
 **Pruebas**: 10.025 pruebas, 0 fallos (`omo-opencode` carpeta por carpeta, `lsp-core`, `model-core` y el banco
 `script/fork`), en `.omo/evidence/incidents/package-tests-final.txt`; tipos del paquete y de `script/` sin errores.
 
-**Fusión** (21-10-2026): en `mis-mejoras` con `--no-ff`, `dist/` real reconstruido con el shim y subido.
+**Pendiente para fusionar** (lo decide el usuario): la fusión en `mis-mejoras` con `--no-ff`, reconstruir el `dist/` real
+con el shim y subir. Probado el 21-10 en local y deshecho a petición del usuario: la fusión no tiene conflictos, el `dist/`
+resultante lleva los arreglos y carga en OpenCode real aislado (`title-free-model` PASA; base real 541 → 541). Al
+reconstruir, el paquete de Senpi sale distinto con Bun 1.4.3 (H16): se deja el versionado, generado con 1.4.2.
 
 ## Hallazgos del banco y de la QA (14–19-10-2026) — se cierran todos antes de fusionar
 Nota: H20 se retiró (era un error al lanzar la autocomprobación sin `codex` en el PATH). Regla del usuario (19-10-2026): todo fallo encontrado midiendo se arregla con su test en rojo y se documenta, aunque no
