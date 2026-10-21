@@ -12,7 +12,7 @@ Bun (diagnósticos engañosos) y, una vez arreglado eso, los agentes se quedaban
 supiera. Encima, `npm install typescript` instala hoy TypeScript 7 (nativo, sin `tsserver.js`), con el que
 `typescript-language-server` no arranca: tener el binario instalado no basta, hay que comprobar que conecta.
 
-`omo doctor` ya existe, pero su comprobación de LSP solo mira que el MCP de LSP esté activo (`tools-lsp.ts`).
+`oh-my-openagent doctor` ya existe, pero su comprobación de LSP solo mira que el MCP de LSP esté activo (`tools-lsp.ts`).
 
 ## Diseño
 1. **Inventario por función** (un solo sitio en el código, usado por todo lo demás): cada herramienta con lo que deja de
@@ -34,9 +34,9 @@ supiera. Encima, `npm install typescript` instala hoy TypeScript 7 (nativo, sin 
    - **Al arrancar OpenCode:** solo para los lenguajes del proyecto abierto, un aviso (toast) si falta o no conecta algo
      que ese proyecto necesita. En segundo plano y guardado en caché, para no retrasar el arranque; nunca en el prompt
      (cero contexto).
-   - **`omo doctor`:** la lista completa con el resultado de cada prueba de conexión.
+   - **`oh-my-openagent doctor`:** la lista completa con el resultado de cada prueba de conexión.
 4. **Cómo instalar o reinstalar, de forma duradera** (usuario, 19-10-2026: "si falla la herramienta, decir cómo
-   reinstalar"): cada aviso y `omo doctor` dan el comando exacto y la forma que sobrevive a actualizar Node o reinstalar
+   reinstalar"): cada aviso y `oh-my-openagent doctor` dan el comando exacto y la forma que sobrevive a actualizar Node o reinstalar
    el sistema. Ejemplo comprobado en esta máquina: con `mise`, `~/.default-npm-packages` con
    `typescript-language-server@6` y `typescript@6` se instala solo en cada Node nuevo (un `npm install -g` se pierde al
    cambiar de versión de Node, y el backend `npm:` de mise instala cada paquete aparte, así que el servidor no encuentra
@@ -59,4 +59,4 @@ supiera. Encima, `npm install typescript` instala hoy TypeScript 7 (nativo, sin 
 - Dado una herramienta que falla, entonces el aviso incluye el comando para reinstalarla de forma duradera.
 - Dado que el usuario pregunta cómo instalar lo que necesita el plugin, entonces el agente carga la skill de
   instalación, lista lo que falta y pregunta antes de instalar nada.
-- Dado `omo doctor`, entonces lista cada herramienta con "conecta / no conecta / no instalada" y qué deja de funcionar.
+- Dado `oh-my-openagent doctor`, entonces lista cada herramienta con "conecta / no conecta / no instalada" y qué deja de funcionar.

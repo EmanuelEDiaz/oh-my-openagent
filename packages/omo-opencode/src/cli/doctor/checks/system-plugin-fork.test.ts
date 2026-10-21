@@ -39,4 +39,20 @@ describe("doctor recognises a forked checkout loaded from file:// (fork 0.6)", (
     // then
     expect(findPluginEntry([`file://${join(root, "omo-fork", "dist", "index.js")}`])).toBeNull()
   })
+
+  // Fork finding H35 (21-10-2026): the path text alone decided, so a plugin kept under a folder named after this one
+  // was taken for it.
+  it("an unrelated plugin under a folder named oh-my-openagent is not mistaken for this plugin", () => {
+    // given
+    const root = checkout("some-other-plugin")
+    const named = join(root, "oh-my-openagent")
+    symlinkSync(join(root, "repo"), named)
+
+    // then
+    expect(findPluginEntry([`file://${join(named, "dist", "index.js")}`])).toBeNull()
+  })
+
+  it("a file:// entry not built yet still counts when its path names the plugin", () => {
+    expect(findPluginEntry(["file:///nowhere/oh-my-openagent/dist/index.js"])?.isLocalDev).toBe(true)
+  })
 })

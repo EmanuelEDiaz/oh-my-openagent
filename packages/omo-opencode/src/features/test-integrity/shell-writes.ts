@@ -6,7 +6,7 @@
  * existing test that changed. Git keeps this cheap (~60 ms on a repo with 3,500 tests); without git, every test is
  * copied, up to a limit.
  */
-import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs"
+import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync, type Dirent } from "node:fs"
 import { join, relative } from "node:path"
 
 import { spawnSync } from "../../shared/bun-spawn-shim"
@@ -50,11 +50,30 @@ function testsChangedSince(directory: string, head: string): string[] {
   return zList(git(directory, ["diff", head, "--name-only", "--no-renames", "--relative", "-z", "--"])).filter((path) => isTestFile(path))
 }
 
+/**
+ * Files under `directory`, relative with "/" separators, skipping dot entries and node_modules. Walked by hand rather
+ * than with Bun.Glob, which the bundle must not need, and without descending into node_modules at all.
+ */
+function* projectFiles(directory: string, prefix = ""): Generator<string> {
+  let entries: Dirent[]
+  try {
+    entries = readdirSync(prefix ? join(directory, prefix) : directory, { withFileTypes: true })
+  } catch {
+    return
+  }
+  for (const entry of entries) {
+    if (entry.name.startsWith(".") || entry.name === "node_modules") continue
+    const path = prefix ? `${prefix}/${entry.name}` : entry.name
+    if (entry.isDirectory()) yield* projectFiles(directory, path)
+    else if (entry.isFile()) yield path
+  }
+}
+
 function copyAllTests(directory: string): Map<string, string | undefined> {
   const copies = new Map<string, string | undefined>()
   let bytes = 0
-  for (const path of new Bun.Glob("**/*").scanSync({ cwd: directory, dot: false, onlyFiles: true })) {
-    if (path.includes("node_modules/") || !isTestFile(path)) continue
+  for (const path of projectFiles(directory)) {
+    if (!isTestFile(path)) continue
     const text = readText(join(directory, path))
     bytes += text?.length ?? 0
     if (copies.size >= MAX_COPY_FILES || bytes > MAX_COPY_BYTES) {

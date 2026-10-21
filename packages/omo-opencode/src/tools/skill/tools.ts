@@ -136,7 +136,9 @@ export function createSkillTool(options: SkillLoadOptions): ToolDefinition {
   liveSkillDescription.set(async () => {
     if (cachedDescription === null || (options.nativeSkills && !nativeKnown)) {
       // OpenCode answers by now (this runs per request): load its native list, but never hold a request long.
-      await Promise.race([buildDescription(true), Bun.sleep(3000)]).catch((error: unknown) => log("[skill] description refresh failed", { error: String(error) }))
+      // A plain timer, not Bun.sleep: the bundle must also load where `Bun` is missing (dist-bundle-bun-globals).
+      const giveUp = new Promise<void>((resolve) => setTimeout(resolve, 3000).unref?.())
+      await Promise.race([buildDescription(true), giveUp]).catch((error: unknown) => log("[skill] description refresh failed", { error: String(error) }))
     }
     return cachedDescription ?? undefined
   })
