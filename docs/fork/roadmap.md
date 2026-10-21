@@ -112,12 +112,14 @@ retirado → siguiente gratuito con aviso; los cortes de red siguen esperando en
 `ai-guidelines` acotadas (hecho: sin `languages/`, `frameworks/`, `07-restful-api-design`, `project-map`,
 `planning-log`; 98k → 49k caracteres, ~12k tokens menos por petición; copia `opencode.json.bak.2026-10-07-context`);
 herramientas `ctx_*` de context-mode ocultas a los orquestadores. Arreglos en `plans/real-use-incidents.md`.
-**Estado (12-10-2026): verificado con datos reales; falta fusionar.** Interfaz real de `/omo-models`: 5/5 casos.
-"Hola" con la configuración real: 74.194 → 48.299 tokens (−35 %). QA aislada: 3/3. Batería del paquete: 1.130 archivos
-y 8.279 pruebas por carpeta, 0 fallos; tipos 0 errores. La prueba real encontró 6 fallos que las pruebas unitarias no
-veían, todos corregidos con una prueba que fallaba antes; entre ellos, que el recorte de skills **nunca había llegado
-al modelo**. Faltan la batería completa de resiliencia, el banco antes/después y la fusión. Detalle y evidencia en el
-cierre del plan.
+**Estado (21-10-2026): cerrado y medido; listo para fusionar.** Interfaz real de `/omo-models`: 5/5 casos. "Hola" con
+la configuración real: 74.194 → 48.299 tokens (−35 %). Banco: `fix-integrity` 34/36 → 35/36 con −54 % de tokens (el
+único fallo es un escape de tipos que cubre 0.9c); `explore` 80,4 % → 88,2 % a la primera (pass^3 58,8 % → 70,6 %).
+Batería de resiliencia completa (12 escenarios en OpenCode real aislado): todos pasan. 10.025 pruebas, 0 fallos; tipos
+0 errores. Medir destapó 30 hallazgos (H1–H30), todos cerrados con su causa, su test en rojo y su arreglo, o explicados
+(diseño, red, modelo); entre ellos, que el vigilante de red cancelaba subagentes y dejaba la respuesta vacía (H26) y
+que el respaldo de modelos abortaba a los 30 s a un modelo que trabajaba con herramientas (H30). Detalle y evidencia en
+el cierre del plan (`plans/real-use-incidents.md`, "Cierre final").
 
 ## Punto de reanudación (12-10-2026)
 Rama `fix/user-session-incidents`, verificada con datos reales (ver arriba). Para fusionarla faltan:
@@ -346,6 +348,9 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 - ~~Reglas de lenguaje/framework cargadas bajo demanda~~ — absorbido en 4.5 (antes 2.9), 29-09-2026.
 
 ## Registro de decisiones del roadmap
+- 21-10-2026 — Incidentes del uso real cerrados (rama `fix/user-session-incidents`): banco antes/después, batería de
+  resiliencia completa y pruebas en verde; los hallazgos H1–H30 quedan documentados en el plan. Siguiente paso: fusionar
+  y luego 0.25 (herramientas externas).
 - 20-10-2026 — 7.3 (usuario): el laboratorio visual también mostrará las herramientas activas del plugin (servidores de
   lenguaje, MCP, procesos, visores) y cuánta RAM y CPU gasta cada una, a raíz de lo medido en H4.
 - 20-10-2026 — `context-mode` (propuesta del usuario): se mide como homólogo en 5.3, no se instala junto al plugin. Motivos:
