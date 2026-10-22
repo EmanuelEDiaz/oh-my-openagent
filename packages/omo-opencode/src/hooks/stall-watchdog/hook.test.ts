@@ -106,6 +106,34 @@ describe("stall watchdog hook (fork 0.8a)", () => {
     hook.dispose()
   })
 
+  // QA 22-10-2026 (cut-subagent): OpenCode's own subtask (an explore run) is in neither plugin set; after 4 min of
+  // provider timeouts the watchdog aborted it as a main session and the caller lost the subagent's answer.
+  test("a subagent OpenCode started itself (it has a parent session) is left alone too", async () => {
+    // given
+    const { hook, calls, advance } = setup({ hasParent: async (id) => id === "ses_native" })
+    await hook.event(busy("ses_native"))
+    advance(1001)
+
+    // when
+    await hook.check()
+    await hook.event({ event: { type: "session.error", properties: { sessionID: "ses_native", error: { data: { message: "SSE read timed out" } } } } })
+    await Bun.sleep(1)
+
+    // then
+    expect(calls.aborted).toEqual([])
+    expect(calls.continued).toEqual([])
+    hook.dispose()
+  })
+
+  test("when the parent lookup fails the session is treated as a main session", async () => {
+    const { hook, calls, advance } = setup({ hasParent: async () => { throw new Error("server gone") } })
+    await hook.event(busy(MAIN))
+    advance(1001)
+    await hook.check()
+    expect(calls.aborted).toEqual([MAIN])
+    hook.dispose()
+  })
+
   test("without fallback models it continues on the same model", async () => {
     const { hook, calls, advance } = setup({ fallbackModels: () => [] })
     await hook.event(busy(MAIN))

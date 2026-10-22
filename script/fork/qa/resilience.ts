@@ -384,6 +384,70 @@ const SCENARIOS: Scenario[] = [
   },
 ]
 
+/**
+ * A cut while an OpenCode subtask (explore) works: the guard must leave the subagent's turn alone, nothing may cancel
+ * it, and the caller must get its real answer.
+ */
+async function cutSubagent(context: Context, name: string): Promise<{ checks: Check[]; childID: string; log: string }> {
+  const workdir = prepareWorkdir(context.sandbox, FIXTURE, name)
+  const client = context.client(workdir)
+  const parentID = ((await client.session.create({ title: `qa ${name}` })).data as { id: string }).id
+  const prompt = "Which function in this repo computes the page slice, and which test file covers it? Read the code before answering and cite file:line."
+  await client.session.promptAsync({ sessionID: parentID, parts: [{ type: "subtask", agent: "explore", description: "find the pagination code", prompt }] })
+  let childID = ""
+  await waitFor(async () => {
+    childID = (((await client.session.children({ sessionID: parentID })).data ?? []) as Array<{ id: string }>)[0]?.id ?? ""
+    return childID !== "" && (await completedTools(client, childID)) >= 1
+  }, 300_000, "subagent's first tool")
+  context.proxy.dark()
+  const cutSeen = () => pluginLog(context.sandbox).split("\n").some((line) => line.includes("[network-guard]") && line.includes(childID) && /treating it as a cut|retrying a network error/.test(line))
+  await waitFor(async () => cutSeen(), 180_000, "guard sees the cut on the subagent")
+  await Bun.sleep(8_000)
+  context.proxy.lit()
+  // With the fix the subagent's dead request ends on its 2 min header timeout and OpenCode retries it.
+  await waitSettled(client, parentID, 900_000)
+  const taskPart = (await messages(client, parentID)).flatMap((message) => message.parts).find((part) => part["type"] === "tool" && part["tool"] === "task")
+  const output = String((taskPart?.["state"] as { output?: string } | undefined)?.output ?? "")
+  const answer = output.replace(/<\/?task_result>|task_id: \S+[^\n]*/g, "").trim()
+  // OpenCode does not keep a cancelled turn that had no output yet: its own log is the record of the cancel.
+  const logs = join(context.sandbox.root, "data/opencode/log")
+  const serverLog = readdirSync(logs).map((file) => readFileSync(join(logs, file), "utf8")).join("\n")
+  const cancels = serverLog.split("\n").filter((line) => line.includes("message=cancel") && line.includes(childID)).length
+  const log = pluginLog(context.sandbox)
+  const checks = [
+    check("the guard saw the cut on the subagent", cutSeen()),
+    check("the guard left the subagent's turn alone", log.split("\n").some((line) => line.includes("subagent left to its turn") && line.includes(childID))),
+    check("the subagent's turn was never cancelled", cancels === 0, `${cancels} cancel(s) in OpenCode's log`),
+    check("the caller got the subagent's real answer", /\.(ts|js):\d+/.test(answer), answer.slice(0, 160) || "(empty)"),
+  ]
+  return { checks, childID, log }
+}
+
+// QA 22-10-2026 (H39): the stall watchdog aborted an OpenCode subtask as a main session once its silence passed the
+// 4 min inactivity limit, and the caller lost the answer. A 60 s limit makes the 2 min header wait of the cut cross it
+// every time.
+const STALL_SCENARIO: Scenario = {
+  id: "cut-subagent-stall",
+  async run(context) {
+    setSection(context.sandbox, "stall", { inactivity_ms: 60_000, check_interval_ms: 5_000 })
+    context.server.stop()
+    await context.restart()
+    try {
+      const { checks, childID, log } = await cutSubagent(context, "cut-subagent-stall")
+      const watchdog = log.split("\n").filter((line) => line.includes("[stall-watchdog]") && line.includes(childID))
+      return [
+        ...checks,
+        check("the stall watchdog saw the subagent stall", watchdog.some((line) => line.includes("subagent stalled")), watchdog.map((line) => line.replace(/^\S+ /, "")).join(" | ").slice(0, 200)),
+        check("the stall watchdog never treated it as a main session", !watchdog.some((line) => line.includes("main session stalled"))),
+      ]
+    } finally {
+      setSection(context.sandbox, "stall", { inactivity_ms: undefined, check_interval_ms: undefined })
+      context.server.stop()
+      await context.restart()
+    }
+  },
+}
+
 // A provider that accepts the request and never sends headers: the plugin's default headerTimeout (shortened here to
 // 15 s) must fail the request so OpenCode retries, instead of hanging until the 4 min watchdog.
 const HEADER_SCENARIO: Scenario = {
@@ -421,46 +485,14 @@ async function runHeaderHold(context: Context): Promise<Check[]> {
     check("recovered well before the 4 min watchdog", Date.now() - started < 900_000),
   ]
 }
-SCENARIOS.push(HEADER_SCENARIO)
+SCENARIOS.push(HEADER_SCENARIO, STALL_SCENARIO)
 
 // Fork incidents H26 (20-10-2026): the network went dark while an `explore` subagent answered a `task` call. When it
 // came back the guard stopped the subagent's turn to continue it, which ended the caller's call with an empty answer.
 // The caller must get the subagent's real answer. The subtask part runs OpenCode's own `task` tool, as `@explore` does.
 const SUBAGENT_CUT_SCENARIO: Scenario = {
   id: "cut-subagent",
-  async run(context) {
-    const workdir = prepareWorkdir(context.sandbox, FIXTURE, "cut-subagent")
-    const client = context.client(workdir)
-    const parentID = ((await client.session.create({ title: "qa cut-subagent" })).data as { id: string }).id
-    const prompt = "Which function in this repo computes the page slice, and which test file covers it? Read the code before answering and cite file:line."
-    await client.session.promptAsync({ sessionID: parentID, parts: [{ type: "subtask", agent: "explore", description: "find the pagination code", prompt }] })
-    let childID = ""
-    await waitFor(async () => {
-      childID = (((await client.session.children({ sessionID: parentID })).data ?? []) as Array<{ id: string }>)[0]?.id ?? ""
-      return childID !== "" && (await completedTools(client, childID)) >= 1
-    }, 300_000, "subagent's first tool")
-    context.proxy.dark()
-    const cutSeen = () => pluginLog(context.sandbox).split("\n").some((line) => line.includes("[network-guard]") && line.includes(childID) && /treating it as a cut|retrying a network error/.test(line))
-    await waitFor(async () => cutSeen(), 180_000, "guard sees the cut on the subagent")
-    await Bun.sleep(8_000)
-    context.proxy.lit()
-    // With the fix the subagent's dead request ends on its 2 min header timeout and OpenCode retries it.
-    await waitSettled(client, parentID, 900_000)
-    const taskPart = (await messages(client, parentID)).flatMap((message) => message.parts).find((part) => part["type"] === "tool" && part["tool"] === "task")
-    const output = String((taskPart?.["state"] as { output?: string } | undefined)?.output ?? "")
-    const answer = output.replace(/<\/?task_result>|task_id: \S+[^\n]*/g, "").trim()
-    // OpenCode does not keep a cancelled turn that had no output yet: its own log is the record of the cancel.
-    const logs = join(context.sandbox.root, "data/opencode/log")
-    const serverLog = readdirSync(logs).map((file) => readFileSync(join(logs, file), "utf8")).join("\n")
-    const cancels = serverLog.split("\n").filter((line) => line.includes("message=cancel") && line.includes(childID)).length
-    const log = pluginLog(context.sandbox)
-    return [
-      check("the guard saw the cut on the subagent", cutSeen()),
-      check("the guard left the subagent's turn alone", log.split("\n").some((line) => line.includes("subagent left to its turn") && line.includes(childID))),
-      check("the subagent's turn was never cancelled", cancels === 0, `${cancels} cancel(s) in OpenCode's log`),
-      check("the caller got the subagent's real answer", /\.(ts|js):\d+/.test(answer), answer.slice(0, 160) || "(empty)"),
-    ]
-  },
+  run: async (context) => (await cutSubagent(context, "cut-subagent")).checks,
 }
 SCENARIOS.push(SUBAGENT_CUT_SCENARIO)
 
