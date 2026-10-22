@@ -405,6 +405,9 @@ describe("impactCoverage", () => {
       }
       writeFileSync(join(work, "src/api.ts"), "export const api = 2\n")
       writeFileSync(join(work, "src/unrelated.ts"), "export const unrelated = 2\n")
+      // The plugin's own state in the workdir is not the agent's change (smoke run 22-10-2026).
+      mkdirSync(join(work, ".omo/cache"), { recursive: true })
+      writeFileSync(join(work, ".omo/cache/knowledge.db"), "x")
       const grader = impactCoverage(original, ["src/api.ts", "src/view.ts", "src/receipt.ts"])
       const graded = await grader.grade({ transcript: transcript({ answer: "Changed the API. receipt.ts needs no change." }), workdir: work })
       expect(graded.pass).toBe(true)

@@ -360,6 +360,8 @@ const CODE_FILE = /\.[cm]?[jt]sx?$/
 const SKIP_PATTERN = /\b(?:test|it|describe)\s*\.\s*(?:skip|only|todo|failing|skipIf|todoIf|if)\b|\bx(?:it|test|describe)\s*\(/g
 const SUPPRESSION_PATTERN = /@ts-ignore|@ts-expect-error|@ts-nocheck|\bas\s+any\b|eslint-disable|biome-ignore/g
 const IGNORED_DIR = /(?:^|\/)(?:\.git|node_modules)(?:\/|$)/
+/** What the plugin itself writes in the project (knowledge cache, process registry), not the agent's change. */
+const PLUGIN_STATE = /^\.omo\//
 
 /** Files of a repo, relative to it, without .git and node_modules. */
 function repoFiles(dir: string): string[] {
@@ -539,7 +541,7 @@ export function impactCoverage(originalDir: string, expected: readonly string[])
       })
       const missed = expected.filter((file) => !changed.includes(file)).sort()
       const silent = missed.filter((file) => !transcript.answer.includes(file.split("/").pop() ?? file))
-      const outside = changed.filter((file) => !expected.includes(file) && !TEST_FILE.test(file)).sort()
+      const outside = changed.filter((file) => !expected.includes(file) && !TEST_FILE.test(file) && !PLUGIN_STATE.test(file)).sort()
       const parts = [`covered ${expected.length - missed.length}/${expected.length}`]
       if (missed.length > 0) parts.push(`missed: ${missed.join(", ")}`)
       if (silent.length > 0) parts.push(`silent: ${silent.join(", ")}`)
