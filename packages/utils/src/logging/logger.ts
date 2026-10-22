@@ -11,6 +11,8 @@ export type LoggerTestOverrides = {
   readonly filePath?: string
   readonly maxSizeBytes?: number
   readonly maxBackups?: number
+  /** Receives every message instead of the file, so a test sees calls from modules loaded before it. */
+  readonly sink?: (message: string, data?: unknown) => void
 }
 
 export type LoggerOptions = {
@@ -47,6 +49,7 @@ export function createLogger(options: LoggerOptions): BoundLogger {
   let maxLogFileBackups = maxLogFileBackupsDefault
   let buffer: string[] = []
   let flushTimer: ReturnType<typeof setTimeout> | null = null
+  let sink: ((message: string, data?: unknown) => void) | undefined
 
   function rotateLogFileIfNeeded(): void {
     try {
@@ -92,6 +95,10 @@ export function createLogger(options: LoggerOptions): BoundLogger {
   }
 
   function log(message: string, data?: unknown): void {
+    if (sink) {
+      sink(message, data)
+      return
+    }
     try {
       const timestamp = new Date().toISOString()
       const logEntry = `[${timestamp}] ${message} ${data ? JSON.stringify(data) : ""}\n`
@@ -119,9 +126,11 @@ export function createLogger(options: LoggerOptions): BoundLogger {
     if (overrides.filePath !== undefined) logFile = overrides.filePath
     if (overrides.maxSizeBytes !== undefined) maxLogFileSizeBytes = overrides.maxSizeBytes
     if (overrides.maxBackups !== undefined) maxLogFileBackups = overrides.maxBackups
+    if (overrides.sink !== undefined) sink = overrides.sink
   }
 
   function _resetLoggerForTesting(): void {
+    sink = undefined
     logFile = initialLogFile
     maxLogFileSizeBytes = maxLogFileSizeDefault
     maxLogFileBackups = maxLogFileBackupsDefault

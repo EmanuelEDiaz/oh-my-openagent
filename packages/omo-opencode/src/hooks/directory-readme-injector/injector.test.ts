@@ -6,6 +6,8 @@ import { join } from "node:path"
 
 import type { PluginInput } from "@opencode-ai/plugin"
 
+import { _resetLoggerForTesting, _setLoggerForTesting } from "../../shared/logger"
+
 const storageMaps = new Map<string, Set<string>>()
 const logMock = mock(() => undefined)
 
@@ -16,9 +18,6 @@ mock.module("./storage", () => ({
   },
 }))
 
-mock.module("../../shared/logger", () => ({
-  log: logMock,
-}))
 
 afterAll(() => {
   mock.restore()
@@ -51,9 +50,12 @@ describe("processFilePathForReadmeInjection", () => {
     mkdirSync(testRoot, { recursive: true })
     storageMaps.clear()
     logMock.mockClear()
+    // The logger's test sink, not mock.module: the injector may have been loaded by an earlier test file (H40).
+    _setLoggerForTesting({ sink: logMock })
   })
 
   afterEach(() => {
+    _resetLoggerForTesting()
     rmSync(testRoot, { recursive: true, force: true })
     storageMaps.clear()
   })
