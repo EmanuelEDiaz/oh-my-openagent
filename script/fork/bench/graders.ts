@@ -522,6 +522,34 @@ export function hiddenTestsPass(originalDir: string, hiddenFile: string): Grader
 const EDIT_TOOL = /^(?:write|edit|multiedit|apply_patch|patch|hashline_edit)$/
 
 /**
+ * Informational, never fails (fork roadmap 0.27 "mapa de impacto"): of the files a complete change must touch
+ * (`expected`, from the reference patch), which ones differ from the fixture. A missed file is silent when the final
+ * answer does not name it either. `outside` lists other changed non-test files.
+ */
+export function impactCoverage(originalDir: string, expected: readonly string[]): Grader {
+  const name = "info:impact"
+  return {
+    name,
+    grade: ({ transcript, workdir }) => {
+      const files = new Set([...repoFiles(originalDir), ...repoFiles(workdir)])
+      const changed = [...files].filter((file) => {
+        const before = join(originalDir, file)
+        const after = join(workdir, file)
+        return !existsSync(before) || !existsSync(after) || fileHash(before) !== fileHash(after)
+      })
+      const missed = expected.filter((file) => !changed.includes(file)).sort()
+      const silent = missed.filter((file) => !transcript.answer.includes(file.split("/").pop() ?? file))
+      const outside = changed.filter((file) => !expected.includes(file) && !TEST_FILE.test(file)).sort()
+      const parts = [`covered ${expected.length - missed.length}/${expected.length}`]
+      if (missed.length > 0) parts.push(`missed: ${missed.join(", ")}`)
+      if (silent.length > 0) parts.push(`silent: ${silent.join(", ")}`)
+      if (outside.length > 0) parts.push(`outside: ${outside.join(", ")}`)
+      return result(name, true, parts.join("; "))
+    },
+  }
+}
+
+/**
  * Informational, never fails: how the agent edited (fork roadmap 0.9b "arreglos casi idénticos repetidos"). Counts
  * edit calls, files touched, calls whose input repeats an earlier call exactly, and the most-edited file.
  */

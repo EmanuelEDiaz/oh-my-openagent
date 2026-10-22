@@ -13,6 +13,7 @@ import {
   editStats,
   EXPLORE_CONTRACT,
   hiddenTestsPass,
+  impactCoverage,
   loopStats,
   noNewSkips,
   noNewSuppressions,
@@ -392,6 +393,31 @@ describe("test integrity", () => {
   }, 60_000) // runs tsc three times: seconds each, more on a busy machine (5 s default timed out, 14-10-2026)
 })
 
+// Fork 0.27: how many of the files a full change must touch did the agent touch, and which it skipped without saying so.
+describe("impactCoverage", () => {
+  test("never fails and reports covered, missed and silently missed dependents", async () => {
+    const original = mkdtempSync(join(tmpdir(), "bench-impact-orig-"))
+    const work = mkdtempSync(join(tmpdir(), "bench-impact-work-"))
+    try {
+      for (const dir of [original, work]) {
+        mkdirSync(join(dir, "src"))
+        for (const name of ["api.ts", "view.ts", "receipt.ts", "unrelated.ts"]) writeFileSync(join(dir, "src", name), `export const ${name.split(".")[0]} = 1\n`)
+      }
+      writeFileSync(join(work, "src/api.ts"), "export const api = 2\n")
+      writeFileSync(join(work, "src/unrelated.ts"), "export const unrelated = 2\n")
+      const grader = impactCoverage(original, ["src/api.ts", "src/view.ts", "src/receipt.ts"])
+      const graded = await grader.grade({ transcript: transcript({ answer: "Changed the API. receipt.ts needs no change." }), workdir: work })
+      expect(graded.pass).toBe(true)
+      expect(graded.detail).toBe("covered 1/3; missed: src/receipt.ts, src/view.ts; silent: src/view.ts; outside: src/unrelated.ts")
+      const all = await grader.grade({ transcript: transcript(), workdir: original })
+      expect(all.detail).toBe("covered 0/3; missed: src/api.ts, src/receipt.ts, src/view.ts; silent: src/api.ts, src/receipt.ts, src/view.ts")
+    } finally {
+      rmSync(original, { recursive: true, force: true })
+      rmSync(work, { recursive: true, force: true })
+    }
+  })
+})
+
 describe("editStats", () => {
   test("never fails and counts identical repeated edits", async () => {
     const edit = (filePath: string, newString: string) => ({ tool: "edit", status: "completed", input: { filePath, oldString: "a", newString } })
@@ -444,4 +470,22 @@ describe("loops-hard suite", () => {
       expect(task.expect.map((grader) => grader.name)).toContain("info:loops")
     }
   })
+})
+
+describe("impact suite", () => {
+  test("every task has its fixture, a hidden test that the untouched app fails, and impact files that exist", async () => {
+    const { existsSync } = await import("node:fs")
+    const { IMPACT_TASKS } = await import("./tasks/impact")
+    expect(IMPACT_TASKS.length).toBeGreaterThanOrEqual(8)
+    for (const task of IMPACT_TASKS) {
+      const dir = join(import.meta.dir, "fixtures", String(task.fixture))
+      const hidden = task.expect.find((grader) => grader.name === "outcome:hiddenTests")
+      expect(hidden).toBeDefined()
+      expect((await hidden?.grade({ transcript: transcript(), workdir: dir }))?.pass).toBe(false)
+      const impact = await task.expect.find((grader) => grader.name === "info:impact")?.grade({ transcript: transcript(), workdir: dir })
+      const files = (impact?.detail ?? "").replace(/^covered 0\/\d+; missed: /, "").split("; ")[0]?.split(", ") ?? []
+      expect(files.length).toBeGreaterThanOrEqual(2)
+      for (const file of files) expect(existsSync(join(dir, file))).toBe(true)
+    }
+  }, 60_000)
 })
