@@ -40,18 +40,19 @@ describe("runtime-fallback", () => {
 
     const cacheBuster = `${Date.now()}-${Math.random()}`
 
-    mock.module("../../shared/logger", () => ({
-      ...loggerModule,
-      log: (msg: string, data?: unknown) => {
+    // The logger's test sink, not mock.module: hook modules another test file loaded first keep the real logger (H40).
+    loggerModule._setLoggerForTesting({
+      sink: (msg: string, data?: unknown) => {
         logCalls.push({ msg, data })
       },
-    }))
+    })
 
     const runtimeFallbackModule: RuntimeFallbackModule = await import(`./hook?test=${cacheBuster}`)
     createRuntimeFallbackHook = runtimeFallbackModule.createRuntimeFallbackHook
   })
 
   afterEach(() => {
+    loggerModule._resetLoggerForTesting()
     restoreRuntimeFallbackTestClock()
     SessionCategoryRegistry.clear()
     resetClaudeCodeSessionState()
