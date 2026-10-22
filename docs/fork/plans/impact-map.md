@@ -76,6 +76,27 @@ proyecto, preguntada al usuario, con una escalable (hexagonal) como respaldo.
   comprobación de tipos en verde; pruebas en verde; pass@1 y pass^3; falsas obligaciones; tokens, tiempo y RAM máxima.
 - Se adopta por defecto solo si la variante con control mejora sin disparar las falsas obligaciones ni la RAM.
 
+### Banco construido (22-10-2026, rama `feat/impact-map`)
+- **Suite `impact`** (`script/fork/bench/tasks/impact/`), 8 tareas, todas con solución comprobada con un parche de
+  referencia (tests visibles, ocultos y tipos en verde) y que la app sin tocar falla:
+  | Tarea | App | Nivel | Archivos del parche de referencia |
+  |---|---|---|---|
+  | status-filter | orders-app | simple | 2 (ruta y cliente) |
+  | validate-email | ts-service | simple | 3 (firma con 2 llamadores) |
+  | delivery-date | orders-app | difícil | 5 (fila, datos, handler, tipo del cliente, vista) |
+  | rename-total | orders-app | difícil | 4 (incluye el recibo del servidor, que nadie nombra) |
+  | remove-discount | orders-app | difícil | 5 (prompt de 5 palabras) |
+  | token-from-config | ts-service | difícil | 3 (solo la comprobación de tipos encuentra `index.ts`) |
+  | currency | orders-app | extrema | 7 (firma de `formatMoney` con llamadores en los dos lados) |
+  | rename-route | orders-app | extrema | 2 (el cliente arma la URL con una constante: buscar "/api/orders" no la encuentra) |
+- **Cambio frente al diseño:** la app de pila completa no usa React, Express ni Prisma, sino las mismas capas en
+  TypeScript sin dependencias (fila → almacén → handler → ruta → cliente → vista). Así no hay `npm install` por tarea
+  (RAM y red) y el cliente no comparte tipos con el servidor, que es el caso difícil: la comprobación de tipos no
+  encuentra a los dependientes del otro lado.
+- **Métrica nueva `info:impact`** (`graders.ts`): archivos del parche de referencia tocados, omitidos y omitidos en
+  silencio (el resumen final no los nombra), y archivos cambiados fuera de la lista. No decide el aprobado.
+- Holdout: status-filter y token-from-config.
+
 ## Criterios (Gherkin)
 - Dado un cambio en un campo del backend que usa una vista, cuando el agente termina sin tocar la vista, entonces el
   plugin no da la tarea por cerrada y le dice qué dependiente falta.
