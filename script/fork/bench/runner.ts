@@ -9,7 +9,7 @@ import { join } from "node:path"
 import { prepareWorkdir, type Sandbox } from "./sandbox"
 import { disposeWorkdirInstance } from "./dispose-instance"
 import { classifyFailure, silentModelError } from "./score"
-import { sessionTreeBusy, type SessionStatuses } from "./session-tree"
+import { quotaExhausted, sessionTreeBusy, type SessionStatuses } from "./session-tree"
 import { toTranscript, type RawMessage } from "./transcript"
 import type { GradeContext, GradeResult, RunResult, Task, Transcript } from "./types"
 
@@ -43,6 +43,11 @@ async function subagentsBusy(client: Client, sessionID: string): Promise<boolean
   return sessionTreeBusy(statuses, (id) => childrenOf(client, id), sessionID)
 }
 
+/** A spent provider quota, seen on any session OpenCode is retrying (it never reaches the transcript). */
+async function quotaStop(client: Client): Promise<string | undefined> {
+  return quotaExhausted(((await client.session.status({})).data ?? {}) as SessionStatuses)
+}
+
 async function isIdle(client: Client, sessionID: string): Promise<boolean> {
   const statuses = ((await client.session.status({})).data ?? {}) as Record<string, { type?: string }>
   return (statuses[sessionID]?.type ?? "idle") === "idle"
@@ -72,12 +77,15 @@ async function waitUntil(
   progress: () => Promise<string>,
   timeoutMs: number,
   label: string,
+  stop: () => Promise<string | undefined>,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs
   const detector = createStallDetector(STALL_MS)
   // Give the server a moment to register the prompt before the first idle check.
   await Bun.sleep(POLL_MS)
   while (!(await condition().catch(() => false))) {
+    const quota = await stop().catch(() => undefined)
+    if (quota !== undefined) throw new Error(`provider usage limit reached: ${quota}`)
     if (Date.now() > deadline) throw new Error(`${label} timed out after ${timeoutMs / 1000}s`)
     if (detector.stalled(await progress().catch(() => ""))) throw new Error(`${label} stalled: no progress for ${STALL_MS / 1000}s`)
     await Bun.sleep(POLL_MS)
@@ -212,7 +220,7 @@ async function execute(client: Client, task: Task, workdir: string, stats: RunSt
         const asked = (await answerQuestions(client)) + (await answerPermissions(client, stats.permissions))
         const idle = asked === 0 && (await isIdle(client, parentID)) && !managedProcessesBusy(workdir) && !(await subagentsBusy(client, parentID))
         return quiet.settled(idle)
-      }, () => sessionProgress(client, parentID), task.budget.timeoutMs, task.id)
+      }, () => sessionProgress(client, parentID), task.budget.timeoutMs, task.id, () => quotaStop(client))
     } finally {
       await client.session.abort({ sessionID: parentID }).catch(() => undefined)
     }
@@ -229,7 +237,7 @@ async function execute(client: Client, task: Task, workdir: string, stats: RunSt
       await answerQuestions(client)
       await answerPermissions(client, stats.permissions)
       return finishedSubtask(client, parentID)
-    }, () => sessionProgress(client, parentID), task.budget.timeoutMs, task.id)
+    }, () => sessionProgress(client, parentID), task.budget.timeoutMs, task.id, () => quotaStop(client))
   } finally {
     // Stop the parent's follow-up turn: only the subagent is evaluated, and the parent must not keep working.
     await client.session.abort({ sessionID: parentID }).catch(() => undefined)

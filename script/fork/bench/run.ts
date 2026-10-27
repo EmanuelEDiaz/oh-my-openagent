@@ -20,7 +20,7 @@ import { renderReport } from "./report"
 import { pendingRuns } from "./resume"
 import { runTask } from "./runner"
 import { createSandbox, destroySandbox, isHealthy, overrideAgentModels, overridePluginConfig, saveServerLogs, startServer, warmUp, type Sandbox, type Server } from "./sandbox"
-import { isConfigError, isConnectivityError, summarize } from "./score"
+import { isConfigError, isConnectivityError, isQuotaError, summarize } from "./score"
 import { EXPLORE_TASKS } from "./tasks/explore"
 import { FIX_INTEGRITY_TASKS } from "./tasks/fix-integrity"
 import { IMPACT_TASKS } from "./tasks/impact"
@@ -184,6 +184,9 @@ async function main(): Promise<void> {
           console.log(`${task.id} #${repeat + 1}${attempt > 0 ? ` retry ${attempt}` : ""}: ${verdict}`)
           if (result.error !== undefined && isConfigError(result.error)) {
             throw new Error(`configuration problem, not the agent's: ${result.error}\nFix the models with /omo-models and run again.`)
+          }
+          if (result.error !== undefined && isQuotaError(result.error)) {
+            throw new Error(`the provider's quota is spent, not the agent's fault: ${result.error}\nResume this run once it resets with --resume ${rawFile}`)
           }
           if (result.failure !== "infra") break
           if (result.error !== undefined && isConnectivityError(result.error) && connectionRetries < CONNECTION_RETRIES) {
