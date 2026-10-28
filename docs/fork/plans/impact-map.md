@@ -132,6 +132,42 @@ Agente `sisyphus` sin nada del 0.27, modelos gratis del sandbox (`deepseek-v4.1-
 3. **Escrituras por la shell:** decidir si el plugin debe hacer algo (avisar, pasar esas escrituras por los mismos
    guardias o pedir al agente que use `edit`). Es independiente del 0.27.
 
+### Propuesta para las decisiones pendientes (28-10-2026, aprobada por el usuario: "si adelante")
+**A. Banco `impact-hard` (solo `script/fork/bench`, no toca el plugin).**
+1. App nueva `shop-platform`, 45–60 archivos sin dependencias, para que no quepa entera en una lectura: migraciones SQL
+   en texto, repositorios que mapean `delivery_date` ↔ `deliveryDate`, servicios, rutas armadas por partes
+   (`${API}/${RESOURCE}/${id}`), SDK del cliente, dos vistas (cliente y administración), exportación CSV, plantilla de
+   correo con `{{campo}}`, serializador de webhooks, tarea programada, claves en `config.json` y tabla de la API en el
+   README.
+2. 8–10 tareas con prompts cortos como los del usuario ("añade la fecha de entrega", "quita el descuento"), donde al
+   menos un dependiente no sale buscando el nombre del símbolo (cadena SQL, clave de configuración, marcador de
+   plantilla, columna CSV, ruta partida). Parche de referencia, tests visibles y ocultos, como en `impact`.
+3. **Calibración antes de dar el banco por bueno:** una ejecución de línea base por tarea; se acepta si en al menos la
+   mitad de las tareas la cobertura baja del 70 % o fallan los tests ocultos. Si no, se endurece más. Se informa la parte
+   difícil por separado.
+4. La suite `impact` actual se queda como regresión ("lo fácil no debe empeorar").
+5. Con el banco calibrado: línea base ×3 y propuesta de la variante más barata del 0.27 (solo la lista de impacto
+   informativa) para que la apruebes antes de construir nada del plugin.
+
+**B. Escrituras por la shell (paso nuevo del plugin, rama propia).** Homólogos: SWE-agent (su interfaz de edición
+pasa un linter tras cada cambio y rechaza los que rompen la sintaxis; mejoró la tasa de resolución), el prompt de
+Claude Code (pide no usar `cat <<EOF` ni `sed` para editar) y nuestro propio `bash-file-read-guard`.
+1. Hook `bash-file-write-guard` en `tool.execute.before`: si un comando de bash reescribe un archivo de código que ya
+   existe (`cat >`, `>`/`>>` a una ruta, `sed -i`, `tee`), añade un aviso pidiendo `edit`/`write`. No bloquea: los
+   archivos nuevos, los generados y los de `/tmp` siguen libres.
+2. En `tool.execute.after`: los archivos de código que ese bash cambió pasan por lo mismo que una edición normal
+   (diagnósticos de `edit-diagnostics` y revisor de comentarios), para que la escritura por shell no se salte los
+   controles aunque el agente ignore el aviso.
+3. Medida: escrituras por shell en `impact` + `loops` antes y después (hoy 7 de 24 ejecuciones), con el aprobado sin
+   bajar. QA real en la TUI.
+
+**C. Cambios de más.** Sin cambio en el plugin por ahora: `info:impact` ya cuenta los archivos "fuera" y el banco nuevo
+lo informará por tarea. Si el banco endurecido confirma el patrón, se propone que el control de cierre del 0.27 pida
+también justificar los archivos tocados fuera de la lista.
+
+**Orden:** A (calibración incluida) y después B. A no necesita aprobaciones nuevas del plugin; B y cualquier variante
+del 0.27 sí, cuando estén medidas.
+
 ## Criterios (Gherkin)
 - Dado un cambio en un campo del backend que usa una vista, cuando el agente termina sin tocar la vista, entonces el
   plugin no da la tarea por cerrada y le dice qué dependiente falta.
