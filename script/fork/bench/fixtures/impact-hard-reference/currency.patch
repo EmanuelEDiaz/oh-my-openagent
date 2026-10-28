@@ -1,0 +1,259 @@
+diff --git a/README.md b/README.md
+index d25e5a2..0c0e36f 100644
+--- a/README.md
++++ b/README.md
+@@ -18,4 +18,4 @@ All JSON fields are snake_case.
+ | GET | `/api/v2/products` | every product |
+ 
+ An order: `id`, `customer_id`, `customer_name`, `status`, `total_cents`, `payable_cents`, `discount_code`, `created_at`,
+-`items` (`title`, `quantity`).
++`currency` (`USD` or `EUR`), `items` (`title`, `quantity`).
+diff --git a/src/api/wire.ts b/src/api/wire.ts
+index 6b0faa7..ef2ef04 100644
+--- a/src/api/wire.ts
++++ b/src/api/wire.ts
+@@ -11,6 +11,7 @@ export const ORDER_WIRE: ReadonlyArray<readonly [keyof OrderSummary, string]> =
+   ["payableCents", "payable_cents"],
+   ["discountCode", "discount_code"],
+   ["createdAt", "created_at"],
++  ["currency", "currency"],
+   ["items", "items"],
+ ]
+ 
+diff --git a/src/client/format/money.ts b/src/client/format/money.ts
+index 91d5846..0848f46 100644
+--- a/src/client/format/money.ts
++++ b/src/client/format/money.ts
+@@ -1,4 +1,5 @@
+-/** Client-side price label: 1250 → "$12.50". */
+-export function priceLabel(cents: number): string {
+-  return `$${(cents / 100).toFixed(2)}`
++/** Client-side price label: 1250 → "$12.50" in USD, "12,50 €" in EUR. */
++export function priceLabel(cents: number, currency: string): string {
++  const amount = (cents / 100).toFixed(2)
++  return currency === "EUR" ? `${amount.replace(".", ",")} €` : `$${amount}`
+ }
+diff --git a/src/client/sdk/orders.ts b/src/client/sdk/orders.ts
+index c6dbabb..17ff70d 100644
+--- a/src/client/sdk/orders.ts
++++ b/src/client/sdk/orders.ts
+@@ -10,6 +10,7 @@ export type OrderView = {
+   payable: number
+   discount: string | null
+   placedAt: string
++  currency: string
+   items: { title: string; quantity: number }[]
+ }
+ 
+@@ -24,6 +25,7 @@ function fromWire(raw: Wire): OrderView {
+     payable: Number(raw["payable_cents"]),
+     discount: raw["discount_code"] == null ? null : String(raw["discount_code"]),
+     placedAt: String(raw["created_at"]),
++    currency: String(raw["currency"]),
+     items: (raw["items"] as OrderView["items"] | undefined) ?? [],
+   }
+ }
+diff --git a/src/client/views/admin/order-detail.ts b/src/client/views/admin/order-detail.ts
+index 4478b1e..1958265 100644
+--- a/src/client/views/admin/order-detail.ts
++++ b/src/client/views/admin/order-detail.ts
+@@ -8,7 +8,7 @@ export function renderAdminOrder(order: OrderView): string {
+     `Order ${order.id} (${order.status})`,
+     `Customer: ${order.customer}`,
+     `Placed: ${dayOf(order.placedAt)}`,
+-    `Total: ${priceLabel(order.total)}; payable: ${priceLabel(order.payable)}`,
++    `Total: ${priceLabel(order.total, order.currency)}; payable: ${priceLabel(order.payable, order.currency)}`,
+     `Items: ${order.items.map((item) => `${item.quantity} x ${item.title}`).join(", ")}`,
+   ].join("\n")
+ }
+diff --git a/src/client/views/admin/orders-table.ts b/src/client/views/admin/orders-table.ts
+index 62002bd..3de4839 100644
+--- a/src/client/views/admin/orders-table.ts
++++ b/src/client/views/admin/orders-table.ts
+@@ -5,7 +5,7 @@ import { ORDER_TABLE_COLUMNS } from "./columns"
+ function cell(order: OrderView, field: string, money: boolean): string {
+   const value = (order as Record<string, unknown>)[field]
+   if (value === null || value === undefined) return ""
+-  return money ? priceLabel(Number(value)) : String(value)
++  return money ? priceLabel(Number(value), order.currency) : String(value)
+ }
+ 
+ /** Pipe-separated table: a header row, then one row per order. */
+diff --git a/src/client/views/customer/order-history.ts b/src/client/views/customer/order-history.ts
+index 9b52031..fa6a84c 100644
+--- a/src/client/views/customer/order-history.ts
++++ b/src/client/views/customer/order-history.ts
+@@ -4,5 +4,5 @@ import type { OrderView } from "../../sdk/orders"
+ 
+ /** One line per order: id, day, what was paid, status. */
+ export function renderOrderHistory(orders: readonly OrderView[]): string {
+-  return orders.map((order) => `${order.id}  ${dayOf(order.placedAt)}  ${priceLabel(order.payable)}  ${order.status}`).join("\n")
++  return orders.map((order) => `${order.id}  ${dayOf(order.placedAt)}  ${priceLabel(order.payable, order.currency)}  ${order.status}`).join("\n")
+ }
+diff --git a/src/client/views/customer/order-page.ts b/src/client/views/customer/order-page.ts
+index 895f2b5..b3b8720 100644
+--- a/src/client/views/customer/order-page.ts
++++ b/src/client/views/customer/order-page.ts
+@@ -6,7 +6,7 @@ import type { OrderView } from "../../sdk/orders"
+ export function renderOrderPage(order: OrderView): string {
+   const lines = [`Order ${order.id}`, `Placed: ${dayOf(order.placedAt)}`, `Status: ${order.status}`]
+   for (const item of order.items) lines.push(`- ${item.quantity} x ${item.title}`)
+-  lines.push(`Total: ${priceLabel(order.total)}`)
+-  if (order.discount !== null) lines.push(`Discount: ${order.discount} (you pay ${priceLabel(order.payable)})`)
++  lines.push(`Total: ${priceLabel(order.total, order.currency)}`)
++  if (order.discount !== null) lines.push(`Discount: ${order.discount} (you pay ${priceLabel(order.payable, order.currency)})`)
+   return lines.join("\n")
+ }
+diff --git a/src/config/app-config.json b/src/config/app-config.json
+index 9a582ce..7a5d369 100644
+--- a/src/config/app-config.json
++++ b/src/config/app-config.json
+@@ -1,6 +1,6 @@
+ {
+   "api": { "base": "/api/v2" },
+-  "export": { "orderColumns": ["id", "customer_id", "status", "total_cents", "discount_code", "created_at"] },
++  "export": { "orderColumns": ["id", "customer_id", "status", "total_cents", "currency", "discount_code", "created_at"] },
+   "webhooks": { "orderFields": ["id", "customer_id", "status", "total_cents", "payable_cents"], "secret": "dev-secret" },
+   "search": { "orderFields": ["id", "customer_name", "status"] }
+ }
+diff --git a/src/db/migrations/002-currency.ts b/src/db/migrations/002-currency.ts
+new file mode 100644
+index 0000000..b5a5f2b
+--- /dev/null
++++ b/src/db/migrations/002-currency.ts
+@@ -0,0 +1,3 @@
++export const up = `
++ALTER TABLE orders ADD COLUMN currency TEXT NOT NULL;
++`
+diff --git a/src/db/migrations/index.ts b/src/db/migrations/index.ts
+index 7578a7f..ad524b0 100644
+--- a/src/db/migrations/index.ts
++++ b/src/db/migrations/index.ts
+@@ -1,4 +1,5 @@
+ import { up as init } from "./001-init"
++import { up as currency } from "./002-currency"
+ 
+ /** Every migration, oldest first. */
+-export const MIGRATIONS: readonly string[] = [init]
++export const MIGRATIONS: readonly string[] = [init, currency]
+diff --git a/src/db/seed.ts b/src/db/seed.ts
+index 000d4a2..27abe67 100644
+--- a/src/db/seed.ts
++++ b/src/db/seed.ts
+@@ -13,9 +13,9 @@ export const products: ProductRecord[] = [
+ ]
+ 
+ export const orders: OrderRecord[] = [
+-  { id: "o1", customer_id: "c1", status: "paid", total_cents: 1250, discount_code: null, created_at: "2026-10-01T09:00:00Z" },
+-  { id: "o2", customer_id: "c2", status: "pending", total_cents: 4999, discount_code: "WELCOME10", created_at: "2026-10-05T12:30:00Z" },
+-  { id: "o3", customer_id: "c3", status: "shipped", total_cents: 300, discount_code: null, created_at: "2026-10-07T16:45:00Z" },
++  { id: "o1", customer_id: "c1", status: "paid", total_cents: 1250, discount_code: null, created_at: "2026-10-01T09:00:00Z", currency: "USD" },
++  { id: "o2", customer_id: "c2", status: "pending", total_cents: 4999, discount_code: "WELCOME10", created_at: "2026-10-05T12:30:00Z", currency: "EUR" },
++  { id: "o3", customer_id: "c3", status: "shipped", total_cents: 300, discount_code: null, created_at: "2026-10-07T16:45:00Z", currency: "USD" },
+ ]
+ 
+ export const orderItems: OrderItemRecord[] = [
+diff --git a/src/db/tables.ts b/src/db/tables.ts
+index 1cdc143..cc61c98 100644
+--- a/src/db/tables.ts
++++ b/src/db/tables.ts
+@@ -10,6 +10,7 @@ export type OrderRecord = {
+   total_cents: number
+   discount_code: string | null
+   created_at: string
++  currency: string
+ }
+ 
+ export type OrderItemRecord = { order_id: string; product_id: string; quantity: number }
+diff --git a/src/domain/currency.ts b/src/domain/currency.ts
+new file mode 100644
+index 0000000..374ac6e
+--- /dev/null
++++ b/src/domain/currency.ts
+@@ -0,0 +1,7 @@
++export type Currency = "USD" | "EUR"
++
++/** 1250 → "$12.50" in USD, "12,50 €" in EUR. */
++export function moneyIn(cents: number, currency: Currency): string {
++  const amount = (cents / 100).toFixed(2)
++  return currency === "EUR" ? `${amount.replace(".", ",")} €` : `$${amount}`
++}
+diff --git a/src/domain/money.ts b/src/domain/money.ts
+index 3fa7054..6e3e60a 100644
+--- a/src/domain/money.ts
++++ b/src/domain/money.ts
+@@ -1,4 +1,6 @@
+-/** 1250 → "$12.50". */
+-export function formatMoney(cents: number): string {
+-  return `$${(cents / 100).toFixed(2)}`
++import { moneyIn, type Currency } from "./currency"
++
++/** 1250 → "$12.50" (USD) or "12,50 €" (EUR). */
++export function formatMoney(cents: number, currency: Currency): string {
++  return moneyIn(cents, currency)
+ }
+diff --git a/src/domain/order.ts b/src/domain/order.ts
+index 10bf57a..bb86093 100644
+--- a/src/domain/order.ts
++++ b/src/domain/order.ts
+@@ -1,3 +1,4 @@
++import type { Currency } from "./currency"
+ import type { OrderStatus } from "./status"
+ 
+ export type Order = {
+@@ -7,6 +8,7 @@ export type Order = {
+   totalCents: number
+   discountCode: string | null
+   createdAt: string
++  currency: Currency
+ }
+ 
+ export type OrderLine = { title: string; quantity: number }
+diff --git a/src/jobs/nightly-report.ts b/src/jobs/nightly-report.ts
+index 6cf06e8..bcf3db4 100644
+--- a/src/jobs/nightly-report.ts
++++ b/src/jobs/nightly-report.ts
+@@ -1,12 +1,17 @@
+ import { selectAll } from "../db/query"
++import type { Currency } from "../domain/currency"
+ import { formatMoney } from "../domain/money"
+ import { ORDER_STATUSES } from "../domain/status"
+ 
+-/** Revenue per status, from the orders table. */
++const CURRENCIES: readonly Currency[] = ["USD", "EUR"]
++
++/** Revenue per status and currency, from the orders table (currencies are never added together). */
+ export function nightlyReport(): string {
+   const records = selectAll("orders")
+   return ORDER_STATUSES.map((status) => {
+-    const cents = records.filter((record) => record.status === status).reduce((sum, record) => sum + record.total_cents, 0)
+-    return `${status}: ${formatMoney(cents)}`
++    const ofStatus = records.filter((record) => record.status === status)
++    const sums = CURRENCIES.map((currency) => ({ currency, cents: ofStatus.filter((record) => record.currency === currency).reduce((sum, record) => sum + record.total_cents, 0) }))
++    const shown = sums.filter((sum) => sum.cents > 0)
++    return `${status}: ${(shown.length > 0 ? shown : [{ currency: CURRENCIES[0] ?? "USD", cents: 0 }]).map((sum) => formatMoney(sum.cents, sum.currency)).join(" + ")}`
+   }).join("\n")
+ }
+diff --git a/src/notifications/order-mailer.ts b/src/notifications/order-mailer.ts
+index 8cb38ce..61464ac 100644
+--- a/src/notifications/order-mailer.ts
++++ b/src/notifications/order-mailer.ts
+@@ -9,7 +9,7 @@ export function confirmationEmail(order: OrderSummary): Email {
+   const body = renderTemplate(TEMPLATES.orderConfirmation, {
+     customer_name: order.customerName,
+     order_id: order.id,
+-    payable: formatMoney(order.payableCents),
++    payable: formatMoney(order.payableCents, order.currency),
+     discount_line: order.discountCode === null ? "" : `Discount ${order.discountCode} applied.`,
+   })
+   return { to: order.customerEmail, subject: `Order ${order.id} confirmed`, body }
+diff --git a/src/repo/order-columns.ts b/src/repo/order-columns.ts
+index 4e51415..7df308b 100644
+--- a/src/repo/order-columns.ts
++++ b/src/repo/order-columns.ts
+@@ -8,4 +8,5 @@ export const ORDER_COLUMNS = {
+   totalCents: "total_cents",
+   discountCode: "discount_code",
+   createdAt: "created_at",
++  currency: "currency",
+ } as const satisfies Record<keyof Order, string>

@@ -506,3 +506,39 @@ describe("impact suite", () => {
     }
   }, 60_000)
 })
+
+describe("impact-hard suite", () => {
+  // Each reference patch is the proof that its task is solvable: it applies to the fixture, and with it every grader that
+  // decides the pass is green; the untouched fixture fails the hidden tests; the impact list is part of the patch.
+  test("every reference patch applies and passes the hidden tests, the visible tests and the type check", async () => {
+    const { cpSync, existsSync, mkdtempSync: makeTemp, readFileSync, rmSync: remove } = await import("node:fs")
+    const { IMPACT_HARD_CASES, IMPACT_HARD_TASKS } = await import("./tasks/impact-hard")
+    expect(IMPACT_HARD_TASKS.length).toBe(8)
+    const fixture = join(import.meta.dir, "fixtures", "impact", "shop-platform")
+    for (const [index, item] of IMPACT_HARD_CASES.entries()) {
+      const task = IMPACT_HARD_TASKS[index]!
+      const deciding = task.expect.filter((grader) => !grader.name.startsWith("info:"))
+      const hidden = deciding.find((grader) => grader.name === "outcome:hiddenTests")!
+      expect((await hidden.grade({ transcript: transcript(), workdir: fixture })).pass).toBe(false)
+
+      const patchFile = join(import.meta.dir, "fixtures", "impact-hard-reference", `${item.id}.patch`)
+      const patched = [...readFileSync(patchFile, "utf8").matchAll(/^\+\+\+ b\/(.+)$/gm)].map((match) => match[1])
+      for (const file of item.impact) {
+        expect(existsSync(join(fixture, file))).toBe(true)
+        expect(patched).toContain(file)
+      }
+      const dir = makeTemp(join(tmpdir(), `bench-impact-hard-${item.id}-`))
+      try {
+        cpSync(fixture, dir, { recursive: true })
+        const applied = Bun.spawnSync(["git", "apply", patchFile], { cwd: dir, stdout: "pipe", stderr: "pipe" })
+        expect(applied.stderr.toString()).toBe("")
+        for (const grader of deciding) {
+          const graded = await grader.grade({ transcript: transcript(), workdir: dir })
+          expect({ task: item.id, grader: grader.name, pass: graded.pass, detail: graded.pass ? undefined : graded.detail }).toEqual({ task: item.id, grader: grader.name, pass: true, detail: undefined })
+        }
+      } finally {
+        remove(dir, { recursive: true, force: true })
+      }
+    }
+  }, 300_000)
+})

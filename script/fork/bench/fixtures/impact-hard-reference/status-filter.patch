@@ -1,0 +1,47 @@
+diff --git a/README.md b/README.md
+index d25e5a2..fc90883 100644
+--- a/README.md
++++ b/README.md
+@@ -11,7 +11,7 @@ All JSON fields are snake_case.
+ 
+ | Method | Path | Returns |
+ |---|---|---|
+-| GET | `/api/v2/orders` | every order |
++| GET | `/api/v2/orders` | every order; `?status=paid` filters (an unknown status is a 400) |
+ | GET | `/api/v2/orders/:id` | one order, or 404 |
+ | GET | `/api/v2/customers` | every customer |
+ | GET | `/api/v2/customers/:id` | one customer, or 404 |
+diff --git a/src/api/handlers/orders.ts b/src/api/handlers/orders.ts
+index 0bb6160..4302ed6 100644
+--- a/src/api/handlers/orders.ts
++++ b/src/api/handlers/orders.ts
+@@ -1,9 +1,13 @@
++import { isOrderStatus } from "../../domain/status"
+ import { getOrderSummary, listOrderSummaries } from "../../services/order-service"
+ import { json, notFound } from "../json"
+ import { ORDER_WIRE, toWire } from "../wire"
+ 
+-export function listOrdersHandler(_url: URL): Response {
+-  return json(listOrderSummaries().map((summary) => toWire(summary, ORDER_WIRE)))
++export function listOrdersHandler(url: URL): Response {
++  const status = url.searchParams.get("status")
++  if (status !== null && !isOrderStatus(status)) return json({ error: `unknown status ${status}` }, 400)
++  const summaries = listOrderSummaries().filter((summary) => status === null || summary.status === status)
++  return json(summaries.map((summary) => toWire(summary, ORDER_WIRE)))
+ }
+ 
+ export function getOrderHandler(id: string): Response {
+diff --git a/src/client/sdk/orders.ts b/src/client/sdk/orders.ts
+index c6dbabb..2a727cb 100644
+--- a/src/client/sdk/orders.ts
++++ b/src/client/sdk/orders.ts
+@@ -32,6 +32,7 @@ export async function fetchOrder(fetchImpl: FetchLike, id: string): Promise<Orde
+   return fromWire(await getJson<Wire>(fetchImpl, apiPath(ENDPOINTS.orders, id)))
+ }
+ 
+-export async function fetchOrders(fetchImpl: FetchLike): Promise<OrderView[]> {
+-  return (await getJson<Wire[]>(fetchImpl, apiPath(ENDPOINTS.orders))).map(fromWire)
++export async function fetchOrders(fetchImpl: FetchLike, status?: string): Promise<OrderView[]> {
++  const query = status === undefined ? "" : `?status=${encodeURIComponent(status)}`
++  return (await getJson<Wire[]>(fetchImpl, `${apiPath(ENDPOINTS.orders)}${query}`)).map(fromWire)
+ }
