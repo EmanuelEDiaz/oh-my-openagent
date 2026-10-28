@@ -430,6 +430,20 @@ describe("editStats", () => {
     expect(graded.detail).toBe("4 edit(s), 2 file(s), 1 identical repeat(s), max 3 on src/a.ts")
     expect((await editStats().grade(context())).detail).toBe("0 edit(s), 0 file(s), 0 identical repeat(s), max 0 on -")
   })
+
+  // 0.27 baseline (28-10-2026): impact/extreme-currency #1 rewrote 7 files with `cat > file <<'EOF'` and read "0 edit(s)".
+  test("#given files written through the shell #then they are counted apart, since they skip the edit tools' guards", async () => {
+    const bash = (command: string) => ({ tool: "bash", status: "completed", input: { command } })
+    const tools = [
+      bash("cat > src/shared/money.ts <<'EOF'\nexport const x = 1\nEOF"),
+      bash("cat >> tests/orders.test.ts <<'EOF'\ntest()\nEOF"),
+      bash("sed -i 's/a/b/' src/a.ts"),
+      bash("echo done | tee notes.txt"),
+      bash("bun test 2>&1 | tail -8; ls > /dev/null; cat src/a.ts 2>/dev/null"),
+      bash("git diff --stat"),
+    ]
+    expect((await editStats().grade(context({ tools }))).detail).toBe("0 edit(s), 0 file(s), 0 identical repeat(s), max 0 on -; 4 shell write(s)")
+  })
 })
 
 describe("loopStats", () => {

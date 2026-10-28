@@ -522,6 +522,8 @@ export function hiddenTestsPass(originalDir: string, hiddenFile: string): Grader
 }
 
 const EDIT_TOOL = /^(?:write|edit|multiedit|apply_patch|patch|hashline_edit)$/
+// A shell command that writes a file: a redirect to a path (not `2>&1`, not /dev/null), `sed -i` or `tee <file>`.
+const SHELL_WRITE = />>?\s*(?!&|\/dev\/null)[\w.~/-]|\bsed\s+(?:-\w+\s+)*-i|\btee\s+(?!\/dev\/)[\w.~/-]/
 
 /**
  * Informational, never fails (fork roadmap 0.27 "mapa de impacto"): of the files a complete change must touch
@@ -572,7 +574,10 @@ export function editStats(): Grader {
         seen.add(key)
       }
       const [topFile, topCount] = [...perFile.entries()].sort((a, b) => b[1] - a[1])[0] ?? ["-", 0]
-      return result(name, true, `${edits.length} edit(s), ${perFile.size} file(s), ${repeats} identical repeat(s), max ${topCount} on ${topFile}`)
+      // Files written through the shell skip the edit tools and their guards; only the count is kept.
+      const shellWrites = transcript.tools.filter((call) => call.tool === "bash" && SHELL_WRITE.test(String(call.input["command"] ?? ""))).length
+      const shell = shellWrites > 0 ? `; ${shellWrites} shell write(s)` : ""
+      return result(name, true, `${edits.length} edit(s), ${perFile.size} file(s), ${repeats} identical repeat(s), max ${topCount} on ${topFile}${shell}`)
     },
   }
 }
