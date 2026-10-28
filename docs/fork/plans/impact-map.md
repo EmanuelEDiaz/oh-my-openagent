@@ -97,6 +97,41 @@ proyecto, preguntada al usuario, con una escalable (hexagonal) como respaldo.
   silencio (el resumen final no los nombra), y archivos cambiados fuera de la lista. No decide el aprobado.
 - Holdout: status-filter y token-from-config.
 
+### Línea base (22–28-10-2026)
+Agente `sisyphus` sin nada del 0.27, modelos gratis del sandbox (`deepseek-v4.1-flash-free` hace el trabajo;
+`big-pickle` aparece en dev solo por el título de sesión). Informe: `docs/fork/evals/impact.md`; datos en `.omo/evals/`.
+
+| Conjunto | Ejecuciones | pass@1 | pass^3 | Cobertura de impacto | Omitidos en silencio | Tokens medios | Tiempo medio |
+|---|---|---|---|---|---|---|---|
+| dev (6 tareas × 3) | 18 | 100 % | 100 % | 18/18 completa | 0 | 40 116 | 92 s |
+| holdout (2 tareas × 3) | 6 | 100 % | 100 % | 6/6 completa | 0 | 39 538 | 75 s |
+
+- **El banco está saturado:** el agente sin ayuda ya encuentra a todos los dependientes, incluso en las tareas
+  extremas (la constante `RESOURCE` de rename-route, los 7 archivos de currency, el `index.ts` que solo ve la
+  comprobación de tipos). Con esta línea base ninguna variante del 0.27 puede mostrar mejora, así que **no sirve
+  todavía para decidir si se construye**. Las apps son pequeñas (10–15 archivos) y el agente lee todo el código en
+  una o dos llamadas (`for f in …; do cat -n "$f"; done`): con todo en contexto, no hace falta mapa.
+- **Hallazgo aparte: escrituras por la shell.** En 7 de las 24 ejecuciones el agente escribió archivos con
+  `cat > archivo <<'EOF'`, `sed -i` o similares; en currency #1 cambió los 7 archivos así y ninguno con `edit`/`write`.
+  Esas escrituras se saltan los guardias del plugin que miran las herramientas de edición (sobrescritura de archivos
+  existentes, hashline, revisor de comentarios, diagnósticos tras editar). `info:edits` ahora las cuenta aparte
+  (`97e893815`).
+- **Hallazgo aparte: alcance de más.** En status-filter (simple, 2 archivos en el parche de referencia) las 3 ejecuciones
+  bajaron el filtro hasta el almacén y tocaron 3–4 archivos más (`schema.ts`, `store.ts`, `handlers.ts`). Pasa los
+  tests, pero es el contrario del problema del 0.27: cambiar de más, no de menos.
+- **Incidencia del banco durante la medición:** H42 (cuota gratis de Zen agotada leída como "sin salida").
+
+### Decisiones pendientes del usuario (28-10-2026)
+1. **Endurecer el banco antes de medir variantes** (recomendado). Propuesta: una app de 40–60 archivos para que no quepa
+   entera en contexto; dependientes que no se ven con `grep` del nombre (rutas armadas por partes, claves en
+   configuración o JSON, nombres de columna en SQL en texto, un script o un documento que usa el campo, una segunda
+   vista); y prompts del tamaño que usa el usuario ("añade la fecha de entrega"). Primero se comprueba que la línea base
+   baje de verdad (por ejemplo, por debajo del 70 % de cobertura) y solo entonces se miden las tres variantes.
+2. **O replantear el 0.27** si ni con el banco endurecido el agente omite dependientes: en ese caso el problema que viste
+   (21-10) vendría de otra cosa (prompts, modelo o contexto largo de sesiones reales) y habría que medir eso.
+3. **Escrituras por la shell:** decidir si el plugin debe hacer algo (avisar, pasar esas escrituras por los mismos
+   guardias o pedir al agente que use `edit`). Es independiente del 0.27.
+
 ## Criterios (Gherkin)
 - Dado un cambio en un campo del backend que usa una vista, cuando el agente termina sin tocar la vista, entonces el
   plugin no da la tarea por cerrada y le dice qué dependiente falta.
