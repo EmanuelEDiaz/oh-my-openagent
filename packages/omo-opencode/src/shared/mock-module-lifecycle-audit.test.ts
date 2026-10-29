@@ -242,4 +242,22 @@ describe("mock.module lifecycle hygiene", () => {
     // then
     expect(offenders.sort()).toEqual([])
   }, 20_000)
+
+  // Fork incident H44 (28-10-2026): six hook tests replaced the shared logger with mock.module. mock.restore() does not
+  // undo that, so when Bun loaded one of them first, runtime-fallback and directory-readme-injector configured a logger
+  // their hook no longer used and 44 tests failed (hooks + plugin in one process). The logger has a test sink instead.
+  test("#given test files #when audited #then none replaces the shared logger with mock.module", async () => {
+    // given
+    const files = [...await listTestFiles(SOURCE_ROOT), ...await listPackageTestFiles()]
+    const loggerMock = /mock\.module\(\s*["'`][^"'`]*(?:shared|logging)\/logger["'`]/
+
+    // when
+    const offenders: string[] = []
+    for (const filePath of files) {
+      if (loggerMock.test(await readFile(filePath, "utf8"))) offenders.push(relativeSourcePath(filePath))
+    }
+
+    // then
+    expect(offenders.sort()).toEqual([])
+  }, 20_000)
 })

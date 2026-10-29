@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test"
+import * as loggerModule from "../../shared/logger"
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
@@ -18,11 +19,13 @@ function writeDatabase(pluginsHome: string, database: unknown): void {
   writeFileSync(join(pluginsHome, "installed_plugins.json"), JSON.stringify(database), "utf-8")
 }
 
+afterEach(() => {
+  loggerModule._resetLoggerForTesting()
+})
+
 describe("discoverInstalledPlugins settings", () => {
   beforeEach(() => {
-    mock.module("../../shared/logger", () => ({
-      log: () => {},
-    }))
+    loggerModule._setLoggerForTesting({ sink: () => {} })
 
     process.env.CLAUDE_PLUGINS_HOME = createTemporaryDirectory("omo-settings-plugins-")
   })
