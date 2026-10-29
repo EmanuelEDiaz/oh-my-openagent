@@ -168,6 +168,28 @@ también justificar los archivos tocados fuera de la lista.
 **Orden:** A (calibración incluida) y después B. A no necesita aprobaciones nuevas del plugin; B y cualquier variante
 del 0.27 sí, cuando estén medidas.
 
+### Calibración de `impact-hard` (29-10-2026): no discrimina
+Una ejecución por tarea, dev + holdout, `opencode/deepseek-v4.1-flash-free` (el de `/omo-models`), plugin actual
+(`.omo/evals/2026-10-29-impact-hard-calibration-1793297739808.jsonl`):
+
+| Tarea | Resultado | Cobertura | Turnos | Tokens | Escrituras por shell |
+|---|---|---|---|---|---|
+| hard-delivery-date | aprobada | 9/9 | 25 | 87.390 | 1 |
+| extreme-api-amount | aprobada | 3/3 | 8 | 39.093 | 0 |
+| hard-remove-discount | aprobada | 11/11 | 14 | 67.574 | 1 |
+| extreme-rename-resource | aprobada | 2/2 | 10 | 189.434 | 2 |
+| extreme-currency | suspendida (`noNewTypeEscapes`: +1 en `src/domain/money.ts`) | 15/15 | 28 | 87.260 | 1 |
+| extreme-split-name | aprobada | 8/8 | 20 | 57.970 | 1 |
+| simple-status-filter (holdout) | aprobada | 2/2 | 14 | 71.775 | 0 |
+| hard-tracking-number (holdout) | aprobada | 10/10 | 14 | 62.052 | 1 |
+
+Criterio de aceptación (al menos la mitad de las tareas con cobertura < 70 % o tests ocultos en rojo): **no se cumple**,
+0 de 8. La cobertura es del 100 % en todas y el único suspenso no tiene que ver con dependientes. Lectura: con este modelo,
+los dependientes "escondidos" de una app de 51 archivos (SQL en cadenas, JSON de configuración, plantillas, columnas por
+nombre) se encuentran con `grep` y con los errores de tipos; el agente además toca de más (migraciones, vistas) sin
+romper nada. Dos bancos saturados apuntan a que, a esta escala, el mapa de impacto no tiene margen de mejora medible.
+Decisión pendiente del usuario (ver informe del 29-10).
+
 ## Criterios (Gherkin)
 - Dado un cambio en un campo del backend que usa una vista, cuando el agente termina sin tocar la vista, entonces el
   plugin no da la tarea por cerrada y le dice qué dependiente falta.
