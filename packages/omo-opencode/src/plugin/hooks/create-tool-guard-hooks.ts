@@ -83,7 +83,7 @@ export function createToolGuardHooks(args: {
     safeCreateHook(hookName, factory, { enabled: safeHookEnabled })
 
   const commentChecker = isHookEnabled("comment-checker")
-    ? safeHook("comment-checker", () => createCommentCheckerHooks(pluginConfig.comment_checker))
+    ? safeHook("comment-checker", () => createCommentCheckerHooks(pluginConfig.comment_checker, undefined, ctx.directory))
     : null
 
   const toolOutputTruncator = isHookEnabled("tool-output-truncator")
