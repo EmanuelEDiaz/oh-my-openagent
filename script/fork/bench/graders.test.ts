@@ -13,6 +13,7 @@ import {
   editStats,
   EXPLORE_CONTRACT,
   hiddenTestsPass,
+  impactCoverage,
   loopStats,
   noNewSkips,
   noNewSuppressions,
@@ -392,6 +393,34 @@ describe("test integrity", () => {
   }, 60_000) // runs tsc three times: seconds each, more on a busy machine (5 s default timed out, 14-10-2026)
 })
 
+// Fork 0.27: how many of the files a full change must touch did the agent touch, and which it skipped without saying so.
+describe("impactCoverage", () => {
+  test("never fails and reports covered, missed and silently missed dependents", async () => {
+    const original = mkdtempSync(join(tmpdir(), "bench-impact-orig-"))
+    const work = mkdtempSync(join(tmpdir(), "bench-impact-work-"))
+    try {
+      for (const dir of [original, work]) {
+        mkdirSync(join(dir, "src"))
+        for (const name of ["api.ts", "view.ts", "receipt.ts", "unrelated.ts"]) writeFileSync(join(dir, "src", name), `export const ${name.split(".")[0]} = 1\n`)
+      }
+      writeFileSync(join(work, "src/api.ts"), "export const api = 2\n")
+      writeFileSync(join(work, "src/unrelated.ts"), "export const unrelated = 2\n")
+      // The plugin's own state in the workdir is not the agent's change (smoke run 22-10-2026).
+      mkdirSync(join(work, ".omo/cache"), { recursive: true })
+      writeFileSync(join(work, ".omo/cache/knowledge.db"), "x")
+      const grader = impactCoverage(original, ["src/api.ts", "src/view.ts", "src/receipt.ts"])
+      const graded = await grader.grade({ transcript: transcript({ answer: "Changed the API. receipt.ts needs no change." }), workdir: work })
+      expect(graded.pass).toBe(true)
+      expect(graded.detail).toBe("covered 1/3; missed: src/receipt.ts, src/view.ts; silent: src/view.ts; outside: src/unrelated.ts")
+      const all = await grader.grade({ transcript: transcript(), workdir: original })
+      expect(all.detail).toBe("covered 0/3; missed: src/api.ts, src/receipt.ts, src/view.ts; silent: src/api.ts, src/receipt.ts, src/view.ts")
+    } finally {
+      rmSync(original, { recursive: true, force: true })
+      rmSync(work, { recursive: true, force: true })
+    }
+  })
+})
+
 describe("editStats", () => {
   test("never fails and counts identical repeated edits", async () => {
     const edit = (filePath: string, newString: string) => ({ tool: "edit", status: "completed", input: { filePath, oldString: "a", newString } })
@@ -400,6 +429,20 @@ describe("editStats", () => {
     expect(graded.pass).toBe(true)
     expect(graded.detail).toBe("4 edit(s), 2 file(s), 1 identical repeat(s), max 3 on src/a.ts")
     expect((await editStats().grade(context())).detail).toBe("0 edit(s), 0 file(s), 0 identical repeat(s), max 0 on -")
+  })
+
+  // 0.27 baseline (28-10-2026): impact/extreme-currency #1 rewrote 7 files with `cat > file <<'EOF'` and read "0 edit(s)".
+  test("#given files written through the shell #then they are counted apart, since they skip the edit tools' guards", async () => {
+    const bash = (command: string) => ({ tool: "bash", status: "completed", input: { command } })
+    const tools = [
+      bash("cat > src/shared/money.ts <<'EOF'\nexport const x = 1\nEOF"),
+      bash("cat >> tests/orders.test.ts <<'EOF'\ntest()\nEOF"),
+      bash("sed -i 's/a/b/' src/a.ts"),
+      bash("echo done | tee notes.txt"),
+      bash("bun test 2>&1 | tail -8; ls > /dev/null; cat src/a.ts 2>/dev/null"),
+      bash("git diff --stat"),
+    ]
+    expect((await editStats().grade(context({ tools }))).detail).toBe("0 edit(s), 0 file(s), 0 identical repeat(s), max 0 on -; 4 shell write(s)")
   })
 })
 
@@ -444,4 +487,58 @@ describe("loops-hard suite", () => {
       expect(task.expect.map((grader) => grader.name)).toContain("info:loops")
     }
   })
+})
+
+describe("impact suite", () => {
+  test("every task has its fixture, a hidden test that the untouched app fails, and impact files that exist", async () => {
+    const { existsSync } = await import("node:fs")
+    const { IMPACT_TASKS } = await import("./tasks/impact")
+    expect(IMPACT_TASKS.length).toBeGreaterThanOrEqual(8)
+    for (const task of IMPACT_TASKS) {
+      const dir = join(import.meta.dir, "fixtures", String(task.fixture))
+      const hidden = task.expect.find((grader) => grader.name === "outcome:hiddenTests")
+      expect(hidden).toBeDefined()
+      expect((await hidden?.grade({ transcript: transcript(), workdir: dir }))?.pass).toBe(false)
+      const impact = await task.expect.find((grader) => grader.name === "info:impact")?.grade({ transcript: transcript(), workdir: dir })
+      const files = (impact?.detail ?? "").replace(/^covered 0\/\d+; missed: /, "").split("; ")[0]?.split(", ") ?? []
+      expect(files.length).toBeGreaterThanOrEqual(2)
+      for (const file of files) expect(existsSync(join(dir, file))).toBe(true)
+    }
+  }, 60_000)
+})
+
+describe("impact-hard suite", () => {
+  // Each reference patch is the proof that its task is solvable: it applies to the fixture, and with it every grader that
+  // decides the pass is green; the untouched fixture fails the hidden tests; the impact list is part of the patch.
+  test("every reference patch applies and passes the hidden tests, the visible tests and the type check", async () => {
+    const { cpSync, existsSync, mkdtempSync: makeTemp, readFileSync, rmSync: remove } = await import("node:fs")
+    const { IMPACT_HARD_CASES, IMPACT_HARD_TASKS } = await import("./tasks/impact-hard")
+    expect(IMPACT_HARD_TASKS.length).toBe(8)
+    const fixture = join(import.meta.dir, "fixtures", "impact", "shop-platform")
+    for (const [index, item] of IMPACT_HARD_CASES.entries()) {
+      const task = IMPACT_HARD_TASKS[index]!
+      const deciding = task.expect.filter((grader) => !grader.name.startsWith("info:"))
+      const hidden = deciding.find((grader) => grader.name === "outcome:hiddenTests")!
+      expect((await hidden.grade({ transcript: transcript(), workdir: fixture })).pass).toBe(false)
+
+      const patchFile = join(import.meta.dir, "fixtures", "impact-hard-reference", `${item.id}.patch`)
+      const patched = [...readFileSync(patchFile, "utf8").matchAll(/^\+\+\+ b\/(.+)$/gm)].map((match) => match[1])
+      for (const file of item.impact) {
+        expect(existsSync(join(fixture, file))).toBe(true)
+        expect(patched).toContain(file)
+      }
+      const dir = makeTemp(join(tmpdir(), `bench-impact-hard-${item.id}-`))
+      try {
+        cpSync(fixture, dir, { recursive: true })
+        const applied = Bun.spawnSync(["git", "apply", patchFile], { cwd: dir, stdout: "pipe", stderr: "pipe" })
+        expect(applied.stderr.toString()).toBe("")
+        for (const grader of deciding) {
+          const graded = await grader.grade({ transcript: transcript(), workdir: dir })
+          expect({ task: item.id, grader: grader.name, pass: graded.pass, detail: graded.pass ? undefined : graded.detail }).toEqual({ task: item.id, grader: grader.name, pass: true, detail: undefined })
+        }
+      } finally {
+        remove(dir, { recursive: true, force: true })
+      }
+    }
+  }, 300_000)
 })

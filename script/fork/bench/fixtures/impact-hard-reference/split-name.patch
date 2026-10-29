@@ -1,0 +1,238 @@
+diff --git a/README.md b/README.md
+index d25e5a2..46aa336 100644
+--- a/README.md
++++ b/README.md
+@@ -17,5 +17,7 @@ All JSON fields are snake_case.
+ | GET | `/api/v2/customers/:id` | one customer, or 404 |
+ | GET | `/api/v2/products` | every product |
+ 
+-An order: `id`, `customer_id`, `customer_name`, `status`, `total_cents`, `payable_cents`, `discount_code`, `created_at`,
++An order: `id`, `customer_id`, `customer_name`, `customer_first_name`, `customer_last_name`, `status`, `total_cents`, `payable_cents`, `discount_code`, `created_at`,
+ `items` (`title`, `quantity`).
++
++A customer: `id`, `first_name`, `last_name`, `email`.
+diff --git a/src/api/wire.ts b/src/api/wire.ts
+index 6b0faa7..2146b92 100644
+--- a/src/api/wire.ts
++++ b/src/api/wire.ts
+@@ -6,6 +6,8 @@ export const ORDER_WIRE: ReadonlyArray<readonly [keyof OrderSummary, string]> =
+   ["id", "id"],
+   ["customerId", "customer_id"],
+   ["customerName", "customer_name"],
++  ["customerFirstName", "customer_first_name"],
++  ["customerLastName", "customer_last_name"],
+   ["status", "status"],
+   ["totalCents", "total_cents"],
+   ["payableCents", "payable_cents"],
+@@ -16,7 +18,8 @@ export const ORDER_WIRE: ReadonlyArray<readonly [keyof OrderSummary, string]> =
+ 
+ export const CUSTOMER_WIRE: ReadonlyArray<readonly [keyof Customer, string]> = [
+   ["id", "id"],
+-  ["name", "name"],
++  ["firstName", "first_name"],
++  ["lastName", "last_name"],
+   ["email", "email"],
+ ]
+ 
+diff --git a/src/client/sdk/customers.ts b/src/client/sdk/customers.ts
+index 87d6eff..37dc8a6 100644
+--- a/src/client/sdk/customers.ts
++++ b/src/client/sdk/customers.ts
+@@ -1,9 +1,9 @@
+ import { ENDPOINTS } from "./endpoints"
+ import { apiPath, getJson, type FetchLike } from "./http"
+ 
+-export type CustomerView = { id: string; name: string; email: string }
++export type CustomerView = { id: string; firstName: string; lastName: string; email: string }
+ 
+ export async function fetchCustomer(fetchImpl: FetchLike, id: string): Promise<CustomerView> {
+   const raw = await getJson<Record<string, unknown>>(fetchImpl, apiPath(ENDPOINTS.customers, id))
+-  return { id: String(raw["id"]), name: String(raw["name"]), email: String(raw["email"]) }
++  return { id: String(raw["id"]), firstName: String(raw["first_name"]), lastName: String(raw["last_name"]), email: String(raw["email"]) }
+ }
+diff --git a/src/client/sdk/orders.ts b/src/client/sdk/orders.ts
+index c6dbabb..7db00dd 100644
+--- a/src/client/sdk/orders.ts
++++ b/src/client/sdk/orders.ts
+@@ -5,6 +5,8 @@ import { apiPath, getJson, type FetchLike } from "./http"
+ export type OrderView = {
+   id: string
+   customer: string
++  customerFirstName: string
++  customerLastName: string
+   status: string
+   total: number
+   payable: number
+@@ -19,6 +21,8 @@ function fromWire(raw: Wire): OrderView {
+   return {
+     id: String(raw["id"]),
+     customer: String(raw["customer_name"]),
++    customerFirstName: String(raw["customer_first_name"]),
++    customerLastName: String(raw["customer_last_name"]),
+     status: String(raw["status"]),
+     total: Number(raw["total_cents"]),
+     payable: Number(raw["payable_cents"]),
+diff --git a/src/client/views/admin/columns.ts b/src/client/views/admin/columns.ts
+index 6340044..339f9fc 100644
+--- a/src/client/views/admin/columns.ts
++++ b/src/client/views/admin/columns.ts
+@@ -3,7 +3,7 @@ export type Column = { field: string; header: string; money?: boolean }
+ 
+ export const ORDER_TABLE_COLUMNS: readonly Column[] = [
+   { field: "id", header: "Order" },
+-  { field: "customer", header: "Customer" },
++  { field: "customerAdminName", header: "Customer" },
+   { field: "status", header: "Status" },
+   { field: "total", header: "Total", money: true },
+   { field: "discount", header: "Discount" },
+diff --git a/src/client/views/admin/order-detail.ts b/src/client/views/admin/order-detail.ts
+index 4478b1e..203452f 100644
+--- a/src/client/views/admin/order-detail.ts
++++ b/src/client/views/admin/order-detail.ts
+@@ -6,7 +6,7 @@ import type { OrderView } from "../../sdk/orders"
+ export function renderAdminOrder(order: OrderView): string {
+   return [
+     `Order ${order.id} (${order.status})`,
+-    `Customer: ${order.customer}`,
++    `Customer: ${order.customerLastName}, ${order.customerFirstName}`,
+     `Placed: ${dayOf(order.placedAt)}`,
+     `Total: ${priceLabel(order.total)}; payable: ${priceLabel(order.payable)}`,
+     `Items: ${order.items.map((item) => `${item.quantity} x ${item.title}`).join(", ")}`,
+diff --git a/src/client/views/admin/orders-table.ts b/src/client/views/admin/orders-table.ts
+index 62002bd..d0dba21 100644
+--- a/src/client/views/admin/orders-table.ts
++++ b/src/client/views/admin/orders-table.ts
+@@ -3,7 +3,8 @@ import type { OrderView } from "../../sdk/orders"
+ import { ORDER_TABLE_COLUMNS } from "./columns"
+ 
+ function cell(order: OrderView, field: string, money: boolean): string {
+-  const value = (order as Record<string, unknown>)[field]
++  const row: Record<string, unknown> = { ...order, customerAdminName: `${order.customerLastName}, ${order.customerFirstName}` }
++  const value = row[field]
+   if (value === null || value === undefined) return ""
+   return money ? priceLabel(Number(value)) : String(value)
+ }
+diff --git a/src/db/migrations/002-split-name.ts b/src/db/migrations/002-split-name.ts
+new file mode 100644
+index 0000000..ea27bd9
+--- /dev/null
++++ b/src/db/migrations/002-split-name.ts
+@@ -0,0 +1,4 @@
++export const up = `
++ALTER TABLE customers RENAME COLUMN name TO first_name;
++ALTER TABLE customers ADD COLUMN last_name TEXT NOT NULL;
++`
+diff --git a/src/db/migrations/index.ts b/src/db/migrations/index.ts
+index 7578a7f..1b9812d 100644
+--- a/src/db/migrations/index.ts
++++ b/src/db/migrations/index.ts
+@@ -1,4 +1,5 @@
+ import { up as init } from "./001-init"
++import { up as splitName } from "./002-split-name"
+ 
+ /** Every migration, oldest first. */
+-export const MIGRATIONS: readonly string[] = [init]
++export const MIGRATIONS: readonly string[] = [init, splitName]
+diff --git a/src/db/seed.ts b/src/db/seed.ts
+index 000d4a2..e0cea3f 100644
+--- a/src/db/seed.ts
++++ b/src/db/seed.ts
+@@ -1,9 +1,9 @@
+ import type { CustomerRecord, OrderItemRecord, OrderRecord, ProductRecord } from "./tables"
+ 
+ export const customers: CustomerRecord[] = [
+-  { id: "c1", name: "Ada Lovelace", email: "ada@example.com" },
+-  { id: "c2", name: "Linus Torvalds", email: "linus@example.com" },
+-  { id: "c3", name: "Grace Hopper", email: "grace@example.com" },
++  { id: "c1", first_name: "Ada", last_name: "Lovelace", email: "ada@example.com" },
++  { id: "c2", first_name: "Linus", last_name: "Torvalds", email: "linus@example.com" },
++  { id: "c3", first_name: "Grace", last_name: "Hopper", email: "grace@example.com" },
+ ]
+ 
+ export const products: ProductRecord[] = [
+diff --git a/src/db/tables.ts b/src/db/tables.ts
+index 1cdc143..670e23b 100644
+--- a/src/db/tables.ts
++++ b/src/db/tables.ts
+@@ -1,5 +1,5 @@
+ /** Rows as stored: snake_case, one type per table. */
+-export type CustomerRecord = { id: string; name: string; email: string }
++export type CustomerRecord = { id: string; first_name: string; last_name: string; email: string }
+ 
+ export type ProductRecord = { id: string; title: string; price_cents: number }
+ 
+diff --git a/src/domain/customer.ts b/src/domain/customer.ts
+index d2fab12..fe8bba6 100644
+--- a/src/domain/customer.ts
++++ b/src/domain/customer.ts
+@@ -1 +1 @@
+-export type Customer = { id: string; name: string; email: string }
++export type Customer = { id: string; firstName: string; lastName: string; email: string }
+diff --git a/src/notifications/order-mailer.ts b/src/notifications/order-mailer.ts
+index 8cb38ce..a72eabb 100644
+--- a/src/notifications/order-mailer.ts
++++ b/src/notifications/order-mailer.ts
+@@ -7,7 +7,7 @@ export type Email = { to: string; subject: string; body: string }
+ 
+ export function confirmationEmail(order: OrderSummary): Email {
+   const body = renderTemplate(TEMPLATES.orderConfirmation, {
+-    customer_name: order.customerName,
++    first_name: order.customerFirstName,
+     order_id: order.id,
+     payable: formatMoney(order.payableCents),
+     discount_line: order.discountCode === null ? "" : `Discount ${order.discountCode} applied.`,
+@@ -16,6 +16,6 @@ export function confirmationEmail(order: OrderSummary): Email {
+ }
+ 
+ export function shippedEmail(order: OrderSummary): Email {
+-  const body = renderTemplate(TEMPLATES.orderShipped, { customer_name: order.customerName, order_id: order.id })
++  const body = renderTemplate(TEMPLATES.orderShipped, { first_name: order.customerFirstName, order_id: order.id })
+   return { to: order.customerEmail, subject: `Order ${order.id} shipped`, body }
+ }
+diff --git a/src/notifications/templates.ts b/src/notifications/templates.ts
+index cea6e40..48932bc 100644
+--- a/src/notifications/templates.ts
++++ b/src/notifications/templates.ts
+@@ -1,5 +1,5 @@
+ /** Email bodies; `{{name}}` placeholders are filled by `renderTemplate`. */
+ export const TEMPLATES = {
+-  orderConfirmation: "Hi {{customer_name}},\nthanks for your order {{order_id}}.\nYou pay: {{payable}}\n{{discount_line}}",
+-  orderShipped: "Hi {{customer_name}},\nyour order {{order_id}} is on its way.",
++  orderConfirmation: "Hi {{first_name}},\nthanks for your order {{order_id}}.\nYou pay: {{payable}}\n{{discount_line}}",
++  orderShipped: "Hi {{first_name}},\nyour order {{order_id}} is on its way.",
+ } as const
+diff --git a/src/repo/customers-repo.ts b/src/repo/customers-repo.ts
+index 2b5b88f..6d2cf0f 100644
+--- a/src/repo/customers-repo.ts
++++ b/src/repo/customers-repo.ts
+@@ -3,7 +3,7 @@ import type { CustomerRecord } from "../db/tables"
+ import type { Customer } from "../domain/customer"
+ 
+ function toCustomer(record: CustomerRecord): Customer {
+-  return { id: record.id, name: record.name, email: record.email }
++  return { id: record.id, firstName: record.first_name, lastName: record.last_name, email: record.email }
+ }
+ 
+ export function findCustomer(id: string): Customer | undefined {
+diff --git a/src/services/order-service.ts b/src/services/order-service.ts
+index ba8e9db..bc0648a 100644
+--- a/src/services/order-service.ts
++++ b/src/services/order-service.ts
+@@ -5,13 +5,15 @@ import { findOrder, listOrders } from "../repo/orders-repo"
+ import { payableCents } from "./pricing"
+ 
+ /** An order with what every reader of it needs: who placed it, what they pay and what they bought. */
+-export type OrderSummary = Order & { customerName: string; customerEmail: string; payableCents: number; items: OrderLine[] }
++export type OrderSummary = Order & { customerName: string; customerFirstName: string; customerLastName: string; customerEmail: string; payableCents: number; items: OrderLine[] }
+ 
+ function summarize(order: Order): OrderSummary {
+   const customer = findCustomer(order.customerId)
+   return {
+     ...order,
+-    customerName: customer?.name ?? "(unknown customer)",
++    customerName: customer === undefined ? "(unknown customer)" : `${customer.firstName} ${customer.lastName}`,
++    customerFirstName: customer?.firstName ?? "",
++    customerLastName: customer?.lastName ?? "",
+     customerEmail: customer?.email ?? "",
+     payableCents: payableCents(order),
+     items: linesOf(order.id),

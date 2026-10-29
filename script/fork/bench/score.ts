@@ -27,6 +27,14 @@ const INFRA_PATTERNS = [
   /model produced no output/i,
 ]
 
+// The provider's quota is spent (Zen's free models, 27-10-2026): nothing will answer until it resets, so the run stops
+// and is resumed later. A passing 429 or rate limit is not this.
+const QUOTA_PATTERN = /usage limit reached|usage exceeded|FreeUsageLimit|free_tier_limit|quota exceeded|insufficient_quota/i
+
+export function isQuotaError(error: string): boolean {
+  return QUOTA_PATTERN.test(error)
+}
+
 // The setup is wrong (e.g. a model OpenCode retired is still configured): retrying cannot help, the run stops.
 const CONFIG_PATTERNS = [/model not found/i, /agent not found/i, /ProviderModelNotFound|ModelNotFound/i]
 

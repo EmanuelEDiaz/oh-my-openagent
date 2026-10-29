@@ -76,6 +76,120 @@ proyecto, preguntada al usuario, con una escalable (hexagonal) como respaldo.
   comprobación de tipos en verde; pruebas en verde; pass@1 y pass^3; falsas obligaciones; tokens, tiempo y RAM máxima.
 - Se adopta por defecto solo si la variante con control mejora sin disparar las falsas obligaciones ni la RAM.
 
+### Banco construido (22-10-2026, rama `feat/impact-map`)
+- **Suite `impact`** (`script/fork/bench/tasks/impact/`), 8 tareas, todas con solución comprobada con un parche de
+  referencia (tests visibles, ocultos y tipos en verde) y que la app sin tocar falla:
+  | Tarea | App | Nivel | Archivos del parche de referencia |
+  |---|---|---|---|
+  | status-filter | orders-app | simple | 2 (ruta y cliente) |
+  | validate-email | ts-service | simple | 3 (firma con 2 llamadores) |
+  | delivery-date | orders-app | difícil | 5 (fila, datos, handler, tipo del cliente, vista) |
+  | rename-total | orders-app | difícil | 4 (incluye el recibo del servidor, que nadie nombra) |
+  | remove-discount | orders-app | difícil | 5 (prompt de 5 palabras) |
+  | token-from-config | ts-service | difícil | 3 (solo la comprobación de tipos encuentra `index.ts`) |
+  | currency | orders-app | extrema | 7 (firma de `formatMoney` con llamadores en los dos lados) |
+  | rename-route | orders-app | extrema | 2 (el cliente arma la URL con una constante: buscar "/api/orders" no la encuentra) |
+- **Cambio frente al diseño:** la app de pila completa no usa React, Express ni Prisma, sino las mismas capas en
+  TypeScript sin dependencias (fila → almacén → handler → ruta → cliente → vista). Así no hay `npm install` por tarea
+  (RAM y red) y el cliente no comparte tipos con el servidor, que es el caso difícil: la comprobación de tipos no
+  encuentra a los dependientes del otro lado.
+- **Métrica nueva `info:impact`** (`graders.ts`): archivos del parche de referencia tocados, omitidos y omitidos en
+  silencio (el resumen final no los nombra), y archivos cambiados fuera de la lista. No decide el aprobado.
+- Holdout: status-filter y token-from-config.
+
+### Línea base (22–28-10-2026)
+Agente `sisyphus` sin nada del 0.27, modelos gratis del sandbox (`deepseek-v4.1-flash-free` hace el trabajo;
+`big-pickle` aparece en dev solo por el título de sesión). Informe: `docs/fork/evals/impact.md`; datos en `.omo/evals/`.
+
+| Conjunto | Ejecuciones | pass@1 | pass^3 | Cobertura de impacto | Omitidos en silencio | Tokens medios | Tiempo medio |
+|---|---|---|---|---|---|---|---|
+| dev (6 tareas × 3) | 18 | 100 % | 100 % | 18/18 completa | 0 | 40 116 | 92 s |
+| holdout (2 tareas × 3) | 6 | 100 % | 100 % | 6/6 completa | 0 | 39 538 | 75 s |
+
+- **El banco está saturado:** el agente sin ayuda ya encuentra a todos los dependientes, incluso en las tareas
+  extremas (la constante `RESOURCE` de rename-route, los 7 archivos de currency, el `index.ts` que solo ve la
+  comprobación de tipos). Con esta línea base ninguna variante del 0.27 puede mostrar mejora, así que **no sirve
+  todavía para decidir si se construye**. Las apps son pequeñas (10–15 archivos) y el agente lee todo el código en
+  una o dos llamadas (`for f in …; do cat -n "$f"; done`): con todo en contexto, no hace falta mapa.
+- **Hallazgo aparte: escrituras por la shell.** En 7 de las 24 ejecuciones el agente escribió archivos con
+  `cat > archivo <<'EOF'`, `sed -i` o similares; en currency #1 cambió los 7 archivos así y ninguno con `edit`/`write`.
+  Esas escrituras se saltan los guardias del plugin que miran las herramientas de edición (sobrescritura de archivos
+  existentes, hashline, revisor de comentarios, diagnósticos tras editar). `info:edits` ahora las cuenta aparte
+  (`97e893815`).
+- **Hallazgo aparte: alcance de más.** En status-filter (simple, 2 archivos en el parche de referencia) las 3 ejecuciones
+  bajaron el filtro hasta el almacén y tocaron 3–4 archivos más (`schema.ts`, `store.ts`, `handlers.ts`). Pasa los
+  tests, pero es el contrario del problema del 0.27: cambiar de más, no de menos.
+- **Incidencia del banco durante la medición:** H42 (cuota gratis de Zen agotada leída como "sin salida").
+
+### Decisiones pendientes del usuario (28-10-2026)
+1. **Endurecer el banco antes de medir variantes** (recomendado). Propuesta: una app de 40–60 archivos para que no quepa
+   entera en contexto; dependientes que no se ven con `grep` del nombre (rutas armadas por partes, claves en
+   configuración o JSON, nombres de columna en SQL en texto, un script o un documento que usa el campo, una segunda
+   vista); y prompts del tamaño que usa el usuario ("añade la fecha de entrega"). Primero se comprueba que la línea base
+   baje de verdad (por ejemplo, por debajo del 70 % de cobertura) y solo entonces se miden las tres variantes.
+2. **O replantear el 0.27** si ni con el banco endurecido el agente omite dependientes: en ese caso el problema que viste
+   (21-10) vendría de otra cosa (prompts, modelo o contexto largo de sesiones reales) y habría que medir eso.
+3. **Escrituras por la shell:** decidir si el plugin debe hacer algo (avisar, pasar esas escrituras por los mismos
+   guardias o pedir al agente que use `edit`). Es independiente del 0.27.
+
+### Propuesta para las decisiones pendientes (28-10-2026, aprobada por el usuario: "si adelante")
+**A. Banco `impact-hard` (solo `script/fork/bench`, no toca el plugin).**
+1. App nueva `shop-platform`, 45–60 archivos sin dependencias, para que no quepa entera en una lectura: migraciones SQL
+   en texto, repositorios que mapean `delivery_date` ↔ `deliveryDate`, servicios, rutas armadas por partes
+   (`${API}/${RESOURCE}/${id}`), SDK del cliente, dos vistas (cliente y administración), exportación CSV, plantilla de
+   correo con `{{campo}}`, serializador de webhooks, tarea programada, claves en `config.json` y tabla de la API en el
+   README.
+2. 8–10 tareas con prompts cortos como los del usuario ("añade la fecha de entrega", "quita el descuento"), donde al
+   menos un dependiente no sale buscando el nombre del símbolo (cadena SQL, clave de configuración, marcador de
+   plantilla, columna CSV, ruta partida). Parche de referencia, tests visibles y ocultos, como en `impact`.
+3. **Calibración antes de dar el banco por bueno:** una ejecución de línea base por tarea; se acepta si en al menos la
+   mitad de las tareas la cobertura baja del 70 % o fallan los tests ocultos. Si no, se endurece más. Se informa la parte
+   difícil por separado.
+4. La suite `impact` actual se queda como regresión ("lo fácil no debe empeorar").
+5. Con el banco calibrado: línea base ×3 y propuesta de la variante más barata del 0.27 (solo la lista de impacto
+   informativa) para que la apruebes antes de construir nada del plugin.
+
+**B. Escrituras por la shell (paso nuevo del plugin, rama propia).** Homólogos: SWE-agent (su interfaz de edición
+pasa un linter tras cada cambio y rechaza los que rompen la sintaxis; mejoró la tasa de resolución), el prompt de
+Claude Code (pide no usar `cat <<EOF` ni `sed` para editar) y nuestro propio `bash-file-read-guard`.
+1. Hook `bash-file-write-guard` en `tool.execute.before`: si un comando de bash reescribe un archivo de código que ya
+   existe (`cat >`, `>`/`>>` a una ruta, `sed -i`, `tee`), añade un aviso pidiendo `edit`/`write`. No bloquea: los
+   archivos nuevos, los generados y los de `/tmp` siguen libres.
+2. En `tool.execute.after`: los archivos de código que ese bash cambió pasan por lo mismo que una edición normal
+   (diagnósticos de `edit-diagnostics` y revisor de comentarios), para que la escritura por shell no se salte los
+   controles aunque el agente ignore el aviso.
+3. Medida: escrituras por shell en `impact` + `loops` antes y después (hoy 7 de 24 ejecuciones), con el aprobado sin
+   bajar. QA real en la TUI.
+
+**C. Cambios de más.** Sin cambio en el plugin por ahora: `info:impact` ya cuenta los archivos "fuera" y el banco nuevo
+lo informará por tarea. Si el banco endurecido confirma el patrón, se propone que el control de cierre del 0.27 pida
+también justificar los archivos tocados fuera de la lista.
+
+**Orden:** A (calibración incluida) y después B. A no necesita aprobaciones nuevas del plugin; B y cualquier variante
+del 0.27 sí, cuando estén medidas.
+
+### Calibración de `impact-hard` (29-10-2026): no discrimina
+Una ejecución por tarea, dev + holdout, `opencode/deepseek-v4.1-flash-free` (el de `/omo-models`), plugin actual
+(`.omo/evals/2026-10-29-impact-hard-calibration-1793297739808.jsonl`):
+
+| Tarea | Resultado | Cobertura | Turnos | Tokens | Escrituras por shell |
+|---|---|---|---|---|---|
+| hard-delivery-date | aprobada | 9/9 | 25 | 87.390 | 1 |
+| extreme-api-amount | aprobada | 3/3 | 8 | 39.093 | 0 |
+| hard-remove-discount | aprobada | 11/11 | 14 | 67.574 | 1 |
+| extreme-rename-resource | aprobada | 2/2 | 10 | 189.434 | 2 |
+| extreme-currency | suspendida (`noNewTypeEscapes`: +1 en `src/domain/money.ts`) | 15/15 | 28 | 87.260 | 1 |
+| extreme-split-name | aprobada | 8/8 | 20 | 57.970 | 1 |
+| simple-status-filter (holdout) | aprobada | 2/2 | 14 | 71.775 | 0 |
+| hard-tracking-number (holdout) | aprobada | 10/10 | 14 | 62.052 | 1 |
+
+Criterio de aceptación (al menos la mitad de las tareas con cobertura < 70 % o tests ocultos en rojo): **no se cumple**,
+0 de 8. La cobertura es del 100 % en todas y el único suspenso no tiene que ver con dependientes. Lectura: con este modelo,
+los dependientes "escondidos" de una app de 51 archivos (SQL en cadenas, JSON de configuración, plantillas, columnas por
+nombre) se encuentran con `grep` y con los errores de tipos; el agente además toca de más (migraciones, vistas) sin
+romper nada. Dos bancos saturados apuntan a que, a esta escala, el mapa de impacto no tiene margen de mejora medible.
+Decisión pendiente del usuario (ver informe del 29-10).
+
 ## Criterios (Gherkin)
 - Dado un cambio en un campo del backend que usa una vista, cuando el agente termina sin tocar la vista, entonces el
   plugin no da la tarea por cerrada y le dice qué dependiente falta.
