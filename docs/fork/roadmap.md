@@ -349,6 +349,7 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 - ~~Reglas de lenguaje/framework cargadas bajo demanda~~ — absorbido en 4.5 (antes 2.9), 29-09-2026.
 
 ## Registro de decisiones del roadmap
+- 29-10-2026 — **Cerrado (pendiente de fusión): escrituras por la shell** (rama `feat/bash-write-guard`, aprobado el 28-10: "si adelante"): los archivos existentes que un bash reescribe (`>`, `sed -i`, `perl -i`, `tee`) pasan por los diagnósticos con deshacer y por el revisor de comentarios, y el agente recibe un aviso para usar `edit`/`write` (`edit_diagnostics.shell_writes`). Arreglados por el camino H43 (el aviso de `cat` no llegaba al modelo) y H44 (44 pruebas rotas por sustituir el logger). **Validación:** tests en rojo y luego en verde, 4.385 pruebas en un proceso sin fallos, QA real en `opencode run` y en la TUI con control sin el cambio. Medida antes/después en `impact-hard` a medias por cuota (`plans/shell-writes.md`).
 - 21-10-2026 — 0.27 (usuario): mapa de impacto para que un cambio no deje atrás lo que depende de él. Tras la crítica y la
   investigación de homólogos (CodePlan, RepoGraph, Aider, Serena, Nx, dependency-cruiser…), el mapa se deriva del código
   en vez de escribirse a mano, lo que da la garantía es un control por código antes de cerrar, y la arquitectura se

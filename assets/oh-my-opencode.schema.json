@@ -9772,12 +9772,17 @@
         "use_plugin_lsp": {
           "default": true,
           "type": "boolean"
+        },
+        "shell_writes": {
+          "default": true,
+          "type": "boolean"
         }
       },
       "required": [
         "enabled",
         "revert_syntax_errors",
-        "use_plugin_lsp"
+        "use_plugin_lsp",
+        "shell_writes"
       ],
       "additionalProperties": false
     },

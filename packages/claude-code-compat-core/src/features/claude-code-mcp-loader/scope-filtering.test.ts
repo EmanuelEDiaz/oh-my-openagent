@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test"
+import * as loggerModule from "../../shared/logger"
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { join } from "path"
@@ -15,14 +16,16 @@ function loaderOptions(cwd = testDir) {
   return { cwd, homeDir: testHome, claudeConfigDir: join(testHome, ".claude") }
 }
 
+afterEach(() => {
+  loggerModule._resetLoggerForTesting()
+})
+
 describe("loadMcpConfigs", () => {
   beforeEach(() => {
     testDir = realpathSync(mkdtempSync(join(tmpdir(), "mcp-scope-filtering-test-")))
     testHome = join(testDir, "home")
     mkdirSync(testHome, { recursive: true })
-    mock.module("../../shared/logger", () => ({
-      log: () => {},
-    }))
+    loggerModule._setLoggerForTesting({ sink: () => {} })
   })
 
   afterEach(() => {

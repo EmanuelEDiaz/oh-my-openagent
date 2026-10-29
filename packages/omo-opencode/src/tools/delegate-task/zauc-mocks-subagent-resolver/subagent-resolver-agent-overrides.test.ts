@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import * as loggerModule from "../../../shared/logger"
 import type { ExecutorContext } from "../executor-types"
 import type { DelegateTaskArgs } from "../types"
 
@@ -47,6 +48,10 @@ function createExecutorContext(
   }
 }
 
+afterEach(() => {
+  loggerModule._resetLoggerForTesting()
+})
+
 describe("resolveSubagentExecution agent overrides", () => {
   let resolveSubagentExecution: SubagentResolverModule["resolveSubagentExecution"]
 
@@ -57,9 +62,7 @@ describe("resolveSubagentExecution agent overrides", () => {
     readProviderModelsCacheMock.mockReset()
     readConnectedProvidersCacheMock.mockReturnValue(null)
     readProviderModelsCacheMock.mockReturnValue(null)
-    mock.module("../../../shared/logger", () => ({
-      log: logMock,
-    }))
+    loggerModule._setLoggerForTesting({ sink: logMock })
     mock.module("../../../shared/connected-providers-cache", () => ({
       readConnectedProvidersCache: readConnectedProvidersCacheMock,
       readProviderModelsCache: readProviderModelsCacheMock,

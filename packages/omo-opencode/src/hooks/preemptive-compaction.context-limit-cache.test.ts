@@ -1,13 +1,14 @@
-import { describe, expect, it, mock, afterAll } from "bun:test"
+import { describe, expect, it, mock, afterAll, afterEach, beforeEach } from "bun:test"
+import * as loggerModule from "../shared/logger"
 
 import { applyProviderConfig } from "../plugin-handlers/provider-config-handler"
 import { createModelCacheState } from "../plugin-state"
 
 const logMock = mock(() => {})
 
-mock.module("../shared/logger", () => ({
-  log: logMock,
-}))
+beforeEach(() => {
+  loggerModule._setLoggerForTesting({ sink: logMock })
+})
 
 afterAll(() => { mock.restore() })
 
@@ -27,6 +28,10 @@ function createMockCtx() {
     directory: "/tmp/test",
   }
 }
+
+afterEach(() => {
+  loggerModule._resetLoggerForTesting()
+})
 
 describe("preemptive-compaction context-limit cache invalidation", () => {
   it("skips compaction after provider config removes a cached model limit", async () => {
