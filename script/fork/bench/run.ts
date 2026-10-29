@@ -14,6 +14,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 import { hostAnswers, waitForConnection } from "./connectivity"
+import { loadLocalSuites } from "./local-suites"
 import { renderContextTable, startContextProxy, summarizeContext, type ContextRecord, type ContextWindow } from "./context-proxy"
 import { defaultFixtureCache, resolveFixture } from "./fixtures"
 import { renderReport } from "./report"
@@ -85,8 +86,11 @@ async function fetchStatus(url: string): Promise<number> {
 
 async function main(): Promise<void> {
   const agent = option("agent")
-  const suite = agent === undefined ? undefined : SUITES[agent]
-  if (!agent || !suite) throw new Error(`--agent must be one of: ${Object.keys(SUITES).join(", ")}`)
+  // Private suites (docs/fork/plans/real-project-bench.md): results, arbiter packages and reports stay in their folder.
+  const local = await loadLocalSuites(join(REPO, ".omo/private"), Object.keys(SUITES))
+  const localSuite = agent === undefined ? undefined : local[agent]
+  const suite = agent === undefined ? undefined : SUITES[agent] ?? localSuite?.tasks
+  if (!agent || !suite) throw new Error(`--agent must be one of: ${[...Object.keys(SUITES), ...Object.keys(local)].join(", ")}`)
   const smoke = flag("smoke")
   const split = option("split", "dev") ?? "dev"
   const repeats = smoke ? 1 : Number(option("repeat", "3"))
@@ -106,7 +110,7 @@ async function main(): Promise<void> {
   }
 
   const date = new Date().toISOString().slice(0, 10)
-  const evalsDir = join(REPO, ".omo/evals")
+  const evalsDir = localSuite === undefined ? join(REPO, ".omo/evals") : join(localSuite.outDir, "evals")
   mkdirSync(evalsDir, { recursive: true })
   // --resume <file>: continue a broken run into the same file, skipping what it already scored.
   const resumeFile = option("resume")
@@ -144,7 +148,8 @@ async function main(): Promise<void> {
   const pending = pendingRuns(previousResults, tasks.map((task) => task.id), repeats, INFRA_RETRIES)
   if (resumeFile !== undefined) console.log(`resuming ${resumeFile}: ${previousResults.length} saved result(s), ${pending.length} run(s) to go`)
   try {
-    sandbox = createSandbox(join(tmpdir(), `omo-bench-${process.pid}-${Date.now()}`), plugin)
+    // OMO_BENCH_ROOT: a whole project per task (with node_modules and builds) does not fit a RAM-backed /tmp.
+    sandbox = createSandbox(join(process.env.OMO_BENCH_ROOT ?? tmpdir(), `omo-bench-${process.pid}-${Date.now()}`), plugin)
     overridePluginConfig(sandbox, {
       ...(option("model-all") ? { allModels: option("model-all") as string } : {}),
       ...(option("disable-hooks") ? { disabledHooks: (option("disable-hooks") as string).split(",").map((hook) => hook.trim()).filter(Boolean) } : {}),
@@ -177,6 +182,7 @@ async function main(): Promise<void> {
             repeat,
             attempt,
             ...(flag("offline") ? {} : { fetchStatus }),
+            ...(localSuite === undefined ? {} : { arbiterDir: rawFile.replace(/\.jsonl$/, "-arbiter") }),
           })
           windows.push({ taskId: task.id, repeat, start: startedAt, end: Date.now() })
           results.push(result)
@@ -218,8 +224,9 @@ async function main(): Promise<void> {
     writeFileSync(contextFile.replace(/\.jsonl$/, ".md"), `${table}\n`)
   }
   if (!smoke) {
-    const reportFile = join(REPO, "docs/fork/evals", `${agent}.md`)
-    mkdirSync(join(REPO, "docs/fork/evals"), { recursive: true })
+    const reportDir = localSuite === undefined ? join(REPO, "docs/fork/evals") : localSuite.outDir
+    const reportFile = join(reportDir, `${agent}.md`)
+    mkdirSync(reportDir, { recursive: true })
     const previous = existsSync(reportFile) ? readFileSync(reportFile, "utf8") : undefined
     writeFileSync(reportFile, renderReport(previous, summary, { agent, date, label, split }))
     console.log(`report: ${reportFile}`)

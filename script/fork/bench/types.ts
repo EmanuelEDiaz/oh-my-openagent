@@ -81,4 +81,6 @@ export type RunResult = {
   readonly error?: string
   /** Where the agent worked: lets `regrade.ts` map its absolute paths onto a fresh copy of the fixture. */
   readonly workdir?: string
+  /** Reviewer's verdict on a real-project run (arbiter.ts), separate from the automatic grades. */
+  readonly arbiter?: { readonly verdict: "pass" | "fail"; readonly reason: string; readonly at: string }
 }
