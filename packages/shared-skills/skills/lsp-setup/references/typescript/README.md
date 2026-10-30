@@ -2,17 +2,30 @@
 
 - **Builtin server:** `typescript` — `typescript-language-server --stdio`
 - **Extensions:** `.ts .tsx .js .jsx .mjs .cjs .mts .cts`
-- **Install hint:** `npm install -g typescript-language-server typescript`
+- **Install hint:** `npm install -g typescript-language-server@6 typescript@6`
 
 ## Install
 
-- **macOS:** `npm install -g typescript-language-server typescript`
-- **Linux:** `npm install -g typescript-language-server typescript`
-- **Windows:** `npm install -g typescript-language-server typescript` (PowerShell or cmd)
+- **macOS:** `npm install -g typescript-language-server@6 typescript@6`
+- **Linux:** `npm install -g typescript-language-server@6 typescript@6`
+- **Windows:** `npm install -g typescript-language-server@6 typescript@6` (PowerShell or cmd)
 
-`typescript-language-server` is only a thin wrapper — it needs the `typescript`
+`typescript-language-server` is only a thin wrapper: it needs the `typescript`
 package (`tsserver`) present too, either globally or in the project's
-`node_modules`. Always install both.
+`node_modules`. Always install both, and pin TypeScript to 6: TypeScript 7 (the
+native compiler, now the `latest` tag) ships no `lib/tsserver.js`, so the server
+cannot start with it. typescript-language-server 6 needs Node 22.22.2 or newer.
+
+To keep them across Node upgrades, install them where the Node manager reinstalls
+them on every new Node version instead of a one-off global install. With mise, a
+`postinstall` on the `node` tool in `~/.config/mise/config.toml`:
+
+```toml
+[tools]
+node = { version = "22", postinstall = "npm install -g typescript-language-server@6 typescript@6" }
+```
+
+Ask the user before changing their Node manager configuration.
 
 Confirm it resolves:
 

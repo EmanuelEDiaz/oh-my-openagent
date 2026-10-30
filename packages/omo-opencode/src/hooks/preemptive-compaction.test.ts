@@ -1,6 +1,7 @@
 /// <reference types="bun-types" />
 
 import { afterAll, describe, it, expect, mock, beforeEach, afterEach } from "bun:test"
+import * as loggerModule from "../shared/logger"
 
 const ANTHROPIC_CONTEXT_ENV_KEY = "ANTHROPIC_1M_CONTEXT"
 const VERTEX_CONTEXT_ENV_KEY = "VERTEX_ANTHROPIC_1M_CONTEXT"
@@ -24,9 +25,9 @@ function resetContextLimitEnv(): void {
 
 const logMock = mock(() => {})
 
-mock.module("../shared/logger", () => ({
-  log: logMock,
-}))
+beforeEach(() => {
+  loggerModule._setLoggerForTesting({ sink: logMock })
+})
 
 afterAll(() => {
   mock.restore()
@@ -67,6 +68,10 @@ function setupImmediateTimeouts(): () => void {
     globalThis.clearTimeout = originalClearTimeout
   }
 }
+
+afterEach(() => {
+  loggerModule._resetLoggerForTesting()
+})
 
 describe("preemptive-compaction", () => {
   let ctx: ReturnType<typeof createMockCtx>

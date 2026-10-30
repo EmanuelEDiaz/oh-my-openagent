@@ -6,6 +6,7 @@ import { existsSync, readFileSync, writeFileSync, rmSync } from "node:fs"
 import { isAbsolute, relative, resolve } from "node:path"
 
 import { changesFromArgs, lineDiff, type FileChange } from "./change"
+import { snapshotTests, undoTestChanges, type TestSnapshot } from "./shell-writes"
 import { blockingFindings, stringLiterals, warningFindings, type Finding } from "./checks"
 import { createTestRunTracker, isTestRun } from "./test-runs"
 import { isTestFile, siblingTestCandidates } from "./test-files"
@@ -47,6 +48,7 @@ export function createTestIntegrityGuard(deps: GuardDeps) {
   const tracker = createTestRunTracker(deps.directory)
   const unlocks = new Map<string, { all: boolean; files: Set<string> }>()
   const pending = new Map<string, Pending>()
+  const shellSnapshots = new Map<string, TestSnapshot>()
   const rel = (path: string) => relative(deps.directory, path) || path
 
   function unlocked(root: string, path: string): boolean {
@@ -80,6 +82,13 @@ export function createTestIntegrityGuard(deps: GuardDeps) {
     ].join("\n")
   }
 
+  function shellMessage(paths: string[]): string {
+    return [
+      `[test-integrity] BLOCKED: that command changed existing test(s) ${paths.join(", ")}. The change was UNDONE; the files are back as they were.`,
+      `Tests are the specification: change the code, not the test. If you believe a test is wrong, do NOT work around the block from the shell: stop and ask the user with the question tool, offering the option "Allow editing ${paths[0]}" and explaining why.`,
+    ].join("\n")
+  }
+
   function protectedMessage(path: string): string {
     return [
       `[test-integrity] BLOCKED: ${rel(path)} is an existing test. Tests are the specification: change the code, not the test.`,
@@ -92,6 +101,12 @@ export function createTestIntegrityGuard(deps: GuardDeps) {
 
     /** Throws to refuse the tool call; the message is what the model sees. */
     async before(tool: string, sessionID: string, callID: string, args: Record<string, unknown>): Promise<void> {
+      if (tool.toLowerCase() === "bash") {
+        if ((await deps.agentOf(sessionID)) === TEST_WRITER_AGENT) return
+        shellSnapshots.set(callID, snapshotTests(deps.directory))
+        if (shellSnapshots.size > 50) shellSnapshots.delete(shellSnapshots.keys().next().value as string)
+        return
+      }
       if (!WRITE_TOOLS.has(tool.toLowerCase())) return
       const changes = changesFromArgs(tool, args, deps.directory)
       if (changes.length === 0) return
@@ -138,6 +153,13 @@ export function createTestIntegrityGuard(deps: GuardDeps) {
       const notes: string[] = []
 
       if (tool === "bash") {
+        const snapshot = shellSnapshots.get(input.callID)
+        shellSnapshots.delete(input.callID)
+        if (snapshot) {
+          const root = await deps.rootOf(input.sessionID)
+          const undone = undoTestChanges(snapshot, (path) => unlocked(root, path))
+          if (undone.length > 0) return shellMessage(undone)
+        }
         const command = typeof input.args["command"] === "string" ? input.args["command"] : ""
         if (!isTestRun(command)) return ""
         const exit = output.metadata?.["exit"]

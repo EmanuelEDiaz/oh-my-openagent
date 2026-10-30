@@ -33,6 +33,7 @@ import { getNoModelProvidersWarning, hasAnyConfiguredProvider } from "./provider
 import { ensureTuiPluginEntry } from "./config-manager/add-tui-plugin-to-tui-config"
 import { refreshOpenCodePluginSandboxes } from "./config-manager/refresh-opencode-plugin-sandbox"
 import * as astGrepInstall from "./install-ast-grep-sg"
+import * as externalToolsInstall from "./install-external-tools"
 
 export async function runCliInstaller(args: InstallArgs, version: string): Promise<number> {
   const validation = validateNonTuiArgs(args)
@@ -148,6 +149,7 @@ export async function runCliInstaller(args: InstallArgs, version: string): Promi
     }
     printSuccess(`Config written ${SYMBOLS.arrow} ${color.dim(omoResult.configPath)}`)
     await astGrepInstall.installAstGrepForOpenCode({ log: printWarning })
+    await externalToolsInstall.reportExternalToolsAtInstall({ log: printWarning })
   }
 
   printBox(formatConfigSummary(config), isUpdate ? "Updated Configuration" : "Installation Complete")

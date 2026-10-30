@@ -26,6 +26,10 @@ function getAssistantText(parts: SessionMessagePart[] | undefined): string {
     .join("\n")
 }
 
+function hasFinishedToolCall(parts: SessionMessagePart[] | undefined): boolean {
+  return (parts ?? []).some((part) => part.type === "tool" && (part.state?.status === "completed" || part.state?.status === "error"))
+}
+
 export function hasVisibleAssistantResponse(extractAutoRetrySignalFn: typeof extractAutoRetrySignal) {
   return async (
     ctx: HookDeps["ctx"],
@@ -60,6 +64,12 @@ export function hasVisibleAssistantResponse(extractAutoRetrySignalFn: typeof ext
         const parts = message.parts && message.parts.length > 0
           ? message.parts
           : infoMessageParts
+        // A finished tool call is the model answering too: a fallback model working through tools writes no text for a
+        // while, and must not be timed out as unresponsive (fork incidents H30).
+        if (hasFinishedToolCall(parts)) {
+          return true
+        }
+
         const assistantText = getAssistantText(parts)
         if (!assistantText) {
           continue

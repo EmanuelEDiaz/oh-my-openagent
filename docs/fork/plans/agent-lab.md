@@ -19,7 +19,7 @@ señales de OpenCode, casi nulo cuando está plegado.**
 - **Espacio:** la barra lateral tiene ~38 columnas útiles y solo aparece con más de 120 columnas de terminal `[V]`; caben
   2 personajes de 16×16 por fila (16 columnas × 8 filas cada uno).
 - **La app de escritorio no admite paneles de plugins** `[V]`: solo terminal.
-- **Proyectos de referencia:** `campy` (mascota en la barra lateral de OpenCode, solo eventos, MIT), `pixel-agents`
+- **Proyectos de referencia:** `agents-pixel-dungeon` (Rust + egui, MIT, añadido 19-10-2026 por el usuario: una sala por agente que cambia con su estado, chat con aceptar/rechazar permisos, diff y terminal por agente, subagentes como personajes pequeños, un "Laboratory" de hipótesis y experimentos; lee los agentes por Herdr, sin OpenCode; solo referencia: el usuario elige qué ideas conservar y prefiere un laboratorio a una mazmorra), `campy` (mascota en la barra lateral de OpenCode, solo eventos, MIT), `pixel-agents`
   (oficina de agentes en VS Code, MIT), `term-pet` (medios bloques, MIT); `clawd-on-desk` es AGPL: solo ideas.
 
 ## Diseño
@@ -50,6 +50,23 @@ señales de OpenCode, casi nulo cuando está plegado.**
 - Tocar uno abre su sesión (como `ctrl+x ↓` en OpenCode) para ver qué hace.
 - Mismas reglas de coste: solo eventos, nada si está plegado.
 - **Revisión en Pencil antes de construir 7.1 y 7.2: pedírsela al usuario cuando llegue el momento.**
+
+## Herramientas activas y su consumo (7.3, usuario 20-10-2026)
+Petición: "aparte de los agentes, me gustaría ver qué herramientas tiene activas, qué visores y demás cosas, y cuánto
+gastan en el equipo".
+- **Qué se muestra:** todo lo que el plugin tiene en marcha, no solo los agentes: servidores de lenguaje (`lsp-daemon`,
+  su proxy por carpeta y cada servidor como `typescript-language-server` o `deno lsp`), servidores MCP (los del plugin, los
+  de `.mcp.json` y los de las skills), procesos gestionados (`process_start`), tareas en segundo plano, instancias de
+  OpenCode abiertas por carpeta y visores (navegador de `ui-tester`, capturas…).
+- **Cuánto gasta cada uno:** RAM y CPU por proceso y en total, más la RAM libre del equipo. Lo medido el 19-10-2026
+  muestra por qué importa: cada carpeta añade un proxy de ~60 MB y un servidor de lenguaje de 30–45 MB (H4).
+- **Acciones:** desde el detalle, cerrar lo que no se usa (por ejemplo, un servidor de lenguaje de una carpeta cerrada),
+  siempre preguntando antes y nunca procesos que no sean del plugin (0.21).
+- **Coste de mirar:** el sondeo de `/proc` (Linux) o del sistema (Windows) solo con el panel abierto y como mucho cada
+  pocos segundos; plegado, nada. El plugin ya conoce sus procesos (registro por carpeta de H13), así que no hay que
+  buscarlos por todo el sistema.
+- **Referencia:** `agents-pixel-dungeon` muestra el consumo de cuota por agente ("HP del gremio"); aquí se añade el de
+  recursos del equipo.
 
 ## Medición
 CPU y memoria con el panel plegado, abierto en reposo y abierto con 3–12 agentes trabajando; respuesta al clic.

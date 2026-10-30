@@ -1,10 +1,11 @@
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test"
+import { afterAll, beforeEach, describe, expect, mock, test, afterEach } from "bun:test"
+import * as loggerModule from "../../shared/logger"
 
 const logMock = mock((..._args: unknown[]) => {})
 
-mock.module("../../shared/logger", () => ({
-  log: logMock,
-}))
+beforeEach(() => {
+  loggerModule._setLoggerForTesting({ sink: logMock })
+})
 
 import type { OpencodeClient } from "./opencode-client"
 
@@ -26,6 +27,10 @@ function hasSessionID(value: unknown, sessionID: string): boolean {
 function logCallsForSession(sessionID: string): unknown[][] {
   return logMock.mock.calls.filter((call) => hasSessionID(call[1], sessionID))
 }
+
+afterEach(() => {
+  loggerModule._resetLoggerForTesting()
+})
 
 describe("abortWithTimeout", () => {
   beforeEach(() => {

@@ -4,6 +4,7 @@ import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 
 import { assertSafeSandboxRoot, createSandbox, destroySandbox, overrideAgentModels, overridePluginConfig, prepareWorkdir, sandboxProcesses } from "./sandbox"
+import { onStopSignal } from "./sandbox"
 
 const scratch = mkdtempSync(join(tmpdir(), "bench-sandbox-"))
 afterAll(() => rmSync(scratch, { recursive: true, force: true }))
@@ -41,7 +42,7 @@ describe("createSandbox / prepareWorkdir / destroySandbox", () => {
 
     destroySandbox(sandbox)
     expect(existsSync(join(scratch, "sb"))).toBe(false)
-  })
+  }, 60_000) // ~1 s alone; 13-25 s when the machine is busy (disk copies, git), past bun's 5 s default (14-10-2026)
 
   test("finds processes left running with the sandbox's HOME (e.g. the LSP daemon) so destroySandbox can stop them", () => {
     const proc = mkdtempSync(join(tmpdir(), "fake-proc-"))
@@ -85,6 +86,30 @@ describe("createSandbox / prepareWorkdir / destroySandbox", () => {
     expect(scope.agents.explore).toEqual({ model: "opencode/big-pickle" })
     expect(scope.categories.quick).toEqual({ model: "opencode/big-pickle" })
     expect(scope.disabled_hooks).toEqual(["x", "test-integrity-guard"])
+    rmSync(root, { recursive: true, force: true })
+  })
+})
+
+// Fork incidents H27 (20-10-2026): a QA run stopped by `systemctl stop` (the RAM guard, or a gap for another agent)
+// died before its `finally`, leaving its sandbox in /tmp with a copy of auth.json.
+describe("onStopSignal", () => {
+  test("#given a run stopped by SIGTERM #then its cleanup runs and the process exits 130", async () => {
+    // given
+    const root = mkdtempSync(join(tmpdir(), "omo-signal-"))
+    const marker = join(root, "sandbox")
+    mkdirSync(marker)
+    const script = `import { rmSync } from "node:fs"; import { onStopSignal } from ${JSON.stringify(join(import.meta.dir, "sandbox.ts"))}; onStopSignal(() => rmSync(${JSON.stringify(marker)}, { recursive: true, force: true })); console.log("ready"); setInterval(() => {}, 1000)`
+    const child = Bun.spawn(["bun", "-e", script], { stdout: "pipe" })
+    const reader = child.stdout.getReader()
+    await reader.read()
+
+    // when
+    child.kill("SIGTERM")
+    const code = await child.exited
+
+    // then
+    expect(existsSync(marker)).toBe(false)
+    expect(code).toBe(130)
     rmSync(root, { recursive: true, force: true })
   })
 })

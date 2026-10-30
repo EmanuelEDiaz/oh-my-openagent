@@ -23,6 +23,37 @@ function createContext(messagesResponse: unknown): RuntimeFallbackPluginInput {
 }
 
 describe("hasVisibleAssistantResponse", () => {
+  // Fork incidents H30 (21-10-2026): the fallback model worked through tools for 30 s without writing text yet; the
+  // fallback timeout took that as "no response", aborted it and, with no model left, left the task half done.
+  it("#given the fallback model's reply so far is finished tool calls #when visibility is checked #then it counts as a response", async () => {
+    // given
+    const checkVisibleResponse = hasVisibleAssistantResponse(() => undefined)
+    const ctx = createContext({
+      data: [
+        { info: { role: "user" }, parts: [{ type: "text", text: "fix the failing tests" }] },
+        { info: { role: "assistant" }, parts: [{ type: "tool", state: { status: "completed" } }] },
+        { info: { role: "assistant" }, parts: [{ type: "tool", state: { status: "error" } }, { type: "tool", state: { status: "running" } }] },
+      ],
+    })
+
+    // when
+    const result = await checkVisibleResponse(ctx, "session-tools-only", undefined)
+
+    // then
+    expect(result).toBe(true)
+  })
+
+  it("#given only a tool call still pending #when visibility is checked #then it is not a response yet", async () => {
+    const checkVisibleResponse = hasVisibleAssistantResponse(() => undefined)
+    const ctx = createContext({
+      data: [
+        { info: { role: "user" }, parts: [{ type: "text", text: "fix the failing tests" }] },
+        { info: { role: "assistant" }, parts: [{ type: "tool", state: { status: "pending" } }] },
+      ],
+    })
+    expect(await checkVisibleResponse(ctx, "session-pending-tool", undefined)).toBe(false)
+  })
+
   it("#given only an old assistant reply before the latest user turn #when visibility is checked #then the stale reply is ignored", async () => {
     // given
     const checkVisibleResponse = hasVisibleAssistantResponse(() => undefined)
@@ -231,5 +262,41 @@ describe('Internal abort suppression guard (Layer-2)', () => {
     expect(deps.sessionStatusRetryKeys.get(sessionID)).toBe('retry-key-1')
     expect(deps.sessionAwaitingFallbackResult.has(sessionID)).toBe(true)
     expect(operations).toEqual([])
+  })
+})
+
+describe("session.error and message.updated for the same failure (isolated QA, 12-10-2026)", () => {
+  afterEach(() => {
+    SessionCategoryRegistry.clear()
+  })
+
+  it("#given session.error starts a fallback while message.updated is resolving the agent #then message.updated leaves that fallback alone", async () => {
+    // given: OpenCode emits both events for one 429; message.updated awaits the agent lookup, and meanwhile the
+    // session.error path creates the fallback state and has its retry in flight.
+    const sessionID = "session-double-event"
+    const operations: string[] = []
+    SessionCategoryRegistry.register(sessionID, "test")
+    const deps = createRuntimeFallbackDeps(operations)
+    const helpers = createRuntimeFallbackHelpers(deps, operations)
+    const { createFallbackState } = await import("./fallback-state")
+    const sessionErrorState = createFallbackState("openai/gpt-5.4")
+    helpers.resolveAgentForSessionFromContext = async () => {
+      sessionErrorState.currentModel = "litellm/openai.eu.gpt-5.5"
+      sessionErrorState.pendingFallbackModel = "litellm/openai.eu.gpt-5.5"
+      deps.sessionStates.set(sessionID, sessionErrorState)
+      deps.sessionRetryInFlight.add(sessionID)
+      return undefined
+    }
+    const handler = createMessageUpdateHandler(deps, helpers)
+
+    // when
+    await handler({
+      sessionID,
+      info: { role: "assistant", model: "openai/gpt-5.4", error: { name: "APIError", message: "rate limited", statusCode: 429 } },
+    })
+
+    // then: the in-flight fallback's state is still the session's state, and no second retry was dispatched
+    expect(deps.sessionStates.get(sessionID)).toBe(sessionErrorState)
+    expect(operations.filter((operation) => operation.startsWith("retry:"))).toEqual([])
   })
 })

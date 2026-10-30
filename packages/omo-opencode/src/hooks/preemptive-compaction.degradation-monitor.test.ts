@@ -1,12 +1,13 @@
 /// <reference types="bun-types" />
 
-import { beforeEach, describe, expect, it, mock, afterAll } from "bun:test"
+import { beforeEach, describe, expect, it, mock, afterAll, afterEach } from "bun:test"
+import * as loggerModule from "../shared/logger"
 
 const logMock = mock(() => {})
 
-mock.module("../shared/logger", () => ({
-  log: logMock,
-}))
+beforeEach(() => {
+  loggerModule._setLoggerForTesting({ sink: logMock })
+})
 
 afterAll(() => { mock.restore() })
 
@@ -90,6 +91,10 @@ function buildAssistantUpdate(input: {
     },
   }
 }
+
+afterEach(() => {
+  loggerModule._resetLoggerForTesting()
+})
 
 describe("preemptive-compaction post-compaction degradation monitor", () => {
   beforeEach(() => {

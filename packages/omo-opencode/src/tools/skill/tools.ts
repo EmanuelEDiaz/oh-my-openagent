@@ -25,8 +25,23 @@ import {
   mergeNativeSkills,
 } from "./native-skills"
 
+import { liveSkillDescription } from "./live-description"
+import { log } from "../../shared/logger"
 export function createSkillTool(options: SkillLoadOptions): ToolDefinition {
   let cachedDescription: string | null = null
+  // Skills OpenCode lists itself in <available_skills>; the description does not repeat them.
+  let nativeSkillNames: ReadonlySet<string> = new Set()
+  /** OpenCode answered with its native skill list at least once. */
+  let nativeKnown = false
+  const rememberNativeSkills = (nativeAll: readonly { name: string }[]): void => {
+    nativeSkillNames = new Set(nativeAll.map((skill) => skill.name))
+    nativeKnown = true
+  }
+  const formatDescription = (skillInfos: Parameters<typeof formatCombinedDescription>[0], commands: CommandInfo[]): string =>
+    formatCombinedDescription(skillInfos, commands, {
+      includeSkills: options.includeSkillsInDescription,
+      excludeSkillNames: nativeSkillNames,
+    })
 
   const getBaseSkills = async (context?: ToolContext): Promise<LoadedSkill[]> => {
     if (shouldInvalidateSkillCacheForSession(context?.sessionID)) {
@@ -51,9 +66,11 @@ export function createSkillTool(options: SkillLoadOptions): ToolDefinition {
     if (options.nativeSkills) {
       try {
         const nativeAll = await options.nativeSkills.all()
+        rememberNativeSkills(nativeAll)
         mergeNativeSkills(skills, nativeAll, options.disabledSkills)
       } catch (error) {
-        if (!(error instanceof Error)) throw error
+        // Expected while OpenCode is still starting; the per-request description retries (live-description).
+        log("[skill] OpenCode's native skill list is not available yet", { error: error instanceof Error ? error.message : String(error) })
       }
     }
   }
@@ -82,9 +99,7 @@ export function createSkillTool(options: SkillLoadOptions): ToolDefinition {
     // check already enforces the restriction at call time.
     const publicSkills = skills.filter((s) => !s.definition.agent)
     const skillInfos = publicSkills.map(loadedSkillToInfo)
-    cachedDescription = formatCombinedDescription(skillInfos, commands, {
-      includeSkills: options.includeSkillsInDescription,
-    })
+    cachedDescription = formatDescription(skillInfos, commands)
     return cachedDescription
   }
 
@@ -98,8 +113,11 @@ export function createSkillTool(options: SkillLoadOptions): ToolDefinition {
       try {
         const nativeAll = options.nativeSkills.all()
         if (isPromiseLike(nativeAll)) {
+          // Handled by the refresh below; a failure here would otherwise surface as an unhandled rejection.
+          Promise.resolve(nativeAll).catch(() => undefined)
           needsAsyncRefresh = true
         } else {
+          rememberNativeSkills(nativeAll)
           mergeNativeSkillInfos(skillInfos, nativeAll, options.disabledSkills)
         }
       } catch (error) {
@@ -107,17 +125,23 @@ export function createSkillTool(options: SkillLoadOptions): ToolDefinition {
       }
     }
 
-    cachedDescription = formatCombinedDescription(skillInfos, commandsForDescription, {
-      includeSkills: options.includeSkillsInDescription,
-    })
+    cachedDescription = formatDescription(skillInfos, commandsForDescription)
     if (needsAsyncRefresh) {
-      void buildDescription(true)
+      buildDescription(true).catch((error: unknown) => log("[skill] description refresh failed", { error: String(error) }))
     }
   } else if (options.commands !== undefined) {
-    cachedDescription = formatCombinedDescription([], options.commands, {
-      includeSkills: options.includeSkillsInDescription,
-    })
+    cachedDescription = formatDescription([], options.commands)
   }
+
+  liveSkillDescription.set(async () => {
+    if (cachedDescription === null || (options.nativeSkills && !nativeKnown)) {
+      // OpenCode answers by now (this runs per request): load its native list, but never hold a request long.
+      // A plain timer, not Bun.sleep: the bundle must also load where `Bun` is missing (dist-bundle-bun-globals).
+      const giveUp = new Promise<void>((resolve) => setTimeout(resolve, 3000).unref?.())
+      await Promise.race([buildDescription(true), giveUp]).catch((error: unknown) => log("[skill] description refresh failed", { error: String(error) }))
+    }
+    return cachedDescription ?? undefined
+  })
 
   return tool({
     get description() {
@@ -145,9 +169,7 @@ export function createSkillTool(options: SkillLoadOptions): ToolDefinition {
         matchedSkill = matchSkillByName(skills, requestedName)
       }
 
-      cachedDescription = formatCombinedDescription(skills.map(loadedSkillToInfo), commands, {
-        includeSkills: options.includeSkillsInDescription,
-      })
+      cachedDescription = formatDescription(skills.map(loadedSkillToInfo), commands)
 
       if (matchedSkill) {
         await ctx?.ask({

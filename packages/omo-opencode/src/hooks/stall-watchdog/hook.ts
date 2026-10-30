@@ -13,6 +13,8 @@ export type StallWatchdogHookOptions = {
   readonly inactivityMs: number
   readonly checkIntervalMs: number
   readonly maxStallsPerTask: number
+  /** Project folder of this OpenCode instance; several can share one server (fork incidents H13). */
+  readonly directory?: string
   /** A monotonic-clock jump of more than this over the check interval is a freeze (0.15 B); undefined disables it. */
   readonly freezeThresholdMs?: number
 }
@@ -23,6 +25,8 @@ export type StallWatchdogHookDeps = {
   readonly now?: () => number
   readonly hasManagedProcess?: (sessionID: string) => boolean
   readonly isSubagentSession: (sessionID: string) => boolean
+  /** The session has a parent: a subagent OpenCode runs itself, outside the plugin's sets. A failed lookup is false. */
+  readonly hasParent?: (sessionID: string) => Promise<boolean>
   /** Stop the stalled turn; must not block the hook (it is raced against a timeout by the caller's implementation). */
   readonly abort: (sessionID: string) => Promise<void>
   readonly toast: (message: string) => Promise<void>
@@ -70,7 +74,12 @@ export function createStallWatchdogHook(options: StallWatchdogHookOptions, deps:
     ...(deps.isWaiting ? { isWaiting: deps.isWaiting } : {}),
     ...(deps.isNetworkRetry ? { isNetworkRetry: deps.isNetworkRetry } : {}),
   })
-  setStallWatchdog(watchdog)
+  const unregister = setStallWatchdog(watchdog, options.directory)
+
+  async function isSubagent(sessionID: string): Promise<boolean> {
+    if (deps.isSubagentSession(sessionID)) return true
+    return (await deps.hasParent?.(sessionID).catch(() => false)) ?? false
+  }
 
   async function recoverMainSession(sessionID: string, silentMs: number, alreadyStopped = false): Promise<void> {
     const networkCut = await deps.takeOverStall?.(sessionID, { stopped: alreadyStopped }).catch((error) => {
@@ -137,7 +146,7 @@ export function createStallWatchdogHook(options: StallWatchdogHookOptions, deps:
   async function check(): Promise<void> {
     detectFreeze()
     for (const stall of watchdog.findStalled()) {
-      if (deps.isSubagentSession(stall.sessionID)) {
+      if (await isSubagent(stall.sessionID)) {
         log(`[${HOOK_NAME}] subagent stalled; its owner will retry`, { sessionID: stall.sessionID, silentMs: stall.silentMs })
         continue
       }
@@ -155,16 +164,19 @@ export function createStallWatchdogHook(options: StallWatchdogHookOptions, deps:
       watchdog.observe(input.event)
       // OpenCode's chunkTimeout already cut the stream and its own retries are spent: continue on the next model.
       const sessionID = streamTimeoutSession(input.event)
-      if (sessionID && !deps.isSubagentSession(sessionID)) {
-        log(`[${HOOK_NAME}] main session ended on a stream timeout`, { sessionID })
-        void recoverMainSession(sessionID, 0, true).catch((error) =>
-          log(`[${HOOK_NAME}] recovery failed`, { sessionID, error: String(error) }))
+      if (sessionID) {
+        void (async () => {
+          if (await isSubagent(sessionID)) return
+          log(`[${HOOK_NAME}] main session ended on a stream timeout`, { sessionID })
+          await recoverMainSession(sessionID, 0, true)
+        })().catch((error) => log(`[${HOOK_NAME}] recovery failed`, { sessionID, error: String(error) }))
       }
     },
     check,
     dispose(): void {
       clearInterval(timer)
-      setStallWatchdog(undefined)
+      // Only this instance's watchdog: another folder's live instance keeps its own.
+      unregister()
     },
   }
 }

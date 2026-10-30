@@ -26,7 +26,7 @@ export async function executeSyncTask(
   deps: SyncTaskDeps = syncTaskDeps
 ): Promise<string> {
   const { client, directory, syncPollTimeoutMs } = executorCtx
-  const toastManager = getTaskToastManager()
+  const toastManager = getTaskToastManager(directory)
   let taskId: string | undefined
   let syncSessionID: string | undefined
   let spawnReservation:

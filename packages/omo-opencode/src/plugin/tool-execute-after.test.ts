@@ -172,4 +172,27 @@ describe("createToolExecuteAfterHandler", () => {
     // then
     expect(seenArgs).toBe(args)
   })
+
+  // Fork incident H43 (28-10-2026): the read guard's warning only ever went to tool.execute.before, which OpenCode
+  // does not read back; it now goes on the bash output, so the after handler must call it.
+  it("#given the bash read guard #when tool.execute.after runs #then the guard can add its warning to the output", async () => {
+    // given
+    const handler = createToolExecuteAfterHandler({
+      ctx: { directory: "/repo" } as never,
+      hooks: {
+        bashFileReadGuard: {
+          "tool.execute.after": async (_input: unknown, output: { output: string }) => {
+            output.output = `${output.output}\n\nwarned`
+          },
+        },
+      } as never,
+    })
+    const output = { title: "bash", output: "file text", metadata: {} }
+
+    // when
+    await handler({ tool: "bash", sessionID: "ses_1", callID: "call_1" }, output)
+
+    // then
+    expect(output.output).toBe("file text\n\nwarned")
+  })
 })

@@ -41,7 +41,7 @@ function createDelegateTask(...args: Parameters<typeof import("./tools").createD
 		const description = toolDefinition.description
 
 		//#then
-		expect(description).toContain("subagent_type: Use specific agent directly")
+		expect(description).toContain("- subagent_type: a specific agent")
 		expect(description).toContain("task_id: Continuation session id")
 		expect(description).not.toContain("sisyphus")
 		expect(description).not.toContain("hephaestus")
@@ -56,7 +56,7 @@ function createDelegateTask(...args: Parameters<typeof import("./tools").createD
 		const runInBackgroundSchema = unsafeTestValue<{ description?: string }>(toolDefinition.args.run_in_background)
 
 		//#then
-		expect(runInBackgroundSchema.description).toContain("background task ID")
+		expect(runInBackgroundSchema.description).toContain("`bg_...`")
 		expect(runInBackgroundSchema.description).toContain("bg_")
 		expect(runInBackgroundSchema.description).toContain("background_output")
 		expect(runInBackgroundSchema.description).not.toContain("returns task_id")

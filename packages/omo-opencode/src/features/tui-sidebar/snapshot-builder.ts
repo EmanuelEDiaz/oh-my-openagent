@@ -45,7 +45,7 @@ export async function buildTuiRuntimeSnapshot(
 ): Promise<TuiRuntimeSnapshot> {
   const statuses = await readStatuses(input)
   const loop = readActiveLoop(input.projectDir)
-  const connection = connectionFromGuard((input.getConnectionViews ?? defaultConnectionViews)() ?? [])
+  const connection = connectionFromGuard((input.getConnectionViews ?? (() => defaultConnectionViews(input.projectDir)))() ?? [])
 
   return {
     version: MIRROR_SCHEMA_VERSION,
@@ -58,8 +58,8 @@ export async function buildTuiRuntimeSnapshot(
   }
 }
 
-function defaultConnectionViews(): readonly NetworkGuardSessionView[] | undefined {
-  return getNetworkGuard()?.snapshot()
+function defaultConnectionViews(projectDir: string): readonly NetworkGuardSessionView[] | undefined {
+  return getNetworkGuard(projectDir)?.snapshot()
 }
 
 /** One line for the whole sidebar: a guard probe cycle first, then OpenCode's own retry, then a freeze. */

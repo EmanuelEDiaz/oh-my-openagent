@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test"
+import * as loggerModule from "../../shared/logger"
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "fs"
 import { tmpdir } from "os"
 import { join } from "path"
@@ -14,6 +15,10 @@ let projectSubdirectory = ""
 let pluginDir = ""
 let mcpConfigPath = ""
 
+afterEach(() => {
+  loggerModule._resetLoggerForTesting()
+})
+
 describe("loadPluginMcpServers", () => {
   beforeEach(() => {
     testDir = realpathSync(mkdtempSync(join(tmpdir(), "plugin-mcp-loader-test-")))
@@ -24,9 +29,7 @@ describe("loadPluginMcpServers", () => {
     mkdirSync(projectDir, { recursive: true })
     mkdirSync(projectSubdirectory, { recursive: true })
     mkdirSync(pluginDir, { recursive: true })
-    mock.module("../../shared/logger", () => ({
-      log: () => {},
-    }))
+    loggerModule._setLoggerForTesting({ sink: () => {} })
   })
 
   afterEach(() => {

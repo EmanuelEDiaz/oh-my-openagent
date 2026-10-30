@@ -6,17 +6,26 @@ const executeStopHooks = mock(async (context: { parentSessionId?: string; transc
   observedParentSessionId: context.parentSessionId,
 }))
 
+// Each mock keeps the module's real exports and replaces only what this test controls: other modules
+// (session-hook-state, dispatch) import more names from them than this test cares about.
+const actualConfig = await import("../config")
+const actualConfigLoader = await import("../config-loader")
+
 mock.module("../config", () => ({
+  ...actualConfig,
   clearClaudeHooksConfigCache: () => {},
   loadClaudeHooksConfig: async () => null,
 }))
 
 mock.module("../config-loader", () => ({
+  ...actualConfigLoader,
   clearPluginExtendedConfigCache: () => {},
   loadPluginExtendedConfig: async () => ({}),
 }))
 
+const actualStop = await import("../stop")
 mock.module("../stop", () => ({
+  ...actualStop,
   executeStopHooks,
 }))
 

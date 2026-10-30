@@ -35,6 +35,10 @@ export class LspClientTransport {
 	protected connection: JsonRpcConnection | null = null;
 	protected readonly stderrBuffer: string[] = [];
 	protected processExited = false;
+	/** Work-done progress the server has begun and not ended, e.g. "Initializing JS/TS language features". */
+	private readonly activeProgress = new Set<string>();
+	/** When the server process was spawned; a server this young may not have announced its work yet. */
+	private startedAt: number | undefined;
 	protected readonly diagnosticsStore = new Map<string, Diagnostic[]>();
 	protected readonly requestTimeoutMs: number;
 	protected readonly initializeTimeoutMs: number;
@@ -99,6 +103,7 @@ export class LspClientTransport {
 			...this.server.env,
 		});
 
+		this.startedAt = this.timerProvider.now();
 		this.proc = spawnProcess(this.server.command, {
 			cwd: this.root,
 			env,
@@ -129,12 +134,14 @@ export class LspClientTransport {
 
 		this.connection.onRequest("client/registerCapability", () => null);
 		this.connection.onRequest("window/workDoneProgress/create", () => null);
+		this.connection.onNotification("$/progress", (params) => this.trackProgress(params));
 		if (this.workspaceApplyEditHandler) {
 			this.connection.onRequest("workspace/applyEdit", this.workspaceApplyEditHandler);
 		}
 
 		this.connection.onClose(() => {
 			this.processExited = true;
+			this.activeProgress.clear();
 		});
 
 		this.connection.onError((error) => {
@@ -142,6 +149,26 @@ export class LspClientTransport {
 		});
 
 		this.connection.listen();
+	}
+
+	private trackProgress(params: unknown): void {
+		if (!params || typeof params !== "object") return;
+		const token = Reflect.get(params, "token");
+		const value = Reflect.get(params, "value");
+		if ((typeof token !== "string" && typeof token !== "number") || !value || typeof value !== "object") return;
+		const kind = Reflect.get(value, "kind");
+		if (kind === "begin") this.activeProgress.add(String(token));
+		else if (kind === "end") this.activeProgress.delete(String(token));
+	}
+
+	/** Milliseconds since the server process was spawned (0 before start). */
+	serverAgeMs(): number {
+		return this.startedAt === undefined ? 0 : this.timerProvider.now() - this.startedAt;
+	}
+
+	/** True while the server reports work in progress (it may not have published diagnostics yet). */
+	isServerBusy(): boolean {
+		return !this.processExited && this.activeProgress.size > 0;
 	}
 
 	protected startStderrReading(): void {
@@ -160,9 +187,11 @@ export class LspClientTransport {
 			return false;
 		}
 		const code = "code" in error && typeof error.code === "string" ? error.code : undefined;
+		// EPIPE: the write reached a server that had already exited (fork incidents H17).
 		return (
 			code === "ERR_STREAM_DESTROYED" ||
-			/connection closed|connection is disposed|stream was destroyed/i.test(error.message)
+			code === "EPIPE" ||
+			/connection closed|connection is disposed|stream was destroyed|write EPIPE/i.test(error.message)
 		);
 	}
 

@@ -361,6 +361,8 @@ const CODE_FILE = /\.[cm]?[jt]sx?$/
 const SKIP_PATTERN = /\b(?:test|it|describe)\s*\.\s*(?:skip|only|todo|failing|skipIf|todoIf|if)\b|\bx(?:it|test|describe)\s*\(/g
 const SUPPRESSION_PATTERN = /@ts-ignore|@ts-expect-error|@ts-nocheck|\bas\s+any\b|eslint-disable|biome-ignore/g
 const IGNORED_DIR = /(?:^|\/)(?:\.git|node_modules)(?:\/|$)/
+/** What the plugin itself writes in the project (knowledge cache, process registry), not the agent's change. */
+const PLUGIN_STATE = /^\.omo\//
 
 /** Files of a repo, relative to it, without .git and node_modules. */
 function repoFiles(dir: string): string[] {
@@ -544,6 +546,36 @@ export function hiddenTestsPass(originalDir: string, hiddenFile: string): Grader
 }
 
 const EDIT_TOOL = /^(?:write|edit|multiedit|apply_patch|patch|hashline_edit)$/
+// A shell command that writes a file: a redirect to a path (not `2>&1`, not /dev/null), `sed -i` or `tee <file>`.
+const SHELL_WRITE = />>?\s*(?!&|\/dev\/null)[\w.~/-]|\bsed\s+(?:-\w+\s+)*-i|\btee\s+(?!\/dev\/)[\w.~/-]/
+
+/**
+ * Informational, never fails (fork roadmap 0.27 "mapa de impacto"): of the files a complete change must touch
+ * (`expected`, from the reference patch), which ones differ from the fixture. A missed file is silent when the final
+ * answer does not name it either. `outside` lists other changed non-test files.
+ */
+export function impactCoverage(originalDir: string, expected: readonly string[]): Grader {
+  const name = "info:impact"
+  return {
+    name,
+    grade: ({ transcript, workdir }) => {
+      const files = new Set([...repoFiles(originalDir), ...repoFiles(workdir)])
+      const changed = [...files].filter((file) => {
+        const before = join(originalDir, file)
+        const after = join(workdir, file)
+        return !existsSync(before) || !existsSync(after) || fileHash(before) !== fileHash(after)
+      })
+      const missed = expected.filter((file) => !changed.includes(file)).sort()
+      const silent = missed.filter((file) => !transcript.answer.includes(file.split("/").pop() ?? file))
+      const outside = changed.filter((file) => !expected.includes(file) && !TEST_FILE.test(file) && !PLUGIN_STATE.test(file)).sort()
+      const parts = [`covered ${expected.length - missed.length}/${expected.length}`]
+      if (missed.length > 0) parts.push(`missed: ${missed.join(", ")}`)
+      if (silent.length > 0) parts.push(`silent: ${silent.join(", ")}`)
+      if (outside.length > 0) parts.push(`outside: ${outside.join(", ")}`)
+      return result(name, true, parts.join("; "))
+    },
+  }
+}
 
 /**
  * Informational, never fails: how the agent edited (fork roadmap 0.9b "arreglos casi idénticos repetidos"). Counts
@@ -566,7 +598,10 @@ export function editStats(): Grader {
         seen.add(key)
       }
       const [topFile, topCount] = [...perFile.entries()].sort((a, b) => b[1] - a[1])[0] ?? ["-", 0]
-      return result(name, true, `${edits.length} edit(s), ${perFile.size} file(s), ${repeats} identical repeat(s), max ${topCount} on ${topFile}`)
+      // Files written through the shell skip the edit tools and their guards; only the count is kept.
+      const shellWrites = transcript.tools.filter((call) => call.tool === "bash" && SHELL_WRITE.test(String(call.input["command"] ?? ""))).length
+      const shell = shellWrites > 0 ? `; ${shellWrites} shell write(s)` : ""
+      return result(name, true, `${edits.length} edit(s), ${perFile.size} file(s), ${repeats} identical repeat(s), max ${topCount} on ${topFile}${shell}`)
     },
   }
 }
