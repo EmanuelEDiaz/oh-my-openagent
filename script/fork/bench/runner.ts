@@ -1,6 +1,7 @@
 /** Runs one bench task against the sandboxed OpenCode and grades what really happened in the session. */
 import { createOpencodeClient } from "@opencode-ai/sdk/v2"
 
+import { saveArbiterPackage } from "./arbiter"
 import { gradersFor } from "./graders"
 import { createStallDetector, progressSignature } from "./progress"
 import { existsSync, readFileSync, rmSync, statSync } from "node:fs"
@@ -263,6 +264,8 @@ export type RunOptions = {
   readonly repeat: number
   readonly attempt: number
   readonly fetchStatus?: (url: string) => Promise<number>
+  /** Real-project suites: keep the agent's change for the arbiter before the workdir is deleted (arbiter.ts). */
+  readonly arbiterDir?: string
 }
 
 export async function runTask(task: Task, options: RunOptions): Promise<RunResult> {
@@ -303,6 +306,8 @@ async function runInWorkdir(task: Task, options: RunOptions, workdirName: string
   }
   const silent = transcript.error === undefined ? silentModelError(transcript) : undefined
   if (silent !== undefined) return { ...base, failure: "infra", grades: runtimeInfo(), transcript, error: silent }
+  // Before grading: command graders may build in the workdir, and the arbiter judges the agent's change, not theirs.
+  if (options.arbiterDir !== undefined) saveArbiterPackage(options.arbiterDir, workdirName, workdir, transcript)
   const context: GradeContext = { transcript, workdir, ...(options.fetchStatus ? { fetchStatus: options.fetchStatus } : {}) }
   const grades = [...(await Promise.all(gradersFor(task).map((grader) => grader.grade(context)))), ...runtimeInfo()]
   const pass = transcript.error === undefined && grades.every((grade) => grade.pass)
