@@ -10,6 +10,7 @@ import { createPluginProcessManager, type ProcessManager } from "./features/mana
 import { createPluginResumeService } from "./features/resume/plugin"
 import { sampleMemory } from "./features/resume/memory-watch"
 import { createPluginResilience, type PluginResilience } from "./features/interruption/plugin"
+import { createExternalToolsNotice, type ExternalToolsNotice } from "./features/external-tools"
 import { createMemoryGate } from "./features/background-agent/memory-gate"
 import type { ResumeService } from "./features/resume/service"
 import { SkillMcpManager } from "./features/skill-mcp-manager"
@@ -66,6 +67,7 @@ export type Managers = {
   processManager?: ProcessManager
   resumeService?: ResumeService
   resilience?: PluginResilience
+  externalToolsNotice?: ExternalToolsNotice
 }
 
 export function createManagers(args: {
@@ -120,6 +122,9 @@ export function createManagers(args: {
   const resumeService = pluginConfig.resume?.enabled === false ? undefined : createPluginResumeService(ctx, pluginConfig.resume)
   // Killed-process recovery and the one-shot resume note (fork roadmap 0.15 C/D), on unless resilience.enabled is false.
   const resilience = createPluginResilience(ctx, pluginConfig.resilience)
+  // Missing or broken external tools (TypeScript server, git...), checked in the background and cached; the notice
+  // waits for the TUI to listen (fork roadmap 0.25).
+  const externalToolsNotice = createExternalToolsNotice(ctx.directory, ctx.client)
   const resilienceConfig = pluginConfig.resilience
   const memoryGate = resilienceConfig?.enabled === false
     ? undefined
@@ -252,7 +257,7 @@ export function createManagers(args: {
     tuiStateMirror.start()
   }
 
-  deps.initTaskToastManagerFn(ctx.client)
+  deps.initTaskToastManagerFn(ctx.client, undefined, ctx.directory)
 
   const skillMcpManager = new deps.SkillMcpManagerClass()
 
@@ -273,5 +278,6 @@ export function createManagers(args: {
     processManager,
     resumeService,
     resilience,
+    externalToolsNotice,
   }
 }

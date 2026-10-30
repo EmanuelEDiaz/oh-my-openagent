@@ -40,6 +40,24 @@ describe("#given a bound utils logger", () => {
     expect(fs.existsSync(logFilePath)).toBe(false)
   })
 
+  // Fork H40: tests that replaced the logger module with mock.module only saw the messages of modules loaded after the
+  // mock; a test sink sees every call, whatever loaded first.
+  test("#when a test sink is set #then every message goes to it and nothing to the file, until reset", () => {
+    const logger = createLogger({ logFileName: "unused.log", resolveLogFilePath: () => logFilePath })
+    const seen: Array<{ message: string; data?: unknown }> = []
+
+    logger._setLoggerForTesting({ sink: (message, data) => void seen.push({ message, data }) })
+    logger.log("TO-SINK", { n: 1 })
+    logger._flushForTesting()
+    logger._resetLoggerForTesting()
+    logger.log("TO-FILE")
+    logger._flushForTesting()
+
+    expect(seen).toEqual([{ message: "TO-SINK", data: { n: 1 } }])
+    expect(fs.readFileSync(logFilePath, "utf8")).toContain("TO-FILE")
+    expect(fs.readFileSync(logFilePath, "utf8")).not.toContain("TO-SINK")
+  })
+
   test("#when reset follows a test override #then the default resolved path is restored", () => {
     const defaultLogFilePath = path.join(tempDir, "default.log")
     const overrideLogFilePath = path.join(tempDir, "override.log")

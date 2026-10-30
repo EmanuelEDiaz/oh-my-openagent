@@ -64,6 +64,7 @@ type ConfigModelsCommandOptions = {
   readonly models?: string
   readonly allowUnavailable?: boolean
   readonly enableRuntimeFallback?: boolean
+  readonly prune?: boolean
   readonly project?: boolean
   readonly json?: boolean
 }
@@ -311,6 +312,7 @@ configCommand
   .option("--models <list>", "Comma-separated ordered chain, first = primary, e.g. opencode/a,opencode/b")
   .option("--allow-unavailable", "Write models even if they are not in the current available list")
   .option("--enable-runtime-fallback", "Also set runtime_fallback: true so fallbacks apply mid-session")
+  .option("--prune", "Remove retired and not-served models from every agent chain (backs up the file first)")
   .option("--project", "Write the project .omo/omo.jsonc instead of ~/.omo/omo.jsonc")
   .option("--json", "Machine-readable output for --check")
   .addHelpText("after", `
@@ -336,6 +338,7 @@ Examples:
         : { models: options.models.split(",").map((model) => model.trim()).filter((model) => model.length > 0) }),
       allowUnavailable: options.allowUnavailable ?? false,
       ...(options.enableRuntimeFallback ? { enableRuntimeFallback: true } : {}),
+      ...(options.prune ? { prune: true } : {}),
       scope: options.project ? "project" : "user",
       json: options.json ?? false,
     })

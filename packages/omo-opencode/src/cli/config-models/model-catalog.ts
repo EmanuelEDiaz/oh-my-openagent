@@ -20,6 +20,8 @@ export type ModelInfo = {
   readonly openWeights: boolean
   /** Only known for local models (Ollama); used to warn about models too small for agent work. */
   readonly parameterBillions?: number
+  /** models.dev status, e.g. "deprecated" (OpenCode drops deprecated models from its provider list). */
+  readonly status?: string
 }
 
 export type ModelCatalog = ReadonlyMap<string, ModelInfo>
@@ -44,6 +46,7 @@ function toModelInfo(id: string, raw: Record<string, unknown>): ModelInfo {
   const input = Array.isArray(modalities["input"])
     ? modalities["input"].filter((entry): entry is string => typeof entry === "string")
     : []
+  const status = stringAt(raw, "status")
   return {
     id,
     name: stringAt(raw, "name") ?? id,
@@ -59,6 +62,7 @@ function toModelInfo(id: string, raw: Record<string, unknown>): ModelInfo {
     releaseDate: stringAt(raw, "release_date"),
     knowledge: stringAt(raw, "knowledge"),
     openWeights: raw["open_weights"] === true,
+    ...(status === undefined ? {} : { status }),
   }
 }
 
@@ -75,6 +79,21 @@ export function parseModelCatalog(content: string): Map<string, ModelInfo> {
     }
   }
   return catalog
+}
+
+/**
+ * A model OpenCode will not run any more: models.dev marks it deprecated (OpenCode then drops it from the provider
+ * list and the TUI falls back to another model), or its provider is in the catalog but the model is not. Models of
+ * providers the catalog does not know (Ollama, custom providers) are never called retired.
+ */
+export function isRetiredModel(model: string, catalog: ModelCatalog): boolean {
+  const info = catalog.get(model)
+  if (info !== undefined) return info.status === "deprecated"
+  const slash = model.indexOf("/")
+  if (slash <= 0) return false
+  const prefix = model.slice(0, slash + 1)
+  for (const id of catalog.keys()) if (id.startsWith(prefix)) return true
+  return false
 }
 
 export function loadModelCatalog(readCache: () => string | null = defaultReadCache): ModelCatalog {

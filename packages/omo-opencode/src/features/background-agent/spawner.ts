@@ -91,7 +91,7 @@ export async function startTask(
 
   log("[background-agent] Launching task:", { taskId: task.id, sessionID, agent: normalizedAgent })
 
-  const toastManager = getTaskToastManager()
+  const toastManager = getTaskToastManager(directory)
   if (toastManager) {
     toastManager.updateTask(task.id, "running")
   }
@@ -203,7 +203,7 @@ export async function resumeTask(
 
   subagentSessions.add(sessionID)
 
-  const toastManager = getTaskToastManager()
+  const toastManager = getTaskToastManager(directory)
   if (toastManager) {
     toastManager.addTask({
       id: task.id,

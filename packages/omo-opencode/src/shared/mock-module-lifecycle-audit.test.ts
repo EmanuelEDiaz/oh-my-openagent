@@ -218,19 +218,18 @@ describe("mock.module lifecycle hygiene", () => {
   test("#given test files using mock.module #when audited #then each must pair with cleanup", async () => {
     // given
     const files = [...await listTestFiles(SOURCE_ROOT), ...await listPackageTestFiles()]
-    const parsedSourceFiles = await parser.parse(files)
+    // Only files that mention mock.module can offend: parse just those (the rest were skipped below anyway).
+    // Parsing all ~1,200 test files at once held every syntax tree in memory (> 2 GB, 12-10-2026).
+    const candidates: string[] = []
+    for (const filePath of files) {
+      if (MOCK_MODULE_LIFECYCLE_ALLOWLIST.has(filePath)) continue
+      if ((await readFile(filePath, "utf8")).includes(MOCK_MODULE_TOKEN)) candidates.push(filePath)
+    }
+    const parsedSourceFiles = await parser.parse(candidates)
     const offenders: string[] = []
 
     // when
-    for (const filePath of files) {
-      if (MOCK_MODULE_LIFECYCLE_ALLOWLIST.has(filePath)) {
-        continue
-      }
-
-      const contents = await readFile(filePath, "utf8")
-      if (!contents.includes(MOCK_MODULE_TOKEN)) {
-        continue
-      }
+    for (const filePath of candidates) {
       const sourceFile = parsedSourceFiles.get(filePath)
       if (!sourceFile) {
         throw new Error(`TypeScript did not parse ${filePath}`)
@@ -238,6 +237,24 @@ describe("mock.module lifecycle hygiene", () => {
       if (hasMockModuleCall(sourceFile) && !hasCleanupPattern(sourceFile)) {
         offenders.push(relativeSourcePath(filePath))
       }
+    }
+
+    // then
+    expect(offenders.sort()).toEqual([])
+  }, 20_000)
+
+  // Fork incident H44 (28-10-2026): six hook tests replaced the shared logger with mock.module. mock.restore() does not
+  // undo that, so when Bun loaded one of them first, runtime-fallback and directory-readme-injector configured a logger
+  // their hook no longer used and 44 tests failed (hooks + plugin in one process). The logger has a test sink instead.
+  test("#given test files #when audited #then none replaces the shared logger with mock.module", async () => {
+    // given
+    const files = [...await listTestFiles(SOURCE_ROOT), ...await listPackageTestFiles()]
+    const loggerMock = /mock\.module\(\s*["'`][^"'`]*(?:shared|logging)\/logger["'`]/
+
+    // when
+    const offenders: string[] = []
+    for (const filePath of files) {
+      if (loggerMock.test(await readFile(filePath, "utf8"))) offenders.push(relativeSourcePath(filePath))
     }
 
     // then

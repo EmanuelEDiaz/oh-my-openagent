@@ -1,0 +1,49 @@
+diff --git a/README.md b/README.md
+index d25e5a2..c969e13 100644
+--- a/README.md
++++ b/README.md
+@@ -17,5 +17,5 @@ All JSON fields are snake_case.
+ | GET | `/api/v2/customers/:id` | one customer, or 404 |
+ | GET | `/api/v2/products` | every product |
+ 
+-An order: `id`, `customer_id`, `customer_name`, `status`, `total_cents`, `payable_cents`, `discount_code`, `created_at`,
++An order: `id`, `customer_id`, `customer_name`, `status`, `amount_cents`, `payable_cents`, `discount_code`, `created_at`,
+ `items` (`title`, `quantity`).
+diff --git a/src/api/wire.ts b/src/api/wire.ts
+index 6b0faa7..768168d 100644
+--- a/src/api/wire.ts
++++ b/src/api/wire.ts
+@@ -7,7 +7,7 @@ export const ORDER_WIRE: ReadonlyArray<readonly [keyof OrderSummary, string]> =
+   ["customerId", "customer_id"],
+   ["customerName", "customer_name"],
+   ["status", "status"],
+-  ["totalCents", "total_cents"],
++  ["totalCents", "amount_cents"],
+   ["payableCents", "payable_cents"],
+   ["discountCode", "discount_code"],
+   ["createdAt", "created_at"],
+diff --git a/src/client/sdk/orders.ts b/src/client/sdk/orders.ts
+index c6dbabb..e60b2e7 100644
+--- a/src/client/sdk/orders.ts
++++ b/src/client/sdk/orders.ts
+@@ -20,7 +20,7 @@ function fromWire(raw: Wire): OrderView {
+     id: String(raw["id"]),
+     customer: String(raw["customer_name"]),
+     status: String(raw["status"]),
+-    total: Number(raw["total_cents"]),
++    total: Number(raw["amount_cents"]),
+     payable: Number(raw["payable_cents"]),
+     discount: raw["discount_code"] == null ? null : String(raw["discount_code"]),
+     placedAt: String(raw["created_at"]),
+diff --git a/src/config/app-config.json b/src/config/app-config.json
+index 9a582ce..90078d4 100644
+--- a/src/config/app-config.json
++++ b/src/config/app-config.json
+@@ -1,6 +1,6 @@
+ {
+   "api": { "base": "/api/v2" },
+   "export": { "orderColumns": ["id", "customer_id", "status", "total_cents", "discount_code", "created_at"] },
+-  "webhooks": { "orderFields": ["id", "customer_id", "status", "total_cents", "payable_cents"], "secret": "dev-secret" },
++  "webhooks": { "orderFields": ["id", "customer_id", "status", "amount_cents", "payable_cents"], "secret": "dev-secret" },
+   "search": { "orderFields": ["id", "customer_name", "status"] }
+ }

@@ -1,0 +1,31 @@
+diff --git a/README.md b/README.md
+index d25e5a2..910bf2f 100644
+--- a/README.md
++++ b/README.md
+@@ -11,8 +11,8 @@ All JSON fields are snake_case.
+ 
+ | Method | Path | Returns |
+ |---|---|---|
+-| GET | `/api/v2/orders` | every order |
+-| GET | `/api/v2/orders/:id` | one order, or 404 |
++| GET | `/api/v2/purchases` | every order |
++| GET | `/api/v2/purchases/:id` | one order, or 404 |
+ | GET | `/api/v2/customers` | every customer |
+ | GET | `/api/v2/customers/:id` | one customer, or 404 |
+ | GET | `/api/v2/products` | every product |
+diff --git a/src/api/resources.ts b/src/api/resources.ts
+index b02739f..0b566b0 100644
+--- a/src/api/resources.ts
++++ b/src/api/resources.ts
+@@ -1,2 +1,2 @@
+ /** Path segment of each API resource, after the API base. */
+-export const RESOURCES = { orders: "orders", customers: "customers", products: "products" } as const
++export const RESOURCES = { orders: "purchases", customers: "customers", products: "products" } as const
+diff --git a/src/client/sdk/endpoints.ts b/src/client/sdk/endpoints.ts
+index 76d87ae..b6e8db9 100644
+--- a/src/client/sdk/endpoints.ts
++++ b/src/client/sdk/endpoints.ts
+@@ -1,2 +1,2 @@
+ /** Path segments the client calls, after `API_BASE`. */
+-export const ENDPOINTS = { orders: ["orders"], customers: ["customers"], products: ["products"] } as const
++export const ENDPOINTS = { orders: ["purchases"], customers: ["customers"], products: ["products"] } as const

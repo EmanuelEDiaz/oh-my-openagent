@@ -1,6 +1,7 @@
 /// <reference types="bun-types" />
 
 import { describe, it, expect, beforeEach, afterEach, mock, spyOn } from "bun:test"
+import * as loggerModule from "../../shared/logger"
 import { mkdirSync, mkdtempSync, writeFileSync, rmSync } from "fs"
 import { join } from "path"
 import { homedir, tmpdir } from "os"
@@ -15,6 +16,10 @@ let TEST_HOME = ""
 function loaderOptions(cwd = TEST_DIR) {
   return { cwd, homeDir: TEST_HOME, claudeConfigDir: join(TEST_HOME, ".claude") }
 }
+
+afterEach(() => {
+  loggerModule._resetLoggerForTesting()
+})
 
 describe("getSystemMcpServerNames", () => {
   beforeEach(() => {
@@ -326,9 +331,7 @@ describe("loadMcpConfigs", () => {
   beforeEach(() => {
     mkdirSync(TEST_DIR, { recursive: true })
     mkdirSync(TEST_HOME, { recursive: true })
-    mock.module("../../shared/logger", () => ({
-      log: () => {},
-    }))
+    loggerModule._setLoggerForTesting({ sink: () => {} })
   })
 
   afterEach(() => {

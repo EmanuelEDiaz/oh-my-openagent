@@ -1,0 +1,6 @@
+{
+  "api": { "base": "/api/v2" },
+  "export": { "orderColumns": ["id", "customer_id", "status", "total_cents", "discount_code", "created_at"] },
+  "webhooks": { "orderFields": ["id", "customer_id", "status", "total_cents", "payable_cents"], "secret": "dev-secret" },
+  "search": { "orderFields": ["id", "customer_name", "status"] }
+}

@@ -2,6 +2,7 @@ import { isRecord } from "@oh-my-opencode/utils"
 export type SessionMessagePart = {
   type?: string
   text?: string
+  state?: { status?: string }
 }
 
 export type SessionMessage = {

@@ -1,11 +1,14 @@
 import { buildChainEntries, isConfigurableAgent, readAgentChain, readAgentChains, CONFIGURABLE_AGENTS } from "./agent-chains"
+import { listBrokenModels } from "../../shared/broken-models-cache"
 import { listAvailableModels } from "./available-models"
 import type { AvailableModels } from "./available-models"
 import {
   chainEdits,
   formatChainSummary,
   isRuntimeFallbackEnabled,
+  isRuntimeFallbackExplicitlyOn,
   printStatuses,
+  pruneChainEdits,
   rankForAgent,
   readOpenCodeSection,
   resolveConfigPath,
@@ -46,6 +49,9 @@ export type ConfigModelsOptions = {
   readonly models?: readonly string[]
   readonly allowUnavailable?: boolean
   readonly enableRuntimeFallback?: boolean
+  /** Drop retired and not-served models from every agent chain (the file is backed up first). */
+  readonly prune?: boolean
+  readonly notServed?: () => ReadonlySet<string>
   readonly scope?: ConfigModelsScope
   readonly cwd?: string
   readonly env?: Readonly<Record<string, string | undefined>>
@@ -93,7 +99,7 @@ function writeChains(context: ModelsContext, chains: ReadonlyMap<string, readonl
   const edits = [...chains].flatMap(([agent, chain]) =>
     chainEdits(agent, buildChainEntries(chain, readAgentChain(context.section.agents[agent]))),
   )
-  if (context.enableRuntimeFallback && !isRuntimeFallbackEnabled(context.section.runtimeFallback)) edits.push(runtimeFallbackEdit())
+  if (context.enableRuntimeFallback && !isRuntimeFallbackExplicitlyOn(context.section.runtimeFallback)) edits.push(runtimeFallbackEdit())
   writeEdits(context, edits)
   context.output(formatChainSummary(chains))
   return 0
@@ -116,6 +122,23 @@ function runPreset(context: ModelsContext, preset: PresetName): number {
     return 1
   }
   return writeChains(context, chains)
+}
+
+/**
+ * Removes from every agent chain the models that are no longer listed or were not served in the last 24 h (fork plan
+ * real-use-incidents A4). A chain left empty is removed, so the agent goes back to omo's defaults. updateOmoConfig
+ * writes a backup of the previous file.
+ */
+function runPrune(context: ModelsContext, notServed: ReadonlySet<string>): number {
+  const available = new Set(context.state.models)
+  const { edits, report } = pruneChainEdits(context.section, (model) => !available.has(model) || notServed.has(model))
+  if (edits.length === 0) {
+    context.output("No retired or not-served models in the agent chains.")
+    return 0
+  }
+  writeEdits(context, edits)
+  for (const line of report) context.output(line)
+  return 0
 }
 
 function runConnectOllama(context: ModelsContext): number {
@@ -192,6 +215,7 @@ export async function runConfigModels(options: ConfigModelsOptions = {}): Promis
     return 1
   }
 
+  if (options.prune) return runPrune(context, (options.notServed ?? listBrokenModels)())
   if (options.rank !== undefined) return runRank(context, options.rank, options.top ?? 20, json)
   if (options.preset !== undefined) return runPreset(context, options.preset)
 

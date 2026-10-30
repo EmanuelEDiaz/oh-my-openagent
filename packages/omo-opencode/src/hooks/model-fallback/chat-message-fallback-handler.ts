@@ -1,4 +1,5 @@
 import { log } from "../../shared/logger"
+import { recordFallbackSwitch } from "../../shared/fallback-switched-models"
 import { getTaskToastManager } from "../../features/task-toast-manager"
 import type { ChatMessageHandlerOutput, ChatMessageInput } from "../../plugin/chat-message"
 
@@ -19,6 +20,8 @@ export async function applyFallbackToChatMessage(params: {
     variant?: string
   }) => void | Promise<void>
   lastToastKey: Map<string, string>
+  /** Project folder of the calling instance, for its toast manager (fork incidents H13). */
+  directory?: string
 }): Promise<void> {
   const { input, output, fallback, toast, onApplied, lastToastKey } = params
   const { sessionID } = input
@@ -28,6 +31,7 @@ export async function applyFallbackToChatMessage(params: {
     providerID: fallback.providerID,
     modelID: fallback.modelID,
   }
+  recordFallbackSwitch(`${fallback.providerID}/${fallback.modelID}`)
   if (fallback.variant !== undefined) {
     output.message["variant"] = fallback.variant
   } else {
@@ -61,7 +65,7 @@ export async function applyFallbackToChatMessage(params: {
     )
   }
 
-  const toastManager = getTaskToastManager()
+  const toastManager = getTaskToastManager(params.directory)
   if (toastManager) {
     const variantLabel = fallback.variant ? ` (${fallback.variant})` : ""
     toastManager.updateTaskModelBySession(sessionID, {

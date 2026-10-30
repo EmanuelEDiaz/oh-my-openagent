@@ -85,7 +85,10 @@ export function getCallerUrlFromStack(stack: string, fallbackUrl: string): strin
   const lines = stack.split("\n")
 
   for (const line of lines) {
-    const match = line.match(/(?:\()?(file:\/\/[^\s)]+|[A-Za-z]:\\[^\n)]+|\/[^\s):]+):(\d+):(\d+)/)
+    // The whole path up to :line:col, inside "(…)" or after "at ": a checkout path may contain spaces
+    // ("…/mejoras opencode/…"), and cutting it there broke every per-file restore (12-10-2026).
+    const match = /\(((?:file:\/\/|[A-Za-z]:\\|\/)[^()]*?):(\d+):(\d+)\)\s*$/.exec(line)
+      ?? /\bat\s+((?:file:\/\/|[A-Za-z]:\\|\/)[^()]*?):(\d+):(\d+)\s*$/.exec(line)
     const candidatePath = match?.[1]
     if (!candidatePath) {
       continue

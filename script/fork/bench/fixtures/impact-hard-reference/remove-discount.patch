@@ -1,0 +1,188 @@
+diff --git a/README.md b/README.md
+index d25e5a2..e8e9500 100644
+--- a/README.md
++++ b/README.md
+@@ -17,5 +17,5 @@ All JSON fields are snake_case.
+ | GET | `/api/v2/customers/:id` | one customer, or 404 |
+ | GET | `/api/v2/products` | every product |
+ 
+-An order: `id`, `customer_id`, `customer_name`, `status`, `total_cents`, `payable_cents`, `discount_code`, `created_at`,
++An order: `id`, `customer_id`, `customer_name`, `status`, `total_cents`, `payable_cents`, `created_at`,
+ `items` (`title`, `quantity`).
+diff --git a/src/api/wire.ts b/src/api/wire.ts
+index 6b0faa7..8da34b7 100644
+--- a/src/api/wire.ts
++++ b/src/api/wire.ts
+@@ -9,7 +9,6 @@ export const ORDER_WIRE: ReadonlyArray<readonly [keyof OrderSummary, string]> =
+   ["status", "status"],
+   ["totalCents", "total_cents"],
+   ["payableCents", "payable_cents"],
+-  ["discountCode", "discount_code"],
+   ["createdAt", "created_at"],
+   ["items", "items"],
+ ]
+diff --git a/src/client/sdk/orders.ts b/src/client/sdk/orders.ts
+index c6dbabb..a622e8c 100644
+--- a/src/client/sdk/orders.ts
++++ b/src/client/sdk/orders.ts
+@@ -8,7 +8,6 @@ export type OrderView = {
+   status: string
+   total: number
+   payable: number
+-  discount: string | null
+   placedAt: string
+   items: { title: string; quantity: number }[]
+ }
+@@ -22,7 +21,6 @@ function fromWire(raw: Wire): OrderView {
+     status: String(raw["status"]),
+     total: Number(raw["total_cents"]),
+     payable: Number(raw["payable_cents"]),
+-    discount: raw["discount_code"] == null ? null : String(raw["discount_code"]),
+     placedAt: String(raw["created_at"]),
+     items: (raw["items"] as OrderView["items"] | undefined) ?? [],
+   }
+diff --git a/src/client/views/admin/columns.ts b/src/client/views/admin/columns.ts
+index 6340044..feaba14 100644
+--- a/src/client/views/admin/columns.ts
++++ b/src/client/views/admin/columns.ts
+@@ -6,5 +6,4 @@ export const ORDER_TABLE_COLUMNS: readonly Column[] = [
+   { field: "customer", header: "Customer" },
+   { field: "status", header: "Status" },
+   { field: "total", header: "Total", money: true },
+-  { field: "discount", header: "Discount" },
+ ]
+diff --git a/src/client/views/customer/order-page.ts b/src/client/views/customer/order-page.ts
+index 895f2b5..6a44e02 100644
+--- a/src/client/views/customer/order-page.ts
++++ b/src/client/views/customer/order-page.ts
+@@ -7,6 +7,5 @@ export function renderOrderPage(order: OrderView): string {
+   const lines = [`Order ${order.id}`, `Placed: ${dayOf(order.placedAt)}`, `Status: ${order.status}`]
+   for (const item of order.items) lines.push(`- ${item.quantity} x ${item.title}`)
+   lines.push(`Total: ${priceLabel(order.total)}`)
+-  if (order.discount !== null) lines.push(`Discount: ${order.discount} (you pay ${priceLabel(order.payable)})`)
+   return lines.join("\n")
+ }
+diff --git a/src/config/app-config.json b/src/config/app-config.json
+index 9a582ce..7b0b67b 100644
+--- a/src/config/app-config.json
++++ b/src/config/app-config.json
+@@ -1,6 +1,6 @@
+ {
+   "api": { "base": "/api/v2" },
+-  "export": { "orderColumns": ["id", "customer_id", "status", "total_cents", "discount_code", "created_at"] },
++  "export": { "orderColumns": ["id", "customer_id", "status", "total_cents", "created_at"] },
+   "webhooks": { "orderFields": ["id", "customer_id", "status", "total_cents", "payable_cents"], "secret": "dev-secret" },
+   "search": { "orderFields": ["id", "customer_name", "status"] }
+ }
+diff --git a/src/db/migrations/002-drop-discount.ts b/src/db/migrations/002-drop-discount.ts
+new file mode 100644
+index 0000000..2b2d7f2
+--- /dev/null
++++ b/src/db/migrations/002-drop-discount.ts
+@@ -0,0 +1,3 @@
++export const up = `
++ALTER TABLE orders DROP COLUMN discount_code;
++`
+diff --git a/src/db/migrations/index.ts b/src/db/migrations/index.ts
+index 7578a7f..63a70df 100644
+--- a/src/db/migrations/index.ts
++++ b/src/db/migrations/index.ts
+@@ -1,4 +1,5 @@
+ import { up as init } from "./001-init"
++import { up as dropDiscount } from "./002-drop-discount"
+ 
+ /** Every migration, oldest first. */
+-export const MIGRATIONS: readonly string[] = [init]
++export const MIGRATIONS: readonly string[] = [init, dropDiscount]
+diff --git a/src/db/seed.ts b/src/db/seed.ts
+index 000d4a2..42f4dcc 100644
+--- a/src/db/seed.ts
++++ b/src/db/seed.ts
+@@ -13,9 +13,9 @@ export const products: ProductRecord[] = [
+ ]
+ 
+ export const orders: OrderRecord[] = [
+-  { id: "o1", customer_id: "c1", status: "paid", total_cents: 1250, discount_code: null, created_at: "2026-10-01T09:00:00Z" },
+-  { id: "o2", customer_id: "c2", status: "pending", total_cents: 4999, discount_code: "WELCOME10", created_at: "2026-10-05T12:30:00Z" },
+-  { id: "o3", customer_id: "c3", status: "shipped", total_cents: 300, discount_code: null, created_at: "2026-10-07T16:45:00Z" },
++  { id: "o1", customer_id: "c1", status: "paid", total_cents: 1250, created_at: "2026-10-01T09:00:00Z" },
++  { id: "o2", customer_id: "c2", status: "pending", total_cents: 4999, created_at: "2026-10-05T12:30:00Z" },
++  { id: "o3", customer_id: "c3", status: "shipped", total_cents: 300, created_at: "2026-10-07T16:45:00Z" },
+ ]
+ 
+ export const orderItems: OrderItemRecord[] = [
+diff --git a/src/db/tables.ts b/src/db/tables.ts
+index 1cdc143..566dae2 100644
+--- a/src/db/tables.ts
++++ b/src/db/tables.ts
+@@ -8,7 +8,6 @@ export type OrderRecord = {
+   customer_id: string
+   status: string
+   total_cents: number
+-  discount_code: string | null
+   created_at: string
+ }
+ 
+diff --git a/src/domain/order.ts b/src/domain/order.ts
+index 10bf57a..3f7e8d3 100644
+--- a/src/domain/order.ts
++++ b/src/domain/order.ts
+@@ -5,7 +5,6 @@ export type Order = {
+   customerId: string
+   status: OrderStatus
+   totalCents: number
+-  discountCode: string | null
+   createdAt: string
+ }
+ 
+diff --git a/src/notifications/order-mailer.ts b/src/notifications/order-mailer.ts
+index 8cb38ce..a403b06 100644
+--- a/src/notifications/order-mailer.ts
++++ b/src/notifications/order-mailer.ts
+@@ -10,7 +10,6 @@ export function confirmationEmail(order: OrderSummary): Email {
+     customer_name: order.customerName,
+     order_id: order.id,
+     payable: formatMoney(order.payableCents),
+-    discount_line: order.discountCode === null ? "" : `Discount ${order.discountCode} applied.`,
+   })
+   return { to: order.customerEmail, subject: `Order ${order.id} confirmed`, body }
+ }
+diff --git a/src/notifications/templates.ts b/src/notifications/templates.ts
+index cea6e40..eaae8ef 100644
+--- a/src/notifications/templates.ts
++++ b/src/notifications/templates.ts
+@@ -1,5 +1,5 @@
+ /** Email bodies; `{{name}}` placeholders are filled by `renderTemplate`. */
+ export const TEMPLATES = {
+-  orderConfirmation: "Hi {{customer_name}},\nthanks for your order {{order_id}}.\nYou pay: {{payable}}\n{{discount_line}}",
++  orderConfirmation: "Hi {{customer_name}},\nthanks for your order {{order_id}}.\nYou pay: {{payable}}",
+   orderShipped: "Hi {{customer_name}},\nyour order {{order_id}} is on its way.",
+ } as const
+diff --git a/src/repo/order-columns.ts b/src/repo/order-columns.ts
+index 4e51415..3a65e53 100644
+--- a/src/repo/order-columns.ts
++++ b/src/repo/order-columns.ts
+@@ -6,6 +6,5 @@ export const ORDER_COLUMNS = {
+   customerId: "customer_id",
+   status: "status",
+   totalCents: "total_cents",
+-  discountCode: "discount_code",
+   createdAt: "created_at",
+ } as const satisfies Record<keyof Order, string>
+diff --git a/src/services/pricing.ts b/src/services/pricing.ts
+index 821220d..aad6194 100644
+--- a/src/services/pricing.ts
++++ b/src/services/pricing.ts
+@@ -1,9 +1,6 @@
+ import type { Order } from "../domain/order"
+ 
+-const DISCOUNTS: Readonly<Record<string, number>> = { WELCOME10: 0.1 }
+-
+-/** What the customer pays: the total minus the discount of a known code, rounded to the cent. */
+-export function payableCents(order: Pick<Order, "totalCents" | "discountCode">): number {
+-  const rate = order.discountCode === null ? 0 : DISCOUNTS[order.discountCode] ?? 0
+-  return Math.round(order.totalCents * (1 - rate))
++/** What the customer pays. */
++export function payableCents(order: Pick<Order, "totalCents">): number {
++  return order.totalCents
+ }

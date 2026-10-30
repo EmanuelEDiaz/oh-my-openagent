@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, mock } from "bun:test"
+import * as loggerModule from "../../shared/logger"
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { basename, join } from "node:path"
@@ -22,11 +23,13 @@ function createInstallPath(prefix: string): string {
   return createTemporaryDirectory(prefix)
 }
 
+afterEach(() => {
+  loggerModule._resetLoggerForTesting()
+})
+
 describe("discoverInstalledPlugins", () => {
   beforeEach(() => {
-    mock.module("../../shared/logger", () => ({
-      log: () => {},
-    }))
+    loggerModule._setLoggerForTesting({ sink: () => {} })
 
     const pluginsHome = createTemporaryDirectory("omo-claude-plugins-")
     process.env.CLAUDE_PLUGINS_HOME = pluginsHome
