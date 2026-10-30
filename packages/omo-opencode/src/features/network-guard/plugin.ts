@@ -10,10 +10,10 @@ import { log } from "../../shared/logger"
 import { parseModel, resolveSessionTarget } from "../../shared/session-target"
 import type { PluginContext } from "../../plugin/types"
 import { abortWithTimeout } from "../background-agent/abort-with-timeout"
-import { registerManagerForCleanup } from "../background-agent/process-cleanup"
+import { registerManagerForCleanup, unregisterManagerForCleanup } from "../background-agent/process-cleanup"
 import { clearInterruption, recordInterruption } from "../interruption/store"
 import { getActiveLoopBreaker } from "../loop-breaker/plugin"
-import { createNetworkGuard, notifyNetworkGuardChange, setNetworkGuard, setNetworkResilienceEnabled, type NetworkGuard } from "./index"
+import { createNetworkGuard, notifyNetworkGuardChange, setNetworkGuard, setNetworkResilienceEnabled, type NetworkGuard, type SessionOwner } from "./index"
 import { watchLinkChanges } from "./link-monitor"
 
 const PROBE_TIMEOUT_MS = 5_000
@@ -63,7 +63,18 @@ type ProvidersClient = {
   provider?: { list?: (input?: unknown) => Promise<{ data?: { all?: ProviderInfo[] } }> }
 }
 
-export function createPluginNetworkGuard(ctx: PluginContext, pluginConfig: OhMyOpenCodeConfig): NetworkGuard | null {
+/** What the guard needs from the background manager: whether it runs a session as a background task. */
+type BackgroundSessions = { findBySession(sessionID: string): unknown }
+type SessionGetClient = { session: { get(input: { path: { id: string } }): Promise<{ data?: unknown }> } }
+
+/** Who waits for a session's turn (fork incidents H26): the background manager, a delegating agent, or the user. */
+export async function sessionOwner(client: SessionGetClient, background: BackgroundSessions | undefined, sessionID: string): Promise<SessionOwner> {
+  if (background?.findBySession(sessionID) !== undefined) return "background"
+  const info = await client.session.get({ path: { id: sessionID } })
+  return (info.data as { parentID?: string } | undefined)?.parentID ? "caller" : "main"
+}
+
+export function createPluginNetworkGuard(ctx: PluginContext, pluginConfig: OhMyOpenCodeConfig, background?: BackgroundSessions): NetworkGuard | null {
   // Set before anything that can throw, so a failed creation never leaves the fallback paths stepping aside.
   setNetworkResilienceEnabled(pluginConfig.resilience?.enabled !== false)
   const config = ResilienceConfigSchema.parse(pluginConfig.resilience ?? {})
@@ -147,6 +158,7 @@ export function createPluginNetworkGuard(ctx: PluginContext, pluginConfig: OhMyO
       abort: async (sessionID) => {
         await abortWithTimeout(ctx.client as never, sessionID)
       },
+      owner: (sessionID) => sessionOwner(ctx.client as unknown as SessionGetClient, background, sessionID),
       handOff: async (sessionID, detail) => {
         const target = await resolveSessionTarget(ctx.client as never, sessionID).catch(() => ({} as { agent?: string; model?: string }))
         const next = getFallbackModelsForSession(sessionID, target.agent, pluginConfig).find((model) => model !== target.model)
@@ -163,12 +175,20 @@ export function createPluginNetworkGuard(ctx: PluginContext, pluginConfig: OhMyO
       },
       watchLink: (onChange) => watchLinkChanges(onChange, log),
       networkFingerprint: () => networkFingerprint(),
-      chargeBudget: (sessionID) => getActiveLoopBreaker()?.charge(sessionID, "provider failing while the network works"),
+      chargeBudget: (sessionID) => getActiveLoopBreaker(ctx.directory)?.charge(sessionID, "provider failing while the network works"),
       log,
       onChange: notifyNetworkGuardChange,
     },
   )
-  setNetworkGuard(guard)
-  registerManagerForCleanup({ shutdown: async () => guard.dispose() })
+  const unregister = setNetworkGuard(guard, ctx.directory)
+  const cleanup = { shutdown: async () => guard.dispose() }
+  registerManagerForCleanup(cleanup)
+  // When OpenCode disposes this instance (fork incidents H12): stop its timers and leave the other folders' guards.
+  const stopTimers = guard.dispose
+  guard.dispose = () => {
+    stopTimers()
+    unregister()
+    unregisterManagerForCleanup(cleanup)
+  }
   return guard
 }

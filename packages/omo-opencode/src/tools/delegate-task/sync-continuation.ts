@@ -102,8 +102,8 @@ export async function executeSyncContinuation(
   deps: SyncContinuationDeps = syncContinuationDeps,
   systemContent?: string
 ): Promise<string> {
-  const { client, syncPollTimeoutMs, sisyphusAgentConfig } = executorCtx
-  const toastManager = getTaskToastManager()
+  const { client, directory, syncPollTimeoutMs, sisyphusAgentConfig } = executorCtx
+  const toastManager = getTaskToastManager(directory)
   const continuationID = getTaskID(args)
   if (!continuationID) {
     throw new Error("task_id is required to continue a sync task")

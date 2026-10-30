@@ -11,6 +11,11 @@ export const EditDiagnosticsConfigSchema = z.object({
    * OpenCode window; it needs the language servers installed (e.g. typescript-language-server, pyright).
    */
   use_plugin_lsp: z.boolean().default(true),
+  /**
+   * Check files rewritten through bash (`cat > file`, `sed -i`, `tee`) like edits, and tell the agent to use the edit
+   * tools instead (default: true).
+   */
+  shell_writes: z.boolean().default(true),
 })
 
 export type EditDiagnosticsConfig = z.infer<typeof EditDiagnosticsConfigSchema>

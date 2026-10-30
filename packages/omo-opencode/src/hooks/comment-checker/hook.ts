@@ -16,6 +16,7 @@ import {
   takePendingCall,
 } from "./pending-calls"
 import { ensureCommentCheckerInitialization } from "./initialization-gate"
+import { shellWriteTargets } from "../../shared"
 
 import * as fs from "fs"
 import { tmpdir } from "os"
@@ -42,6 +43,7 @@ export function createCommentCheckerHooks(
     processWithCli: typeof processWithCli
     processApplyPatchEditsWithCli: typeof processApplyPatchEditsWithCli
   },
+  directory: string = process.cwd(),
 ) {
   const runner = cliRunner ?? {
     initializeCommentCheckerCli,
@@ -51,6 +53,15 @@ export function createCommentCheckerHooks(
     processApplyPatchEditsWithCli,
   }
   debugLog("createCommentCheckerHooks called", { config })
+  // Existing files a bash call rewrites in place, with their content before it (docs/fork/plans/shell-writes.md).
+  const shellCalls = new Map<string, Array<{ filePath: string; before: string }>>()
+  const readText = (path: string): string | undefined => {
+    try {
+      return fs.readFileSync(path, "utf8")
+    } catch {
+      return undefined
+    }
+  }
 
   return {
     "tool.execute.before": async (
@@ -69,6 +80,16 @@ export function createCommentCheckerHooks(
       })
 
       const toolLower = input.tool.toLowerCase()
+      const command = output.args.command
+      if (toolLower === "bash" && typeof command === "string") {
+        const targets = shellWriteTargets(command, directory).flatMap((filePath) => {
+          const before = readText(filePath)
+          return before === undefined ? [] : [{ filePath, before }]
+        })
+        if (targets.length > 0) shellCalls.set(input.callID, targets)
+        if (shellCalls.size > 200) shellCalls.delete(shellCalls.keys().next().value as string)
+        return
+      }
       if (toolLower !== "write" && toolLower !== "edit" && toolLower !== "multiedit") {
         debugLog("skipping non-write/edit tool:", toolLower)
         return
@@ -113,6 +134,24 @@ export function createCommentCheckerHooks(
       debugLog("tool.execute.after:", { tool: input.tool, callID: input.callID })
 
       const toolLower = input.tool.toLowerCase()
+
+      const shellTargets = shellCalls.get(input.callID)
+      shellCalls.delete(input.callID)
+      if (shellTargets !== undefined) {
+        const edits = shellTargets.flatMap((target) => {
+          const after = readText(target.filePath)
+          return after === undefined || after === target.before ? [] : [{ filePath: target.filePath, before: target.before, after }]
+        })
+        if (edits.length === 0) return
+        try {
+          const cliPath = await runner.getCommentCheckerCliPathPromise()
+          if (!runner.isCliPathUsable(cliPath)) return
+          await runner.processApplyPatchEditsWithCli(input.sessionID, edits, output, cliPath, config?.custom_prompt, debugLog)
+        } catch (err) {
+          debugLog("shell write comment check failed:", err)
+        }
+        return
+      }
 
       // Only skip if the output indicates a tool execution failure
       const outputLower = (output.output ?? "").toLowerCase()

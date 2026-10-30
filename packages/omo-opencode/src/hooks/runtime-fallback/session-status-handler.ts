@@ -35,7 +35,7 @@ export function createSessionStatusHandler(
 
     const retryMessage = typeof status.message === "string" ? status.message : ""
     // OpenCode is retrying a network cut itself: never abort its retry nor switch models (fork roadmap 0.15).
-    if (stepAsideForNetwork(sessionID, retryMessage, false)) {
+    if (stepAsideForNetwork(sessionID, retryMessage, false, deps.ctx.directory)) {
       log(`[${HOOK_NAME}] session.status retry is a network cut; leaving OpenCode's retry alone`, { sessionID, attempt: status.attempt })
       return
     }

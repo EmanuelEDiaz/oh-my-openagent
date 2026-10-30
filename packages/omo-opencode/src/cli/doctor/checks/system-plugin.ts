@@ -72,6 +72,22 @@ function isPluginCheckout(fileUrl: string): boolean {
   return false
 }
 
+/**
+ * An existing file is this plugin only if its package says so: the path text can name the plugin by accident (fork
+ * finding H35: an unrelated plugin under a folder called oh-my-openagent was taken for it). A missing file, such as a
+ * checkout not built yet, falls back to the path text.
+ */
+function isThisPluginFile(fileUrl: string): boolean {
+  let exists = false
+  try {
+    exists = existsSync(fileURLToPath(fileUrl))
+  } catch {
+    exists = false
+  }
+  if (exists) return isPluginCheckout(fileUrl)
+  return fileUrl.includes(PLUGIN_NAME) || fileUrl.includes(LEGACY_PLUGIN_NAME)
+}
+
 function findPluginEntry(entries: PluginEntry[]): { entry: PluginEntry; isLocalDev: boolean } | null {
   for (const entry of entries) {
     const name = getPluginEntryName(entry)
@@ -81,7 +97,7 @@ function findPluginEntry(entries: PluginEntry[]): { entry: PluginEntry; isLocalD
     if (name === LEGACY_PLUGIN_NAME || name.startsWith(`${LEGACY_PLUGIN_NAME}@`)) {
       return { entry, isLocalDev: false }
     }
-    if (name.startsWith("file://") && (name.includes(PLUGIN_NAME) || name.includes(LEGACY_PLUGIN_NAME) || isPluginCheckout(name))) {
+    if (name.startsWith("file://") && isThisPluginFile(name)) {
       return { entry, isLocalDev: true }
     }
   }

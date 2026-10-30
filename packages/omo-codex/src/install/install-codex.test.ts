@@ -2,7 +2,7 @@
 /// <reference types="bun-types" />
 
 import { describe, expect, test } from "bun:test"
-import { mkdir, mkdtemp, readdir, readFile, stat, writeFile } from "node:fs/promises"
+import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { findRepoRoot, findRepoRootFromImporter, resolveCodexInstallerBinDir, runCodexInstaller } from "./install-codex"
@@ -290,6 +290,8 @@ describe("install-codex", () => {
       await expect(stat(join(home, ".omo", "lsp-daemon"))).rejects.toThrow()
     } finally {
       await stopChild(daemon)
+      // The legacy home sits in /tmp itself (short socket paths), outside the test process's temp root (fork H31).
+      for (const root of [codexHome, binDir, home]) await rm(root, { recursive: true, force: true })
     }
   }, { timeout: INSTALL_CODEX_INTEGRATION_TEST_TIMEOUT_MS })
 

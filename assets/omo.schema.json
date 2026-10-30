@@ -12089,12 +12089,17 @@
             "use_plugin_lsp": {
               "default": true,
               "type": "boolean"
+            },
+            "shell_writes": {
+              "default": true,
+              "type": "boolean"
             }
           },
           "required": [
             "enabled",
             "revert_syntax_errors",
-            "use_plugin_lsp"
+            "use_plugin_lsp",
+            "shell_writes"
           ],
           "additionalProperties": false
         },
@@ -12277,6 +12282,15 @@
         },
         "zen_free_gate": {
           "type": "boolean"
+        },
+        "context_budget": {
+          "type": "object",
+          "properties": {
+            "orchestrator_minimal_tools": {
+              "type": "boolean"
+            }
+          },
+          "additionalProperties": false
         },
         "team_mode": {
           "type": "object",
@@ -30445,12 +30459,17 @@
                   "use_plugin_lsp": {
                     "default": true,
                     "type": "boolean"
+                  },
+                  "shell_writes": {
+                    "default": true,
+                    "type": "boolean"
                   }
                 },
                 "required": [
                   "enabled",
                   "revert_syntax_errors",
-                  "use_plugin_lsp"
+                  "use_plugin_lsp",
+                  "shell_writes"
                 ],
                 "additionalProperties": false
               },
@@ -30633,6 +30652,15 @@
               },
               "zen_free_gate": {
                 "type": "boolean"
+              },
+              "context_budget": {
+                "type": "object",
+                "properties": {
+                  "orchestrator_minimal_tools": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
               },
               "team_mode": {
                 "type": "object",

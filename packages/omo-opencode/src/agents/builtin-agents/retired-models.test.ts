@@ -55,6 +55,22 @@ describe("agents configured with a model OpenCode no longer offers (fork 0.7)", 
     expect(takeAgentRegistrationIssues().find((entry) => entry.agent === "explore")?.status).toBe("replaced")
   })
 
+  test("an orchestrator moves to the next model of its own chain, not to the session model (real TUI, 12-10-2026)", async () => {
+    // given: the user's chain is retired model -> nemotron; big-pickle is the session default
+    environment(["opencode/nemotron-3.5-lightning-free", "opencode/big-pickle"])
+
+    // when
+    const agents = await createBuiltinAgents([], {
+      sisyphus: { model: RETIRED, fallback_models: ["opencode/nemotron-3.5-lightning-free"] },
+      atlas: { model: RETIRED, fallback_models: ["opencode/north-mini-code-free", "opencode/nemotron-3.5-lightning-free"] },
+    }, undefined, "opencode/big-pickle")
+
+    // then
+    expect(agents.sisyphus?.model).toBe("opencode/nemotron-3.5-lightning-free")
+    expect(agents.atlas?.model).toBe("opencode/nemotron-3.5-lightning-free")
+    expect(takeAgentRegistrationIssues().find((entry) => entry.agent === "sisyphus")?.to).toBe("opencode/nemotron-3.5-lightning-free")
+  })
+
   test("orchestrators without fallback_models are replaced too", async () => {
     // given
     environment(["opencode/big-pickle"])

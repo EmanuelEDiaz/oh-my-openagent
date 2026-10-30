@@ -45,46 +45,16 @@ export function createDelegateTaskPresentation(options: DelegateTaskPresentation
     return indentedGuidance ? `${categoryLine}\n    ${indentedGuidance}` : categoryLine
   }).join("\n")
 
-  const description = `Spawn agent task with category-based or direct agent selection.
-
-  ⚠️  CRITICAL: You MUST provide EITHER category OR subagent_type. Omitting BOTH will FAIL.
-
-  **COMMON MISTAKE (DO NOT DO THIS):**
-  \`\`\`
-  task(description="...", prompt="...")  // ❌ FAILS - missing category AND subagent_type
-  \`\`\`
-
-  **CORRECT - Using category:**
-  \`\`\`
-  task(category="quick", description="Fix type error", prompt="...")
-  \`\`\`
-
-  **CORRECT - Using subagent_type with parallel exploration:**
-  \`\`\`
-  task(subagent_type="explore", description="Find patterns", prompt="...", run_in_background=true)
-  \`\`\`
-
-  REQUIRED: Provide ONE of:
-  - category: For task delegation (uses Sisyphus-Junior with category-optimized model)
-  - subagent_type: For direct agent invocation (explore, librarian, oracle, etc.)
-
-  **DO NOT provide both.** If category is provided, subagent_type is ignored.
-
-  - load_skills: Optional. Defaults to [] when omitted. Pass ["skill-1", "skill-2"] for skill-specific tasks.
-  - category: Use predefined category → Spawns Sisyphus-Junior with category config
-    Available categories:
-  ${categoryList}
-  - subagent_type: Use specific agent directly (explore, librarian, oracle, metis, momus)
-  - run_in_background: true is the standard spawn: returns a background task ID like \`bg_...\` at once and the completion notification delivers the result. false blocks this response until the child finishes (a 30-minute inactivity window, reset by OpenCode busy/retry/running status, not a total wall-clock limit); use it only for a short child whose result gates your very next call. Omitted counts as false.
-  - task_id: Continuation session id (\`ses_...\`) from task metadata. Continues the same subagent session with FULL CONTEXT PRESERVED; not the background task id (\`bg_...\`).
-  - command: The command that triggered this task (optional, for slash command tracking).
-
-  **WHEN TO USE task_id:**
-  - Task failed/incomplete → \`task(task_id="ses_...", prompt="fix: [specific issue]")\`
-  - Need follow-up on previous result → \`task(task_id="ses_...", prompt="Also: [question]")\`
-  - Multi-turn conversation with same agent → always \`task(task_id="ses_...")\` instead of new task
-
-  Prompts MUST be in English.`
+  // Kept short: it is sent with every request of every agent that can delegate (incidents of 07-10-2026).
+  const description = `Spawn an agent task. Provide EXACTLY ONE of category or subagent_type (omitting both fails; with both, subagent_type is ignored).
+- category: spawns Sisyphus-Junior with that category's model. Available categories:
+${categoryList}
+- subagent_type: a specific agent (explore, librarian, oracle, metis, momus, …).
+- load_skills: skill names to inject; defaults to [].
+- run_in_background: true is the standard spawn (returns \`bg_...\` at once; the completion notification delivers the result). false blocks until the child finishes (a 30-minute inactivity window, reset by OpenCode busy/retry/running status, not a total wall-clock limit): only for a short child whose result gates your next call. Omitted = false.
+- task_id: Continuation session id (\`ses_...\`) from task metadata, not the background task id (\`bg_...\`). Continues the same subagent with full context: use it to fix a failed/incomplete result or ask a follow-up instead of starting a new task.
+Example: task(category="quick", description="Fix type error", prompt="...") or task(subagent_type="explore", description="Find patterns", prompt="...", run_in_background=true).
+Prompts MUST be in English.`
 
   return {
     availableCategories,

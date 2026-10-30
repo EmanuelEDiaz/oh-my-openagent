@@ -21,4 +21,10 @@ describe("pendingRuns", () => {
       { taskId: "b", repeat: 2, nextAttempt: 0 },
     ])
   })
+
+  test("#given attempts stopped by the provider's quota #then they do not use up the repeat's retries", () => {
+    const quota = (attempt: number): RunResult => ({ ...done("a", 0, attempt, undefined), error: "provider usage limit reached: Free usage limit reached." })
+    expect(pendingRuns([quota(0), quota(1), quota(2)], ["a"], 1, 2)).toEqual([{ taskId: "a", repeat: 0, nextAttempt: 0 }])
+    expect(pendingRuns([done("a", 0, 0, undefined), quota(1)], ["a"], 1, 2)).toEqual([{ taskId: "a", repeat: 0, nextAttempt: 1 }])
+  })
 })

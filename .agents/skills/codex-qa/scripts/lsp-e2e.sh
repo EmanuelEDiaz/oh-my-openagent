@@ -927,11 +927,14 @@ expectReject("outOfCwd", {
 lookupCount += 0;
 
 const assertions = {
+  // LSP_TOOLS_MCP_CWD carries the session directory into the request context (999c57113, 29-08-2026).
   openCodeMcpEnvInputs: JSON.stringify(Object.keys(openCodeMcpConfig.environment ?? {}).sort()) === JSON.stringify([
+    "LSP_TOOLS_MCP_CWD",
     "LSP_TOOLS_MCP_INSTALL_DECISIONS",
     "LSP_TOOLS_MCP_PROJECT_CONFIG",
     "LSP_TOOLS_MCP_USER_CONFIG",
   ])
+    && openCodeMcpConfig.environment?.LSP_TOOLS_MCP_CWD === projectDir
     && JSON.stringify((openCodeMcpConfig.environment?.LSP_TOOLS_MCP_PROJECT_CONFIG ?? "").split(delimiter)) === JSON.stringify([
       join(projectDir, ".opencode", "lsp.json"),
       join(projectDir, ".omo", "lsp.json"),
@@ -2564,13 +2567,20 @@ NODE
     run_bounded 180 "$EVIDENCE_DIR/installed-component.log" node "$script"
 }
 
+# The result only compares the worktree before and after, so it gets a digest: the full `git status -uall` listing of
+# a worktree with many untracked files exceeds Linux's 128 KiB limit for one argument (MAX_ARG_STRLEN) and the writer
+# never starts (seen 19-10-2026 with untracked build folders: 139 KB, "argument list too long").
+worktree_digest() {
+  printf '%s' "$1" | sha256sum | cut -d' ' -f1
+}
+
 write_final_result() {
   local real_omo_before="$1" real_omo_after="$2" real_codex_before="$3" real_codex_after="$4"
   local worktree_before="$5" worktree_after="$6" sandbox_removed="$7"
   RESULT_STAGE="$EVIDENCE_DIR/.result.json.$$"
   node --input-type=module - \
     "$RESULT_STAGE" "$SCENARIO" "$real_omo_before" "$real_omo_after" "$real_codex_before" "$real_codex_after" \
-    "$worktree_before" "$worktree_after" "$sandbox_removed" \
+    "$(worktree_digest "$worktree_before")" "$(worktree_digest "$worktree_after")" "$sandbox_removed" \
     "$EVIDENCE_DIR/path-contract.json" "$EVIDENCE_DIR/app-server.json" "$EVIDENCE_DIR/daemon-state.json" \
     "$EVIDENCE_DIR/workspace-edit-contract.json" "$EVIDENCE_DIR/rename-fixture.json" "$EVIDENCE_DIR/rename-server-events.jsonl" \
     "$EVIDENCE_DIR/diagnostics-freshness-contract.json" "$EVIDENCE_DIR/diagnostics-freshness-fixture.json" \
@@ -3014,7 +3024,7 @@ write_auth_ownership_result() {
   RESULT_STAGE="$EVIDENCE_DIR/.result.json.$$"
   node --input-type=module - \
     "$RESULT_STAGE" "$SCENARIO" "$real_omo_before" "$real_omo_after" "$real_codex_before" "$real_codex_after" \
-    "$worktree_before" "$worktree_after" "$sandbox_removed" "$EVIDENCE_DIR/path-contract.json" "$EVIDENCE_DIR/auth-ownership.json" <<'NODE'
+    "$(worktree_digest "$worktree_before")" "$(worktree_digest "$worktree_after")" "$sandbox_removed" "$EVIDENCE_DIR/path-contract.json" "$EVIDENCE_DIR/auth-ownership.json" <<'NODE'
 import { readFileSync, writeFileSync } from "node:fs";
 const [output, scenario, omoBefore, omoAfter, codexBefore, codexAfter, worktreeBefore, worktreeAfter, sandboxRemoved, contractPath, authPath] = process.argv.slice(2);
 const contract = JSON.parse(readFileSync(contractPath, "utf8"));
