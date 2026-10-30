@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 import { createThreadComponent } from "./component"
 import type { ThreadHost } from "./tools"
+
+// Inside the test process's temp root, deleted with it (fork H31).
+const STATE_DIRECTORY = join(tmpdir(), "thread-test-state")
 
 function host(): ThreadHost {
   return {
@@ -24,19 +29,19 @@ function api() { const tools: Record<string, unknown>[] = []; return { tools, pi
 describe("thread component production registration", () => {
   test("registers all nine tools when a test host is supplied", () => {
     const f = api()
-    createThreadComponent({ host: host(), stateDirectory: "/tmp/thread-test-state" }).register(f.pi as never, context([]) as never)
+    createThreadComponent({ host: host(), stateDirectory: STATE_DIRECTORY }).register(f.pi as never, context([]) as never)
     expect(f.tools.map((tool) => tool.name)).toEqual(["thread_create", "thread_list", "thread_read", "thread_send", "thread_interrupt", "thread_handoff", "thread_rename", "thread_set_model", "thread_set_reasoning"])
   })
 
   test("registers the family regardless of the context flag", () => {
     const f = api()
-    createThreadComponent({ host: host(), stateDirectory: "/tmp/thread-test-state" }).register(f.pi as never, context([]) as never)
+    createThreadComponent({ host: host(), stateDirectory: STATE_DIRECTORY }).register(f.pi as never, context([]) as never)
     expect(f.tools.map((tool) => tool.name)).toEqual(["thread_create", "thread_list", "thread_read", "thread_send", "thread_interrupt", "thread_handoff", "thread_rename", "thread_set_model", "thread_set_reasoning"])
   })
 
   test("registers all nine tools when a test host is supplied and no host flag exists", () => {
     const f = api()
-    createThreadComponent({ host: host(), stateDirectory: "/tmp/thread-test-state" }).register(f.pi as never, context([]) as never)
+    createThreadComponent({ host: host(), stateDirectory: STATE_DIRECTORY }).register(f.pi as never, context([]) as never)
     expect(f.tools).toHaveLength(9)
   })
 })

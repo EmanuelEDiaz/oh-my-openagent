@@ -20,6 +20,8 @@ export function getOpenCodeCliConfigDir(env: NodeJS.ProcessEnv = process.env): s
     return resolveConfigPath(customConfigDir)
   }
 
-  const xdgConfigDir = env["XDG_CONFIG_HOME"]?.trim() || join(homedir(), ".config")
+  // HOME first, like utils' getHomeDirectory: os.homedir() ignores a changed HOME (fork finding H34).
+  const home = env["HOME"]?.trim() || env["USERPROFILE"]?.trim() || homedir()
+  const xdgConfigDir = env["XDG_CONFIG_HOME"]?.trim() || join(home, ".config")
   return resolveConfigPath(join(xdgConfigDir, "opencode"))
 }

@@ -36,6 +36,8 @@ export class LspClientConnection extends LspClientTransport {
 				rootPath: this.root,
 				workspaceFolders: [{ uri: rootUri, name: "workspace" }],
 				capabilities: {
+					// Lets servers say when they are still loading (fork incidents H22): diagnostics wait for them.
+					window: { workDoneProgress: true },
 					textDocument: {
 						hover: { contentFormat: ["markdown", "plaintext"] },
 						definition: { linkSupport: true },

@@ -69,7 +69,7 @@ describe("runConfigModels", () => {
       expect(exitCode).toBe(1)
       expect(lines).toContain(`${"sisyphus".padEnd(19)}${"missing".padEnd(13)}opencode/deepseek-v4-flash-free (gone)  >  opencode/big-pickle`)
       expect(lines).toContain(`${"oracle".padEnd(19)}${"BROKEN".padEnd(13)}opencode/gone-1 (gone)  >  opencode/gone-2 (gone)`)
-      expect(lines).toContain("Mid-session fallback (runtime_fallback): off")
+      expect(lines).toContain("Mid-session fallback (runtime_fallback): on")
       expect(lines.some((line) => line.startsWith("build "))).toBe(false)
     })
 

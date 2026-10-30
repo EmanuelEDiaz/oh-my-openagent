@@ -3,6 +3,7 @@
 // allow: SIZE_OK - legacy fixture-heavy resolver matrix; add new resolver behavior in focused sibling tests instead.
 
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test"
+import * as loggerModule from "../../../shared/logger"
 import type { DelegateTaskArgs } from "../types"
 import type { ExecutorContext } from "../executor-types"
 
@@ -65,6 +66,10 @@ function createExecutorContext(
   }
 }
 
+afterEach(() => {
+  loggerModule._resetLoggerForTesting()
+})
+
 describe("resolveSubagentExecution", () => {
   let resolveSubagentExecution: SubagentResolverModule["resolveSubagentExecution"]
 
@@ -79,9 +84,7 @@ describe("resolveSubagentExecution", () => {
     loadProjectAgentsMock.mockReset()
     loadUserAgentsMock.mockImplementation(() => ({}))
     loadProjectAgentsMock.mockImplementation(() => ({}))
-    mock.module("../../../shared/logger", () => ({
-      log: logMock,
-    }))
+    loggerModule._setLoggerForTesting({ sink: logMock })
     mock.module("../../../shared/connected-providers-cache", () => ({
       readConnectedProvidersCache: readConnectedProvidersCacheMock,
       readProviderModelsCache: readProviderModelsCacheMock,
@@ -1350,9 +1353,7 @@ describe("resolveSubagentExecution - agent name sanitization", () => {
     loadProjectAgentsMock.mockReset()
     loadUserAgentsMock.mockImplementation(() => ({}))
     loadProjectAgentsMock.mockImplementation(() => ({}))
-    mock.module("../../../shared/logger", () => ({
-      log: logMock,
-    }))
+    loggerModule._setLoggerForTesting({ sink: logMock })
     mock.module("../../../shared/connected-providers-cache", () => ({
       readConnectedProvidersCache: readConnectedProvidersCacheMock,
       readProviderModelsCache: readProviderModelsCacheMock,

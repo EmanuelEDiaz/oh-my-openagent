@@ -33,7 +33,7 @@ Every execution-control answer prints a single snapshot line beginning with `STO
 
 | Command | Effect |
 |---|---|
-| `launch <adapter> <program> [args...]` | Spawn a stdio adapter (path to executable or `.mjs` adapter) and launch the program under it |
+| `launch <adapter> <program> [args...]` | Spawn a stdio adapter (path to executable or `.mjs` adapter) and launch the program under it. Quote paths that contain spaces: `launch "/home/me/my projects/adapter.mjs" app.py` |
 | `attach <host:port>` | Connect to a listening adapter over TCP and attach |
 | `break <file>:<line>` / `rmbreak <file>:<line>` | Set / remove a source breakpoint |
 | `continue` / `step` / `next` / `stepin` / `stepout` / `pause` | Execution control; each prints a `STOP:` snapshot when the debuggee next stops |

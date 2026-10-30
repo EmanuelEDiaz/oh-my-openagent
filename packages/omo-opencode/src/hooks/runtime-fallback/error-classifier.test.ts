@@ -229,6 +229,23 @@ describe("runtime-fallback error classifier", () => {
     ])
   })
 
+  test("classifies OpenCode Zen's out-of-funds answer as quota_exceeded, so a paid model falls back (19-10-2026)", () => {
+    //#given the exact error Zen returned for a paid title model on an account with no balance (user's logs, 16-10-2026)
+    const errors = [
+      { name: "APIError", data: { message: "Upstream request failed: Insufficient account funds" } },
+      { name: "APIError", data: { message: "Insufficient account balance" } },
+      { name: "APIError", data: { message: "insufficient credits on this account" } },
+    ]
+
+    //#when
+    const classifications = errors.map((error) => classifyErrorType(error))
+    const retryable = errors.map((error) => isRetryableError(error, [429, 500, 502, 503, 504]))
+
+    //#then
+    expect(classifications).toEqual(["quota_exceeded", "quota_exceeded", "quota_exceeded"])
+    expect(retryable).toEqual([true, true, true])
+  })
+
   test("classifies ProviderModelNotFoundError as model_not_found", () => {
     //#given
     const error = {

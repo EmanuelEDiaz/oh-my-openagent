@@ -435,6 +435,7 @@ async function inspectExtractedTools(input) {
       registerMessageRenderer() {},
     }
     await extension.default(pi)
+    await emitFirstPaint(handlers)
     const lspTools = tools.filter((tool) => typeof tool?.name === "string" && tool.name.startsWith("lsp_"))
     const unavailablePath = join(input.projectDir, "missing.unknown")
     writeFileSync(unavailablePath, "plain text\n")
@@ -481,6 +482,16 @@ function describeTool(tool) {
     executionMode: tool.executionMode ?? null,
     keys: Object.keys(tool).filter((key) => key !== "execute").sort(),
   }
+}
+
+// The extension defers startup work (the LSP project-config notice among it) until the host's first paint, which Senpi
+// signals with an `input` event (omo-senpi startup-deferral, 17-09-2026). The in-process inspections emit it as Senpi
+// would; without it they finish before the 750 ms backstop and never see that work (fork incidents H17).
+async function emitFirstPaint(handlers) {
+  for (const { handler } of handlers.filter((entry) => entry.event === "input")) {
+    await handler({ type: "input", text: "" }, sessionContext("qa-first-paint"))
+  }
+  await new Promise((resolve) => setTimeout(resolve, 50))
 }
 
 function sessionContext(sessionId, widgetCalls = [], statuses = []) {
@@ -593,6 +604,7 @@ async function inspectExtractedPostEdit(input) {
       registerMessageRenderer() {},
     }
     await extension.default(pi)
+    await emitFirstPaint(handlers)
     const dispatch = async (event, payload, sessionId) => {
       const results = []
       for (const handler of handlers) {

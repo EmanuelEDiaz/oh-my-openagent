@@ -97,7 +97,7 @@ export function createContinuationHooks(args: {
     : null
 
   // Network cuts (fork roadmap 0.15): created before the stall watchdog, which asks it whether a stall is a cut.
-  const networkGuard = safeCreateHook("network-guard", () => createPluginNetworkGuard(ctx, pluginConfig), { enabled: safeHookEnabled })
+  const networkGuard = safeCreateHook("network-guard", () => createPluginNetworkGuard(ctx, pluginConfig, backgroundManager), { enabled: safeHookEnabled })
 
   const stallWatchdog = isHookEnabled("stall-watchdog") && pluginConfig.stall?.enabled !== false
     ? safeHook("stall-watchdog", () => createPluginStallWatchdogHook(ctx, pluginConfig))

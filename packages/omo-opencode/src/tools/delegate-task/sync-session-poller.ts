@@ -69,6 +69,8 @@ export async function pollSyncSession(
     hasActiveChildBackgroundTasks?: (sessionID: string) => boolean
     hasPendingParentWake?: (sessionID: string) => boolean
     childWakeGraceMs?: number
+    /** Project folder of the calling instance, for its stall watchdog (fork incidents H13). */
+    directory?: string
   },
   timeoutMs?: number
 ): Promise<string | null> {
@@ -126,7 +128,7 @@ export async function pollSyncSession(
     }
 
     // The stall watchdog saw no model output for its window: stop here so the runner retries on the next model.
-    if (getStallWatchdog()?.isStalled(input.sessionID)) {
+    if (getStallWatchdog(input.directory)?.isStalled(input.sessionID)) {
       log("[task] Subagent stalled", { sessionID: input.sessionID, pollCount })
       abortSyncSession(client, input.sessionID, "stalled")
       return stallErrorMessage(input.sessionID)

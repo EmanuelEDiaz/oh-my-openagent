@@ -61,9 +61,9 @@ describe("applyToolConfig", () => {
 
         applyToolConfig(params)
 
-        const tools = params.config.tools as Record<string, unknown>
-        expect(tools.todowrite).toBe(false)
-        expect(tools.todoread).toBe(false)
+        const permission = params.config.permission as Record<string, unknown>
+        expect(permission.todowrite).toBe("deny")
+        expect(permission.todoread).toBe("deny")
       })
 
       it.each([
@@ -249,9 +249,9 @@ describe("applyToolConfig", () => {
 
         applyToolConfig(params)
 
-        const tools = params.config.tools as Record<string, unknown>
-        expect(tools.todowrite).toBeUndefined()
-        expect(tools.todoread).toBeUndefined()
+        const permission = params.config.permission as Record<string, unknown>
+        expect(permission.todowrite).toBeUndefined()
+        expect(permission.todoread).toBeUndefined()
       })
 
       it.each([
