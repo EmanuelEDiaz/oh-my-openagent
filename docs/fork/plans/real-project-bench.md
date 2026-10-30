@@ -72,3 +72,12 @@ catalogar. Es el caso que motivó el 0.27 y varias funciones del plugin.
 - F2 hecha: `command-grader.ts` (`commandGrader`, `defectRecall`), `local-suites.ts`, `arbiter.ts` + `arbitrate.ts`,
   `OMO_BENCH_ROOT`, resultados e informes de las suites privadas en su carpeta. Pruebas en rojo y luego en verde
   (`real-project.test.ts`, 12/12; `script/fork` + auditorías 146/146), `typecheck:script` limpio.
+- 30-10-2026, S1 arbitrada (aprobada con observaciones; en local). Hallazgos del plugin H45 y H46 arreglados y
+  fusionados (`1de71be16`). S2 (corregir los fallos que bloquean con pruebas de comportamiento + auditoría de interfaz
+  con Playwright) en marcha.
+- 30-10-2026, **decisión del usuario sobre el orden ("Hitos")**: el inventario no se repara sin fin. Tras S2 se congela
+  como banco (tareas reales con respuesta conocida, desde el commit original) y se vuelve al orden del roadmap. Los
+  proyectos reales se miden en hitos: línea base ahora, al cerrar las 5 ramas pendientes del 11-10 (0.22, 0.23, 0.9c,
+  0.21 ×2) y en la Fase 5 (5.1/5.2). Segundo proyecto real: `codegenerator` (Python) en el primer hito. Cada hallazgo
+  del plugin en esas sesiones se arregla en el momento con su test en rojo.
+
