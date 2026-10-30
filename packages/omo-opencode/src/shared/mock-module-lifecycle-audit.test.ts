@@ -260,4 +260,22 @@ describe("mock.module lifecycle hygiene", () => {
     // then
     expect(offenders.sort()).toEqual([])
   }, 20_000)
+
+  // Fork incident H47 (30-10-2026): a claude-code-hooks test replaced the whole shared barrel with a spread copy to catch
+  // log calls. mock.restore() does not undo it, so with hooks and agents in one process nine model-resolution tests
+  // resolved models through the copy and failed. Log capture uses the logger's test sink instead.
+  test("#given test files #when audited #then none replaces the shared barrel with mock.module", async () => {
+    // given
+    const files = [...await listTestFiles(SOURCE_ROOT), ...await listPackageTestFiles()]
+    const barrelMock = /mock\.module\(\s*["'`](?:\.\.\/)+shared(?:\/index(?:\.ts)?)?["'`]/
+
+    // when
+    const offenders: string[] = []
+    for (const filePath of files) {
+      if (barrelMock.test(await readFile(filePath, "utf8"))) offenders.push(relativeSourcePath(filePath))
+    }
+
+    // then
+    expect(offenders.sort()).toEqual([])
+  }, 20_000)
 })
