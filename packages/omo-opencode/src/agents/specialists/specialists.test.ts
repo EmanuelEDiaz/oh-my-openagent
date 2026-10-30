@@ -2,6 +2,7 @@ import { describe, expect, spyOn, test } from "bun:test"
 
 import * as shared from "../../shared"
 import { createBuiltinAgents } from "../builtin-agents"
+import { isAllowedForTabAgent, TAB_AGENT_SPECIALISTS } from "../tab-agent-roles"
 import { SPECIALISTS } from "./catalog"
 import { createSpecialistAgent } from "./factory"
 
@@ -107,7 +108,9 @@ describe("specialists catalog", () => {
     expect(prompt("api-lookup")).toContain("degraded")
   })
 
-  test("the orchestrator's delegation table advertises every specialist with its requirement", async () => {
+  // Fork 0.22: each tab agent advertises only its own specialists, so the check is per role, and no specialist may be
+  // left without a tab agent that can call it.
+  test("each tab agent's delegation table advertises exactly its role's specialists, and every specialist has one", async () => {
     // given
     const fetchSpy = spyOn(shared, "fetchAvailableModels").mockResolvedValue(new Set(["anthropic/claude-opus-4-8", "openai/gpt-5.6-sol"]))
 
@@ -118,7 +121,10 @@ describe("specialists catalog", () => {
       // then
       for (const spec of SPECIALISTS) {
         expect(agents[spec.name]?.mode).toBe("subagent")
-        expect(agents.sisyphus?.prompt).toContain(`→ \`${spec.name}\``)
+        // Sisyphus's table uses "→ `name`", Atlas's lists "**`name`**".
+        const advertised = (tab: string) => [`→ \`${spec.name}\``, `**\`${spec.name}\`**`].some((entry) => agents[tab]?.prompt?.includes(entry) ?? false)
+        expect(Object.keys(TAB_AGENT_SPECIALISTS).filter(advertised)).not.toEqual([])
+        expect(advertised("sisyphus")).toBe(isAllowedForTabAgent("sisyphus", spec.name))
       }
       expect(agents.sisyphus?.prompt).toContain("→ `verifier` - ")
       expect(agents.sisyphus?.prompt).toContain("**MANDATORY before claiming any task done")
