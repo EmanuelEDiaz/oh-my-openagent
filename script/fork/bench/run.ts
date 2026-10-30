@@ -4,6 +4,7 @@
  *
  *   bun script/fork/bench/run.ts --agent explore [--split dev|holdout|all] [--repeat 3] [--label baseline]
  *                                [--task <id>] [--smoke] [--offline] [--allow-stale]
+ *                                [--plugin-settings '{"tab_agent_roles":{"enabled":false}}']
  *
  * Builds nothing: run the plugin build first (the bench refuses a dist/ older than the sources). Uses the models the
  * user picked with /omo-models; each result records the model each agent really used. Sandbox and its copy of
@@ -28,12 +29,13 @@ import { IMPACT_TASKS } from "./tasks/impact"
 import { IMPACT_HARD_TASKS } from "./tasks/impact-hard"
 import { LOOP_TASKS } from "./tasks/loops"
 import { LOOP_HARD_TASKS } from "./tasks/loops-hard"
+import { ROLE_TASKS } from "./tasks/roles"
 import { LIBRARIAN_WEB_TASKS, WEB_RESEARCHER_TASKS } from "./tasks/web-research"
 import { LIBRARIAN_HARD_TASKS, WEB_RESEARCHER_HARD_TASKS } from "./tasks/web-research-hard"
 import type { RunResult, Task } from "./types"
 
 const REPO = join(import.meta.dir, "../../..")
-const SUITES: Record<string, readonly Task[]> = { explore: EXPLORE_TASKS, "web-researcher": WEB_RESEARCHER_TASKS, "librarian-web": LIBRARIAN_WEB_TASKS, "web-researcher-hard": WEB_RESEARCHER_HARD_TASKS, "librarian-hard": LIBRARIAN_HARD_TASKS, "fix-integrity": FIX_INTEGRITY_TASKS, impact: IMPACT_TASKS, "impact-hard": IMPACT_HARD_TASKS, loops: LOOP_TASKS, "loops-hard": LOOP_HARD_TASKS }
+const SUITES: Record<string, readonly Task[]> = { explore: EXPLORE_TASKS, "web-researcher": WEB_RESEARCHER_TASKS, "librarian-web": LIBRARIAN_WEB_TASKS, "web-researcher-hard": WEB_RESEARCHER_HARD_TASKS, "librarian-hard": LIBRARIAN_HARD_TASKS, "fix-integrity": FIX_INTEGRITY_TASKS, impact: IMPACT_TASKS, "impact-hard": IMPACT_HARD_TASKS, loops: LOOP_TASKS, "loops-hard": LOOP_HARD_TASKS, roles: ROLE_TASKS }
 const INFRA_RETRIES = 2
 // A lost connection is waited out and retried without using up INFRA_RETRIES, a few times per run at most.
 const CONNECTION_RETRIES = 5
@@ -153,6 +155,8 @@ async function main(): Promise<void> {
     overridePluginConfig(sandbox, {
       ...(option("model-all") ? { allModels: option("model-all") as string } : {}),
       ...(option("disable-hooks") ? { disabledHooks: (option("disable-hooks") as string).split(",").map((hook) => hook.trim()).filter(Boolean) } : {}),
+      // --plugin-settings '{"tab_agent_roles":{"enabled":false}}': A/B runs of a plugin setting.
+      ...(option("plugin-settings") ? { settings: JSON.parse(option("plugin-settings") as string) as Record<string, Record<string, unknown>> } : {}),
     })
     overrideAgentModels(sandbox, modelOverrides())
     if (proxy) routeZenThrough(sandbox, proxy.url)

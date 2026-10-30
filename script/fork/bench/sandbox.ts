@@ -244,8 +244,11 @@ export function overrideAgentModels(sandbox: Sandbox, overrides: Readonly<Record
  * Sandbox-only plugin settings for an A/B run: every agent and category on one model, and hooks to switch off
  * (e.g. measuring a guard with and without it). The user's real configuration is never touched.
  */
-export function overridePluginConfig(sandbox: Sandbox, options: { readonly allModels?: string; readonly disabledHooks?: readonly string[] }): void {
-  if (!options.allModels && !options.disabledHooks?.length) return
+export function overridePluginConfig(
+  sandbox: Sandbox,
+  options: { readonly allModels?: string; readonly disabledHooks?: readonly string[]; readonly settings?: Readonly<Record<string, Record<string, unknown>>> },
+): void {
+  if (!options.allModels && !options.disabledHooks?.length && !options.settings) return
   const path = join(sandbox.root, "home/.omo/omo.jsonc")
   const config = (existsSync(path) ? parseJsonc<Record<string, unknown>>(readFileSync(path, "utf8")) : {}) ?? {}
   const scope = ((config["[opencode]"] as Record<string, unknown> | undefined) ?? (config["[opencode]"] = {})) as Record<string, unknown>
@@ -261,6 +264,10 @@ export function overridePluginConfig(sandbox: Sandbox, options: { readonly allMo
   }
   if (options.disabledHooks?.length) {
     scope["disabled_hooks"] = [...new Set([...((scope["disabled_hooks"] as string[] | undefined) ?? []), ...options.disabledHooks])]
+  }
+  // One level deep: `{ tab_agent_roles: { enabled: false } }` keeps the section's other keys.
+  for (const [section, values] of Object.entries(options.settings ?? {})) {
+    scope[section] = { ...((scope[section] as Record<string, unknown> | undefined) ?? {}), ...values }
   }
   writeFileSync(path, JSON.stringify(config, null, 2))
 }

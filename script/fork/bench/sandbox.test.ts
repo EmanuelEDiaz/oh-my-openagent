@@ -88,6 +88,17 @@ describe("createSandbox / prepareWorkdir / destroySandbox", () => {
     expect(scope.disabled_hooks).toEqual(["x", "test-integrity-guard"])
     rmSync(root, { recursive: true, force: true })
   })
+
+  // Fork 0.22 measurement: the same suite with a plugin setting on and off (tab_agent_roles.enabled), in the sandbox only.
+  test("A/B settings: plugin settings are merged into the sandbox's [opencode] block", () => {
+    const root = mkdtempSync(join(tmpdir(), "omo-bench-ab-settings-"))
+    mkdirSync(join(root, "home/.omo"), { recursive: true })
+    writeFileSync(join(root, "home/.omo/omo.jsonc"), '{ "[opencode]": { "tab_agent_roles": { "enabled": true, "other": 1 } } }')
+    overridePluginConfig({ root, env: {} }, { settings: { tab_agent_roles: { enabled: false } } })
+    const scope = JSON.parse(readFileSync(join(root, "home/.omo/omo.jsonc"), "utf8"))["[opencode]"]
+    expect(scope.tab_agent_roles).toEqual({ enabled: false, other: 1 })
+    rmSync(root, { recursive: true, force: true })
+  })
 })
 
 // Fork incidents H27 (20-10-2026): a QA run stopped by `systemctl stop` (the RAM guard, or a gap for another agent)

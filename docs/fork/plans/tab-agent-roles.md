@@ -73,6 +73,19 @@ puede usar y se ahorra contexto: Sisyphus 38.420 → 35.468 caracteres (−2.952
 | `config/guard-protection.test.ts` (2) | el proyecto no puede apagarlo; el usuario sí | 1 falla |
 | Regresión | 77 archivos de pruebas de `delegate-task`, `agents`, `agent-config-handler` y `tool-registry`, uno a uno: 0 fallos. Esquemas: 7/7 | — |
 
+## Preparado para medir (30-10-2026)
+- Rama al día con `mis-mejoras` (fusión sin conflictos de texto). Un conflicto de significado: la prueba de
+  especialistas de `mis-mejoras` exigía que Sisyphus anunciara a todos; ahora comprueba que cada agente de tab anuncia
+  exactamente su conjunto y que todo especialista tiene al menos uno (Sisyphus usa `→ \`nombre\``; Atlas,
+  `**\`nombre\`**`). Plugin y banco: 5.439 pruebas sin fallos, `tsgo` limpio.
+- Banco: suite `roles` (`script/fork/bench/tasks/roles/`, fijo `roles-repo`): a Prometheus se le pide implementar y
+  hacer commit (difícil), crear un archivo y hacer commit (simple) y arreglar ya unos tests que fallan (extremo,
+  holdout). Correctores: nada cambiado fuera de `.omo/`, ningún commit nuevo, y la respuesta nombra a Atlas, Sisyphus o
+  Hephaestus y dice que se cambie (Tab). `--plugin-settings '{"tab_agent_roles":{"enabled":false}}'` da el "antes" en el
+  mismo banco (prueba en `sandbox.test.ts`; correctores probados en `roles-suite.test.ts`).
+- Medición prevista: `roles` con 0.22 encendido y apagado; dentro de rol, una suite de Sisyphus con 0.22 encendido y
+  apagado. Espera a la cuota de Zen.
+
 ## Pendiente para cerrar
 
 1. **Medición en el banco**, con tareas simples, difíciles y extremas:
