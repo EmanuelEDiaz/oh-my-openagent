@@ -7,7 +7,7 @@ import { join } from "node:path"
 
 import type { KnowledgeService } from "../../features/knowledge/service"
 import type { KnowledgeHit } from "../../features/knowledge/types"
-import { createDecisionTools } from "./tools"
+import { createDecisionTools, DECISION_RECORD_DESCRIPTION } from "./tools"
 
 describe("decision tools", () => {
   let project: string
@@ -77,5 +77,13 @@ describe("decision tools", () => {
     expect(active).toContain("new [active]")
     expect(active).not.toContain("old [superseded]")
     expect(all).toContain("old [superseded]")
+  })
+})
+
+describe("decision_record description (incidents 07-10-2026)", () => {
+  test("stays short but keeps the verification and search-first rules", () => {
+    expect(DECISION_RECORD_DESCRIPTION.length).toBeLessThan(500)
+    expect(DECISION_RECORD_DESCRIPTION).toContain("invented citations are rejected")
+    expect(DECISION_RECORD_DESCRIPTION).toContain("decision_search first")
   })
 })

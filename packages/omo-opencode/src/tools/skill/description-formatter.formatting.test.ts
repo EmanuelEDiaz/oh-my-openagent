@@ -65,3 +65,41 @@ describe("formatCombinedDescription with bare-name skills", () => {
     expect(result).toContain("short refactor command")
   })
 })
+
+describe("formatCombinedDescription with skills OpenCode already lists (incidents 07-10-2026)", () => {
+  it("lists only the skills missing from OpenCode's <available_skills>, and says why", () => {
+    const skills: SkillInfo[] = [makeSkill("git-master"), makeSkill("my-disk-skill"), makeSkill("Other-Disk-Skill")]
+    const commands: CommandInfo[] = [makeCommand("handoff", "handoff command")]
+
+    const result = formatCombinedDescription(skills, commands, {
+      includeSkills: true,
+      excludeSkillNames: new Set(["my-disk-skill", "other-disk-skill"]),
+    })
+
+    expect(result).toContain("/git-master")
+    expect(result).not.toContain("my-disk-skill")
+    expect(result).not.toContain("Other-Disk-Skill")
+    expect(result).toContain("/handoff")
+    expect(result).toContain("not repeated here")
+  })
+
+  it("still suppresses a builtin command aliasing a skill that OpenCode lists", () => {
+    const skills: SkillInfo[] = [makeSkill("debugging")]
+    const commands: CommandInfo[] = [makeCommand("debugging", "short debugging command")]
+
+    const result = formatCombinedDescription(skills, commands, { includeSkills: true, excludeSkillNames: new Set(["debugging"]) })
+    expect(result).not.toContain("short debugging command")
+  })
+})
+
+describe("synced copies of skills are listed once (real config, 12-10-2026)", () => {
+  it("drops synced/<id>/<name> when <name> is listed or native", () => {
+    const skills: SkillInfo[] = [makeSkill("synced/abc_def/docx"), makeSkill("synced/abc_def/redux"), makeSkill("git-master"), makeSkill("synced/abc_def/git-master")]
+    const result = formatCombinedDescription(skills, [], { includeSkills: true, excludeSkillNames: new Set(["docx"]) })
+    expect(result).not.toContain("synced/abc_def/docx")
+    expect(result).not.toContain("synced/abc_def/git-master")
+    expect(result).toContain("/git-master")
+    // a synced skill with no bare twin stays: it is the only way to reach it
+    expect(result).toContain("synced/abc_def/redux")
+  })
+})

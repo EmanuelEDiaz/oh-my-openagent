@@ -31,6 +31,27 @@ describe("installModuleMockLifecycle", () => {
     expect(callerUrl).toBe("file:///D:/a/oh-my-openagent/oh-my-openagent/src/hooks/example.test.ts")
   })
 
+  test("#given a repository path with spaces #when selecting caller url #then the whole path is kept (12-10-2026)", () => {
+    // given: a checkout under "mejoras opencode" broke every per-file restore, so mocks leaked between files
+    const stack = [
+      "Error",
+      "    at mock.module (/home/u/mejoras opencode/repo/packages/omo-opencode/src/testing/module-mock-lifecycle.ts:280:25)",
+      "    at registerModuleMocks (/home/u/mejoras opencode/repo/packages/omo-opencode/src/hooks/runtime-fallback/hook.init.test.ts:25:3)",
+      "    at <anonymous> (/home/u/mejoras opencode/repo/packages/omo-opencode/src/hooks/runtime-fallback/hook.init.test.ts:79:5)",
+    ].join("\n")
+
+    // when
+    const callerUrl = getCallerUrlFromStack(stack, "file:///fallback.ts")
+
+    // then
+    expect(callerUrl).toBe("file:///home/u/mejoras%20opencode/repo/packages/omo-opencode/src/hooks/runtime-fallback/hook.init.test.ts")
+  })
+
+  test("#given a file URL frame with spaces #when selecting caller url #then it is kept whole", () => {
+    const stack = ["Error", "    at fn (file:///home/u/mejoras%20opencode/repo/src/a.test.ts:3:1)"].join("\n")
+    expect(getCallerUrlFromStack(stack, "file:///fallback.ts")).toBe("file:///home/u/mejoras%20opencode/repo/src/a.test.ts")
+  })
+
   test("restores the original module exports on mock.restore", () => {
     // given
     const moduleCalls: Array<{ specifier: string; value: Record<string, unknown> }> = []

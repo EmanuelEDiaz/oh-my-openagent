@@ -79,7 +79,8 @@ export function createResumeToolsRecord(args: {
 /** web-researcher's tools (fork roadmap 4.18); the tool config allows them for that agent only. */
 export function createWebResearchToolsRecord(args: {
   readonly pluginConfig: OhMyOpenCodeConfig
+  readonly directory?: string
 }): Record<string, ToolDefinition> {
   if (args.pluginConfig.web_research?.enabled === false) return {}
-  return createWebResearchTools(createPluginWebResearch(args.pluginConfig.web_research))
+  return createWebResearchTools(createPluginWebResearch(args.pluginConfig.web_research, process.env, args.directory))
 }

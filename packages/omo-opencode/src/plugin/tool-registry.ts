@@ -68,7 +68,7 @@ export function createToolRegistry(args: {
     ...createProcessToolsRecord({ managers }),
     ...createResumeToolsRecord({ managers }),
     ...createCredentialToolsRecord({ pluginConfig, directory: ctx.directory }),
-    ...createWebResearchToolsRecord({ pluginConfig }),
+    ...createWebResearchToolsRecord({ pluginConfig, directory: ctx.directory }),
     ...createTaskToolsRecord({ taskSystemEnabled, pluginConfig, ctx, factories }),
     ...createHashlineToolsRecord({ pluginConfig, ctx, factories }),
   }

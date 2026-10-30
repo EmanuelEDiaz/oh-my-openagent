@@ -2,6 +2,8 @@
  * Lossless resume service (fork roadmap 0.8c): pauses work with a resume card when retries are spent, when OpenCode
  * receives SIGTERM (e.g. earlyoom) and, ahead of time, when memory runs high; resumes it with `resume_task`.
  */
+import { existsSync } from "node:fs"
+
 import { getWorkForSession, selectActiveWork } from "@oh-my-opencode/boulder-state"
 
 import { buildCompactionSnapshot } from "../knowledge/compaction-snapshot"
@@ -18,6 +20,11 @@ export type ResumeServiceDeps = {
   readonly toast: (message: string) => Promise<void>
   /** Sessions worth saving when the process is about to die. */
   readonly activeSessions: () => readonly string[]
+  /**
+   * Whether a session belongs to this project. One OpenCode server can host several project folders, each with its
+   * own plugin instance, while the busy-session list is process-wide (bench 19-10-2026: one session saved six times).
+   */
+  readonly ownsSession?: (sessionID: string) => Promise<boolean>
   readonly memory?: { readonly processLimitBytes: number; readonly systemUsedRatio: number; readonly intervalMs: number; readonly sample?: () => { rss: number; systemUsedRatio: number } }
   readonly log?: (message: string, data?: Record<string, unknown>) => void
 }
@@ -43,10 +50,21 @@ export function createResumeService(deps: ResumeServiceDeps) {
     })
   }
 
-  /** Save cards for every active session; never throws. */
+  let folderGoneLogged = false
+
+  /** Save cards for every active session of this project; never throws. */
   async function pauseActive(reason: string): Promise<number> {
     let saved = 0
-    const sessions = [...new Set(deps.activeSessions())]
+    // OpenCode keeps an instance for a folder that was deleted (bench task folders): nothing can be saved there.
+    if (!existsSync(deps.projectDir)) {
+      if (!folderGoneLogged) deps.log?.("[resume] project folder is gone; nothing to save here", { projectDir: deps.projectDir, reason })
+      folderGoneLogged = true
+      return 0
+    }
+    const busy = [...new Set(deps.activeSessions())]
+    const owned = await Promise.all(busy.map((sessionID) => (deps.ownsSession ? deps.ownsSession(sessionID).catch(() => true) : Promise.resolve(true))))
+    const sessions = busy.filter((_, index) => owned[index])
+    if (sessions.length === 0) return 0
     deps.log?.("[resume] saving active sessions", { reason, sessions })
     for (const sessionID of sessions) {
       try {

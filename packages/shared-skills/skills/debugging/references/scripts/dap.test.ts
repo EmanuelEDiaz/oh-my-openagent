@@ -17,6 +17,18 @@ function frame(message: unknown) {
   return Buffer.concat([Buffer.from(`Content-Length: ${body.length}\r\n\r\n`), body]);
 }
 
+// Fork finding H36 (21-10-2026): commands were split on every space, so an adapter or program path with a space (the
+// repository lives under "mejoras opencode") was cut in two and the adapter never started.
+describe("command line splitting", () => {
+  test("quoted arguments keep their spaces; plain ones split as before", async () => {
+    const { splitCommand } = await import("./dap.mjs");
+    expect(splitCommand(`launch "/home/me/my projects/adapter.mjs" '/tmp/a b.py' --flag`)).toEqual(["launch", "/home/me/my projects/adapter.mjs", "/tmp/a b.py", "--flag"]);
+    expect(splitCommand("break  src/app.py:12 ")).toEqual(["break", "src/app.py:12"]);
+    expect(splitCommand("launch /my\\ dir/adapter.mjs prog")).toEqual(["launch", "/my dir/adapter.mjs", "prog"]);
+    expect(splitCommand(`eval ""`)).toEqual(["eval", ""]);
+  });
+});
+
 describe("DAP framing", () => {
   test("parses multiple frames and frames split across chunks", async () => {
     const { DapFrameParser } = await import("./dap.mjs");
@@ -43,7 +55,7 @@ function session(...fixtureArgs: string[]) {
   let output = "";
   child.stdout.on("data", data => { output += data.toString(); });
   const api = { child, get output() { return output; }, command(line: string) { child.stdin.write(`${line}\n`); } };
-  api.command(`launch ${fixture} /tmp/program.py`);
+  api.command(`launch ${JSON.stringify(fixture)} /tmp/program.py`);
   return api;
 }
 async function until(s: ReturnType<typeof session>, predicate: (out: string) => boolean) {

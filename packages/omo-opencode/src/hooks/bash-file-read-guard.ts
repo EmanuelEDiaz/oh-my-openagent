@@ -1,4 +1,3 @@
-import type { Hooks } from "@opencode-ai/plugin"
 
 import { log } from "../shared"
 
@@ -14,11 +13,13 @@ function isSimpleFileReadCommand(command: string): boolean {
   return FILE_READ_PATTERNS.some((pattern) => pattern.test(command))
 }
 
-export function createBashFileReadGuardHook(): Hooks {
+export function createBashFileReadGuardHook() {
+  // OpenCode only reads `args` from tool.execute.before (fork incident H43): the warning goes on the bash output instead.
+  const warned = new Set<string>()
   return {
     "tool.execute.before": async (
       input: { tool: string; sessionID: string; callID: string },
-      output: { args: Record<string, unknown>; message?: string },
+      output: { args: Record<string, unknown> },
     ): Promise<void> => {
       if (input.tool.toLowerCase() !== "bash") {
         return
@@ -33,12 +34,22 @@ export function createBashFileReadGuardHook(): Hooks {
         return
       }
 
-      output.message = WARNING_MESSAGE
+      warned.add(input.callID)
+      if (warned.size > 200) warned.delete(warned.values().next().value as string)
 
       log("[bash-file-read-guard] warned on bash file read command", {
         sessionID: input.sessionID,
         command,
       })
+    },
+    "tool.execute.after": async (
+      input: { tool: string; sessionID: string; callID: string },
+      output: { title: string; output: string; metadata: unknown },
+    ): Promise<void> => {
+      if (!warned.delete(input.callID)) {
+        return
+      }
+      output.output = [output.output ?? "", WARNING_MESSAGE].filter(Boolean).join("\n\n")
     },
   }
 }

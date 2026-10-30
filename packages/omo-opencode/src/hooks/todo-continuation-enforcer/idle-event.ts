@@ -236,7 +236,7 @@ export async function handleSessionIdle(args: {
   if (shouldStopForStagnation({ sessionID, incompleteCount, progressUpdate })) {
     // First stop only: tell the user and save the work (fork roadmap 0.8c).
     if (progressUpdate.stagnationCount === MAX_STAGNATION_COUNT) {
-      void reportWorkStoppedWithClient(ctx.client as never, sessionID, `${incompleteCount} todo(s) made no progress after ${MAX_STAGNATION_COUNT} continuations`)
+      void reportWorkStoppedWithClient(ctx.client as never, sessionID, `${incompleteCount} todo(s) made no progress after ${MAX_STAGNATION_COUNT} continuations`, ctx.directory)
     }
     return
   }

@@ -23,9 +23,27 @@ const mockModelCacheState = {} as ModelCacheState
 const mockBackgroundManager = unsafeTestValue<BackgroundManager>({})
 
 describe("createSessionHooks", () => {
-  it("keeps model fallback disabled when config is unset", () => {
+  it("creates the model fallback hook by default (standby path while runtime_fallback is on; plan A3)", () => {
     // given
     const pluginConfig = {} as OhMyOpenCodeConfig
+
+    // when
+    const result = createSessionHooks({
+      ctx: mockContext,
+      pluginConfig,
+      modelCacheState: mockModelCacheState,
+      backgroundManager: mockBackgroundManager,
+      isHookEnabled: (hookName) => hookName === "model-fallback",
+      safeHookEnabled: true,
+    })
+
+    // then
+    expect(result.modelFallback).not.toBeNull()
+  })
+
+  it("keeps model fallback disabled when config turns it off", () => {
+    // given
+    const pluginConfig = { model_fallback: false } as OhMyOpenCodeConfig
 
     // when
     const result = createSessionHooks({

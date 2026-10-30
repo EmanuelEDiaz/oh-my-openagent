@@ -87,7 +87,7 @@ export function createToolGuardHooks(args: {
     safeCreateHook(hookName, factory, { enabled: safeHookEnabled })
 
   const commentChecker = isHookEnabled("comment-checker")
-    ? safeHook("comment-checker", () => createCommentCheckerHooks(pluginConfig.comment_checker))
+    ? safeHook("comment-checker", () => createCommentCheckerHooks(pluginConfig.comment_checker, undefined, ctx.directory))
     : null
 
   const toolOutputTruncator = isHookEnabled("tool-output-truncator")
@@ -190,7 +190,7 @@ export function createToolGuardHooks(args: {
     : null
 
   const webResearchVerdict = isHookEnabled("web-research-verdict") && pluginConfig.web_research?.enabled !== false
-    ? safeHook("web-research-verdict", () => createWebResearchVerdictHook())
+    ? safeHook("web-research-verdict", () => createWebResearchVerdictHook(ctx.directory))
     : null
 
   const bashFileReadGuard = isHookEnabled("bash-file-read-guard")

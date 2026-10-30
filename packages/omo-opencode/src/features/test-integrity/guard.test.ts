@@ -121,4 +121,25 @@ describe("test-integrity guard (fork 0.9a)", () => {
     expect(note).toContain("UNDONE")
     expect(readFileSync(testFile(), "utf8")).toBe(before)
   })
+
+  test("a shell command that rewrites an existing test is undone and the model is told to ask (bench 19-10-2026)", async () => {
+    const g = guard()
+    const original = readFileSync(testFile(), "utf8")
+    await g.before("bash", "s", "sh1", { command: "sed -i 's/toBe(3)/toBe(-1)/' src/sum.test.ts" })
+    writeFileSync(testFile(), original.replace("toBe(3)", "toBe(-1)"))
+    const note = await g.after({ tool: "bash", sessionID: "s", callID: "sh1", args: { command: "sed -i 's/toBe(3)/toBe(-1)/' src/sum.test.ts" } }, { output: "" })
+    expect(note).toContain("BLOCKED")
+    expect(note).toContain("src/sum.test.ts")
+    expect(note).toContain("Allow editing src/sum.test.ts")
+    expect(readFileSync(testFile(), "utf8")).toBe(original)
+  })
+
+  test("test-writer may still change tests from the shell", async () => {
+    agent = "test-writer"
+    const g = guard()
+    await g.before("bash", "s", "sh2", { command: "echo" })
+    writeFileSync(testFile(), "changed\n")
+    expect(await g.after({ tool: "bash", sessionID: "s", callID: "sh2", args: { command: "echo" } }, { output: "" })).toBe("")
+    expect(readFileSync(testFile(), "utf8")).toBe("changed\n")
+  })
 })

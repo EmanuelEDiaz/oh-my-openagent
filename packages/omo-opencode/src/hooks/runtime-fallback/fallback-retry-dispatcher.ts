@@ -5,6 +5,7 @@ import { log } from "../../shared/logger"
 import { prepareFallback } from "./fallback-state"
 import { restoreFallbackState, snapshotFallbackState } from "./fallback-state-snapshot"
 import { getNetworkGuard } from "../../features/network-guard"
+import { isBackgroundTaskSession } from "../../shared/background-session-owner"
 
 type DispatchFallbackRetryOptions = {
   sessionID: string
@@ -12,10 +13,17 @@ type DispatchFallbackRetryOptions = {
   fallbackModels: string[]
   resolvedAgent?: string
   source: string
+  /** The failed model is listed by its provider but not served (model_not_found): say so in the toast. */
+  notServed?: boolean
 }
 
-function resolveDispatchMessage(result: AutoRetryDispatchOutcome, newModel: string): string {
-  const modelName = newModel.split("/").pop() || newModel
+function shortModelName(model: string): string {
+  return model.split("/").pop() || model
+}
+
+function resolveDispatchMessage(result: AutoRetryDispatchOutcome, newModel: string, notServedModel?: string): string {
+  const modelName = shortModelName(newModel)
+  if (notServedModel !== undefined) return `${shortModelName(notServedModel)} is not served → switched to ${modelName}`
   if (result.status === "queued") return `Fallback queued for ${modelName}`
   if (result.status === "possibly-accepted") return `Fallback dispatch may have been accepted for ${modelName}`
   return `Switched to ${modelName} for next request`
@@ -26,12 +34,19 @@ export async function dispatchFallbackRetry(
   helpers: AutoRetryHelpers,
   options: DispatchFallbackRetryOptions,
 ): Promise<void> {
+  // A background task's session belongs to the BackgroundManager, which relaunches the task on its own chain
+  // (see shared/background-session-owner.ts); a second switch here would double the fallback.
+  if (isBackgroundTaskSession(options.sessionID)) {
+    log(`[${HOOK_NAME}] Fallback skipped - background task session is handled by the BackgroundManager`, { sessionID: options.sessionID, source: options.source })
+    return
+  }
   // Timeouts can fire while the session waits for the network; a fallback then would only burn the chain.
-  if (getNetworkGuard()?.isWaiting(options.sessionID)) {
+  if (getNetworkGuard(deps.ctx.directory)?.isWaiting(options.sessionID)) {
     log(`[${HOOK_NAME}] Fallback skipped - session is waiting for the network`, { sessionID: options.sessionID, source: options.source })
     return
   }
   const snapshot = snapshotFallbackState(options.state)
+  const failedModel = options.state.currentModel
   const result = prepareFallback(
     options.sessionID,
     options.state,
@@ -71,7 +86,7 @@ export async function dispatchFallbackRetry(
         .showToast({
           body: {
             title: "Model Fallback",
-            message: resolveDispatchMessage(dispatchOutcome, result.newModel),
+            message: resolveDispatchMessage(dispatchOutcome, result.newModel, options.notServed ? failedModel : undefined),
             variant: "warning",
             duration: 5000,
           },

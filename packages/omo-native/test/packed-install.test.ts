@@ -6,6 +6,12 @@ import { join, sep } from "node:path"
 
 const packageRoot = join(import.meta.dir, "..")
 
+// `bun add` leaves two empty `.hm` files in its temp dir; pointing it at the test's root keeps them there, deleted with
+// it (fork H31).
+function tempEnv(root: string): Record<string, string | undefined> {
+  return { ...process.env, TMPDIR: root, BUN_TMPDIR: root }
+}
+
 describe("omo-ai packed install", () => {
   test("ships the Senpi patch installer and installs a Senpi that surfaces pre-replay results natively", () => {
     const root = mkdtempSync(join(tmpdir(), "omo-ai-packed-install-"))
@@ -22,7 +28,7 @@ describe("omo-ai packed install", () => {
       const consumer = join(root, "consumer")
       Bun.spawnSync(["mkdir", "-p", consumer], { stdout: "ignore", stderr: "ignore" })
       writeFileSync(join(consumer, "package.json"), JSON.stringify({ name: "omo-ai-consumer", private: true }))
-      const install = Bun.spawnSync(["bun", "add", "--trust", join(root, tarball!)], { cwd: consumer, stdout: "pipe", stderr: "pipe" })
+      const install = Bun.spawnSync(["bun", "add", "--trust", join(root, tarball!)], { cwd: consumer, env: tempEnv(root), stdout: "pipe", stderr: "pipe" })
       expect(install.exitCode).toBe(0)
       const installedPackageRoot = join(consumer, "node_modules", "omo-ai")
       const installedFloor = join(installedPackageRoot, "bin", "lib", "claude-code-floor.js")
@@ -62,7 +68,7 @@ describe("omo-ai packed install", () => {
       const home = join(root, "home")
       Bun.spawnSync(["mkdir", "-p", consumer, home], { stdout: "ignore", stderr: "ignore" })
       writeFileSync(join(consumer, "package.json"), JSON.stringify({ name: "omo-ai-consumer", private: true }))
-      const install = Bun.spawnSync(["bun", "add", "--ignore-scripts", "--backend", "copyfile", join(root, tarball!)], { cwd: consumer, stdout: "pipe", stderr: "pipe" })
+      const install = Bun.spawnSync(["bun", "add", "--ignore-scripts", "--backend", "copyfile", join(root, tarball!)], { cwd: consumer, env: tempEnv(root), stdout: "pipe", stderr: "pipe" })
       expect(install.exitCode).toBe(0)
       const installedPackageRoot = join(consumer, "node_modules", "omo-ai")
       const consumerRequire = createRequire(join(installedPackageRoot, "package.json"))

@@ -113,6 +113,7 @@ export function createToolExecuteAfterHandler(args: {
       await hooks.interactiveBashSession?.["tool.execute.after"]?.(hookInput, output)
       await hooks.editErrorRecovery?.["tool.execute.after"]?.(hookInput, output)
       await hooks.editDiagnostics?.["tool.execute.after"]?.(hookInput, output)
+      await hooks.bashFileReadGuard?.["tool.execute.after"]?.(hookInput, output)
       await hooks.webResearchVerdict?.["tool.execute.after"]?.(hookInput, output)
       await hooks.testIntegrityGuard?.["tool.execute.after"]?.(hookInput, output)
       await hooks.shellSafetyGuard?.["tool.execute.after"]?.(hookInput, output)

@@ -2,20 +2,22 @@
 import { isMainThread } from "node:worker_threads"
 
 import type { ResumeConfig } from "../../config/schema/resume"
-import { registerManagerForCleanup } from "../background-agent/process-cleanup"
+import { registerManagerForCleanup, unregisterManagerForCleanup } from "../background-agent/process-cleanup"
 import { opencodeDbPath } from "../knowledge/service"
 import { openSessionReader } from "../knowledge/session-reader"
 import { getStallWatchdog } from "../stall-watchdog"
 import { log } from "../../shared/logger"
 import { resolveSessionTarget } from "../../shared/session-target"
 import type { PluginContext } from "../../plugin/types"
+import { createInstanceRegistry } from "../../shared/instance-registry"
 import { createResumeService, type ResumeService } from "./service"
 import { registerRetentionDirectory } from "./retention"
 
-let active: ResumeService | undefined
+// One resume service per OpenCode instance (project folder); several can share one server (fork incidents H13).
+const services = createInstanceRegistry<ResumeService>()
 
-export function getActiveResumeService(): ResumeService | undefined {
-  return active
+export function getActiveResumeService(directory?: string): ResumeService | undefined {
+  return services.get(directory)
 }
 
 export function createPluginResumeService(ctx: PluginContext, config: Partial<ResumeConfig> | undefined): ResumeService {
@@ -27,7 +29,12 @@ export function createPluginResumeService(ctx: PluginContext, config: Partial<Re
       await ctx.client.tui.showToast({ body: { title: "Work saved", message, variant: "warning", duration: 15_000 } }).catch(() => undefined)
     },
     // Only sessions that were working: an idle conversation is already safe in OpenCode's database.
-    activeSessions: () => getStallWatchdog()?.busySessions() ?? [],
+    activeSessions: () => getStallWatchdog(ctx.directory)?.busySessions() ?? [],
+    ownsSession: async (sessionID) => {
+      const response = await ctx.client.session.get({ path: { id: sessionID } })
+      const directory = (response as { data?: { directory?: string } }).data?.directory
+      return directory === undefined || directory === ctx.directory
+    },
     memory: {
       processLimitBytes: (config?.memory_limit_mb ?? 1228) * 1024 * 1024,
       systemUsedRatio: (config?.system_memory_percent ?? 85) / 100,
@@ -38,8 +45,19 @@ export function createPluginResumeService(ctx: PluginContext, config: Partial<Re
   service.start()
   registerRetentionDirectory(ctx.directory)
   // Ordered shutdown: the plugin's cleanup waits for every registered manager before exiting.
-  registerManagerForCleanup({ shutdown: () => service.saveOnShutdown() })
+  const cleanup = { shutdown: () => service.saveOnShutdown() }
+  registerManagerForCleanup(cleanup)
   log("[resume] service started", { directory: ctx.directory, mainThread: isMainThread, pid: process.pid, sigtermListeners: process.listenerCount("SIGTERM") })
-  active = service
-  return service
+  // When OpenCode disposes this instance, its timer and its shutdown save go too.
+  let unregisterService = (): void => {}
+  const instance: ResumeService = {
+    ...service,
+    dispose() {
+      service.dispose()
+      unregisterManagerForCleanup(cleanup)
+      unregisterService()
+    },
+  }
+  unregisterService = services.register(ctx.directory, instance)
+  return instance
 }

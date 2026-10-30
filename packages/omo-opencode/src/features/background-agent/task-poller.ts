@@ -33,8 +33,10 @@ export function pruneStaleTasksAndNotifications(args: {
   onTaskPruned: (taskId: string, task: BackgroundTask, errorMessage: string) => void
   taskTtlMs?: number
   sessionStatuses?: SessionStatusMap
+  /** Project folder of the calling instance, for its toast manager (fork incidents H13). */
+  directory?: string
 }): void {
-  const { tasks, notifications, onTaskPruned } = args
+  const { tasks, notifications, onTaskPruned, directory } = args
   const effectiveTtl = args.taskTtlMs ?? TASK_TTL_MS
   const now = Date.now()
   const tasksWithPendingNotifications = new Set<string>()
@@ -55,7 +57,7 @@ export function pruneStaleTasksAndNotifications(args: {
       const age = now - completedAt
       if (age <= TERMINAL_TASK_TTL_MS) continue
 
-      removeTaskToastTracking(taskId)
+      removeTaskToastTracking(taskId, directory)
       tasks.delete(taskId)
       continue
     }
@@ -198,7 +200,7 @@ export async function checkAndInterruptStaleTasks(args: {
     concurrencyManager,
     notifyParentSession,
     sessionStatuses,
-    onTaskInterrupted = (task) => removeTaskToastTracking(task.id),
+    onTaskInterrupted = (task) => removeTaskToastTracking(task.id, directory),
   } = args
   const staleTimeoutMs = config?.staleTimeoutMs ?? DEFAULT_STALE_TIMEOUT_MS
   const sessionGoneTimeoutMs = config?.sessionGoneTimeoutMs ?? DEFAULT_SESSION_GONE_TIMEOUT_MS

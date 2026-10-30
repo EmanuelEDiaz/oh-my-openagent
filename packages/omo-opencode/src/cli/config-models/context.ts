@@ -5,7 +5,7 @@ import { resolveUserOmoConfigPath, updateOmoConfig } from "@oh-my-opencode/omo-c
 import type { OmoConfigEdit } from "@oh-my-opencode/omo-config-core"
 
 import { parseJsonc } from "../../shared"
-import { checkChainAvailability, readAgentChain, readAgentChains } from "./agent-chains"
+import { checkChainAvailability, CONFIGURABLE_AGENTS, entryModel, readAgentChain, readAgentChains } from "./agent-chains"
 import type { ChainAvailability, ModelChainEntry } from "./agent-chains"
 import type { AvailableModelsSource } from "./available-models"
 import type { ModelCatalog, ModelInfo } from "./model-catalog"
@@ -89,7 +89,13 @@ export function unconnectedOllamaModels(state: ModelsState): OllamaModel[] {
   return state.ollama.models.filter((model) => !available.has(ollamaModelId(model)))
 }
 
+/** Unset means on: runtime_fallback is enabled by default (fork plan real-use-incidents A3). */
 export function isRuntimeFallbackEnabled(value: unknown): boolean {
+  return value === undefined || isRuntimeFallbackExplicitlyOn(value)
+}
+
+/** Written as on in the file (what --enable-runtime-fallback guarantees, independent of the default). */
+export function isRuntimeFallbackExplicitlyOn(value: unknown): boolean {
   if (value === true) return true
   return isRecord(value) && value["enabled"] !== false
 }
@@ -157,6 +163,27 @@ export function chainEdits(agent: string, entries: readonly ModelChainEntry[]): 
     { path: [...agentPath, "model"], value: undefined },
     { path: [...agentPath, "fallback_models"], value: undefined },
   ]
+}
+
+export type PruneResult = {
+  readonly edits: OmoConfigEdit[]
+  /** One line per agent that lost models. */
+  readonly report: string[]
+}
+
+/** Drop dead (retired or not-served) models from every agent chain; an emptied chain falls back to the omo default. */
+export function pruneChainEdits(section: OpenCodeSection, isDead: (model: string) => boolean): PruneResult {
+  const edits: OmoConfigEdit[] = []
+  const report: string[] = []
+  for (const agent of CONFIGURABLE_AGENTS) {
+    const entries = readAgentChain(section.agents[agent])
+    const dead = entries.map(entryModel).filter(isDead)
+    if (dead.length === 0) continue
+    const kept = entries.filter((entry) => !isDead(entryModel(entry)))
+    edits.push(...chainEdits(agent, kept).map((edit) => (kept.length === 0 ? { ...edit, value: undefined } : edit)))
+    report.push(`${agent.padEnd(19)}removed ${dead.join(", ")}${kept.length === 0 ? " (chain empty: omo default)" : ""}`)
+  }
+  return { edits, report }
 }
 
 export function runtimeFallbackEdit(): OmoConfigEdit {

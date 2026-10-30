@@ -12,6 +12,8 @@ import { subagentSessions } from "../../features/claude-code-session-state"
 import { resolveMessageEventSessionID } from "../../shared/event-session-id"
 import { normalizeModelToCanonicalString } from "./normalize-model"
 import { stepAsideForNetwork } from "../../features/network-guard"
+import { modelFromEventInfo, recordIfModelNotServed } from "./model-not-served"
+import { isBackgroundTaskSession } from "../../shared/background-session-owner"
 
 export { hasVisibleAssistantResponse } from "./visible-assistant-response"
 
@@ -80,7 +82,7 @@ export function createMessageUpdateHandler(deps: HookDeps, helpers: AutoRetryHel
 
     if (sessionID && role === "assistant" && error) {
       // A network cut is not a model failure (fork roadmap 0.15): the network guard waits and continues on the same model.
-      if (info?.error && stepAsideForNetwork(sessionID, info.error, true)) {
+      if (info?.error && stepAsideForNetwork(sessionID, info.error, true, ctx.directory)) {
         sessionAwaitingFallbackResult.delete(sessionID)
         helpers.clearSessionFallbackTimeout(sessionID)
         log(`[${HOOK_NAME}] message.updated error is a network cut; leaving it to the network guard`, { sessionID, model })
@@ -158,9 +160,18 @@ export function createMessageUpdateHandler(deps: HookDeps, helpers: AutoRetryHel
 
       const agent = info?.agent as string | undefined
       const resolvedAgent = await helpers.resolveAgentForSessionFromContext(sessionID, agent)
+      // OpenCode also emits session.error for the same failure; while the agent was being resolved, that path may
+      // have started the fallback. Read the state again and leave a fallback already under way alone, or a second
+      // state would orphan its retry and neither would run (isolated QA, 12-10-2026).
+      state = sessionStates.get(sessionID)
+      if (sessionRetryInFlight.has(sessionID) && !retrySignal) {
+        log(`[${HOOK_NAME}] message.updated fallback skipped (session.error already started it)`, { sessionID })
+        return
+      }
       const fallbackModels = getFallbackModelsForSession(sessionID, resolvedAgent, pluginConfig)
 
       if (fallbackModels.length === 0) {
+        recordIfModelNotServed(error, modelFromEventInfo(info, model) ?? state?.currentModel)
         if (
           subagentSessions.has(sessionID) &&
           classifyErrorType(error) === "quota_exceeded"
@@ -216,10 +227,12 @@ export function createMessageUpdateHandler(deps: HookDeps, helpers: AutoRetryHel
         }
       }
 
-      if (classifyErrorType(error) === "quota_exceeded") {
+      if (classifyErrorType(error) === "quota_exceeded" && !isBackgroundTaskSession(sessionID)) {
         await helpers.abortSessionRequest(sessionID, "message.updated.quota-fallback")
         sessionRetryInFlight.delete(sessionID)
       }
+
+      const notServed = recordIfModelNotServed(error, modelFromEventInfo(info, model) ?? state.currentModel)
 
       await dispatchFallbackRetry(deps, helpers, {
         sessionID,
@@ -227,6 +240,7 @@ export function createMessageUpdateHandler(deps: HookDeps, helpers: AutoRetryHel
         fallbackModels,
         resolvedAgent,
         source: "message.updated",
+        notServed,
       })
     }
   }

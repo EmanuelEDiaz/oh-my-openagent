@@ -208,4 +208,56 @@ describe("createPluginDispose", () => {
     expect(shutdownSpy).toHaveBeenCalledTimes(1)
     expect(disposeHooksCalls).toHaveLength(1)
   })
+
+  test("#given a resume service #when OpenCode disposes the instance #then its memory timer stops (bench 19-10-2026)", async () => {
+    // given
+    const resumeService = { dispose: (): void => {} }
+    const disposeSpy = spyOn(resumeService, "dispose")
+    const dispose = createPluginDispose({
+      backgroundManager: { shutdown: async (): Promise<void> => {} },
+      skillMcpManager: { disconnectAll: async (): Promise<void> => {} },
+      resumeService,
+      disposeHooks: (): void => {},
+    })
+
+    // when
+    await dispose()
+
+    // then
+    expect(disposeSpy).toHaveBeenCalledTimes(1)
+  })
+
+  test("#given the interruption tracker #when OpenCode disposes the instance #then its heartbeat stops (incidents H12)", async () => {
+    // given
+    const resilience = { dispose: (): void => {} }
+    const spy = spyOn(resilience, "dispose")
+    const dispose = createPluginDispose({
+      backgroundManager: { shutdown: async (): Promise<void> => {} },
+      skillMcpManager: { disconnectAll: async (): Promise<void> => {} },
+      resilience,
+      disposeHooks: (): void => {},
+    })
+
+    // when
+    await dispose()
+
+    // then
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+
+  test("#given the stall watchdog and network guard #when OpenCode disposes the instance #then their timers stop too (incidents H12)", () => {
+    // given
+    const stallWatchdog = { dispose: (): void => {} }
+    const networkGuard = { dispose: (): void => {} }
+    const stallSpy = spyOn(stallWatchdog, "dispose")
+    const networkSpy = spyOn(networkGuard, "dispose")
+
+    // when
+    disposeCreatedHooks({ stallWatchdog, networkGuard })
+
+    // then
+    expect(stallSpy).toHaveBeenCalledTimes(1)
+    expect(networkSpy).toHaveBeenCalledTimes(1)
+  })
 })
+
