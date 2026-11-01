@@ -55,3 +55,21 @@ export function tabAgentDelegationError(parentAgent: string | undefined, target:
     + `Your specialists: ${allowed}. `
     + `If this step really needs ${what}, stop and tell the user to switch to ${owners.join(" or ")} (Tab) for it; do not work around this refusal.`
 }
+
+const COMMITTER = "git-committer"
+// `git commit` or `git push` as a command of its own (after env assignments and `-C`/`-c` options), not inside `echo`.
+const GIT_WRITE = /^(\w+=\S*\s+)*git\s+(-C\s+\S+\s+|-c\s+\S+\s+)*(commit|push)\b/
+
+/**
+ * Undefined when the agent may run this shell command; otherwise the refusal for a tab agent whose set has no
+ * git-committer and runs `git commit`/`git push` itself (measured 31-10-2026: Sisyphus never delegated the commit, it
+ * committed with bash). Only tab agents are checked: their subagents keep their own rules.
+ */
+export function tabAgentGitError(agent: string | undefined, command: string): string | undefined {
+  if (!agent || !isTabAgent(agent) || isAllowedForTabAgent(agent, COMMITTER)) return undefined
+  const parts = command.split(/&&|\|\||;|\n/).map((part) => part.trim())
+  if (!parts.some((part) => GIT_WRITE.test(part))) return undefined
+  const label = TAB_AGENT_LABELS[getAgentConfigKey(agent)] ?? agent
+  return `${label} cannot run \`git commit\` or \`git push\`: commits belong to Atlas (git-committer), outside this agent's role (fork roadmap 0.22). `
+    + "Finish your own part of the request, then stop and tell the user to switch to Atlas (Tab) for the commit; do not work around this refusal."
+}

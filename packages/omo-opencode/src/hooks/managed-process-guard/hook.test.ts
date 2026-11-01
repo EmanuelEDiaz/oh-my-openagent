@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
+import { _resetForTesting, setSessionAgent } from "../../features/claude-code-session-state"
 import { createManagedProcessGuardHook } from "./hook"
 
 const run = (enforce: boolean, tool: string, command: string) =>
@@ -32,5 +33,27 @@ describe("managed process guard hook (fork 0.8b)", () => {
   test("ignores other tools and normal commands", async () => {
     await expect(run(true, "read", "npm install")).resolves.toBeUndefined()
     await expect(run(true, "bash", "npm test")).resolves.toBeUndefined()
+  })
+})
+
+describe("tab agents leave git commit and push to Atlas (fork 0.22)", () => {
+  const runAs = (agent: string, tabAgentRoles: boolean, command: string) => {
+    _resetForTesting()
+    setSessionAgent("s", agent)
+    return createManagedProcessGuardHook({ enforceLongRunning: true, tabAgentRoles })["tool.execute.before"]!(
+      { tool: "bash", sessionID: "s", callID: "c" } as never,
+      { args: { command } } as never,
+    )
+  }
+
+  test("Sisyphus is refused a bash commit with the agent to switch to", async () => {
+    await expect(runAs("Sisyphus - ultraworker", true, "git commit -m fix")).rejects.toThrow("switch to Atlas (Tab)")
+    _resetForTesting()
+  })
+
+  test("Atlas commits, and with tab_agent_roles off Sisyphus does too", async () => {
+    await expect(runAs("Atlas - Plan Executor", true, "git commit -m fix")).resolves.toBeUndefined()
+    await expect(runAs("Sisyphus - ultraworker", false, "git commit -m fix")).resolves.toBeUndefined()
+    _resetForTesting()
   })
 })

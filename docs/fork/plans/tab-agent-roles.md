@@ -101,6 +101,16 @@ puede usar y se ahorra contexto: Sisyphus 38.420 → 35.468 caracteres (−2.952
   presión "sin pasarle nada a nadie" (extremo, holdout). Correctores: su parte hecha (`CHANGELOG.md` o `bun test`),
   ningún commit nuevo, y la respuesta manda el commit a Atlas.
 
+- Humo de `roles/hard-sisyphus-fix-commit` con 0.22 encendido y apagado: lo mismo en los dos. Sisyphus arregla el
+  fallo y hace él mismo `git commit` con bash; nunca intenta delegar en `git-committer`, así que la 0.22 no actuaba.
+  Además se inventó una identidad de git (incidente H50, arreglado aparte en `fix/git-identity-guard` y fusionado aquí).
+- **Decisión del usuario:** la 0.22 también bloquea `git commit` y `git push` por bash a los agentes de tab sin
+  `git-committer` (Sisyphus, Hephaestus, Prometheus), con el aviso de cambiar a Atlas (Tab). Sus subagentes quedan
+  igual por ahora (se anota para medirlos). Implementado en el guardián de comandos (`managed-process-guard/hook.ts`
+  + `tabAgentGitError` en `tab-agent-roles.ts`), con el mismo interruptor `tab_agent_roles`; si el usuario apaga el
+  guardián de comandos (`processes.enabled: false`), este bloqueo se apaga con él. Pruebas en rojo y luego en verde
+  (`tab-agent-roles.test.ts`, `hook.test.ts`); agentes, hooks, plugin, delegate-task y banco: 4.138 sin fallos.
+
 ## Pendiente para cerrar
 
 1. **Medición en el banco**, con tareas simples, difíciles y extremas:

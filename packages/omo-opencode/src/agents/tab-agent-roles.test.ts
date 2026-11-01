@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "bun:test"
 
-import { isAllowedForTabAgent, TAB_AGENT_SPECIALISTS, tabAgentDelegationError } from "./tab-agent-roles"
+import { isAllowedForTabAgent, TAB_AGENT_SPECIALISTS, tabAgentDelegationError, tabAgentGitError } from "./tab-agent-roles"
 
 describe("fixed specialist sets per tab agent (roadmap 0.22)", () => {
   test("a specialist inside the agent's set is allowed, by config key or display name", () => {
@@ -45,5 +45,31 @@ describe("fixed specialist sets per tab agent (roadmap 0.22)", () => {
       prometheus: 9,
       atlas: 12,
     })
+  })
+})
+
+// Decided by the user on 31-10-2026: measured, Sisyphus never delegated the commit, it ran `git commit` itself; the
+// commit belongs to Atlas (git-committer), so tab agents without it are refused in bash too.
+describe("git commit and push stay with Atlas (roadmap 0.22)", () => {
+  test.each([
+    ["Sisyphus - ultraworker", 'git add src/math.ts && git commit -m "fix"'],
+    ["sisyphus", "git commit -qam fix"],
+    ["Hephaestus - Deep Agent", "git -C repo push origin main"],
+    ["prometheus", "git status; git push"],
+    ["sisyphus", "GIT_EDITOR=true git commit --amend"],
+  ])("%s is refused: %s", (agent, command) => {
+    const error = tabAgentGitError(agent, command)
+    expect(error).toContain("switch to Atlas (Tab)")
+  })
+
+  test.each([
+    ["Atlas - Plan Executor", "git commit -m fix"],
+    ["sisyphus", "git status && git diff && git log --oneline -3"],
+    ["sisyphus", "echo git commit"],
+    ["git-committer", "git commit -m fix"],
+    ["sisyphus-junior", "git commit -m fix"],
+    [undefined, "git commit -m fix"],
+  ])("%s may run: %s", (agent, command) => {
+    expect(tabAgentGitError(agent, command)).toBeUndefined()
   })
 })
