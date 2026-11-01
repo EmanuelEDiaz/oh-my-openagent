@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { classifyCommand } from "./classify"
+import { classifyCommand, classifyScriptText } from "./classify"
 
 const blocked = (command: string) => classifyCommand(command).block
 const kind = (command: string) => classifyCommand(command).kind
@@ -90,5 +90,55 @@ describe("commands that run as root are refused (H46)", () => {
 
   test("the message tells the agent to ask the user", () => {
     expect(classifyCommand("sudo systemctl start docker").message).toContain("! sudo systemctl start docker")
+  })
+})
+
+describe("commits never use an identity the agent picked (fork incident H50)", () => {
+  test.each([
+    'GIT_AUTHOR_NAME="Sisyphus" GIT_AUTHOR_EMAIL="sisyphus@omo.local" GIT_COMMITTER_NAME="Sisyphus" GIT_COMMITTER_EMAIL="sisyphus@omo.local" git commit -m "fix"',
+    "git add -A && GIT_COMMITTER_EMAIL=a@b.c git commit -m x",
+    "export GIT_AUTHOR_NAME=bench; git commit -m x",
+    'git -c user.name=bench -c user.email=bench@example.invalid commit -m "fix"',
+    "git -C repo -c user.email=x@y.z commit -qm x",
+    'git commit --author="Bench <bench@example.invalid>" -m x',
+    "git commit -m x --author bench",
+    'git config user.name "Sisyphus"',
+    "git config --local user.email sisyphus@omo.local",
+    "git config --global user.name bench && git commit -m x",
+  ])("blocks %s", (command) => {
+    expect(blocked(command)).toBe(true)
+    expect(kind(command)).toBe("forced-git-identity")
+  })
+
+  test.each([
+    'git commit -m "fix(math): divide by length"',
+    "git add src/math.ts && git commit -qm fix",
+    "git config user.name",
+    "git config --get user.email",
+    "git config user.name 2>/dev/null; git config user.email",
+    "git log --author=bench --oneline",
+    "git log -1 --format='%an <%ae>'",
+    "echo GIT_AUTHOR_NAME is unset",
+  ])("allows %s", (command) => {
+    expect(blocked(command)).toBe(false)
+  })
+
+  test("the message tells the agent to ask the user for the identity", () => {
+    const result = classifyCommand('git -c user.name=bench commit -m x')
+    expect(result.message).toContain("ask the user")
+    expect(result.message).toContain("! git config user.name")
+  })
+})
+
+describe("the identity block cannot be dodged (fork incident H50)", () => {
+  test("the message forbids workarounds and sends an explicit request back to the user", () => {
+    const message = classifyCommand('git commit --author="Robot <r@x.invalid>" -m x').message ?? ""
+    expect(message).toContain("do not work around")
+    expect(message).toContain("! git commit")
+  })
+
+  test("a script's text is judged like a command", () => {
+    expect(classifyScriptText("GIT_AUTHOR_NAME=Robot git commit -m x", "sh commit.sh").kind).toBe("forced-git-identity")
+    expect(classifyScriptText("git commit -m x", "sh commit.sh").block).toBe(false)
   })
 })

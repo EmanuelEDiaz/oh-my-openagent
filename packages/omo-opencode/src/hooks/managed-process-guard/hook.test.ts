@@ -34,3 +34,16 @@ describe("managed process guard hook (fork 0.8b)", () => {
     await expect(run(true, "bash", "npm test")).resolves.toBeUndefined()
   })
 })
+
+describe("a blocked identity cannot move into a script (fork incident H50)", () => {
+  test("a script run from bash is checked with its text", async () => {
+    const { mkdtempSync, rmSync, writeFileSync } = await import("node:fs")
+    const { tmpdir } = await import("node:os")
+    const { join } = await import("node:path")
+    const dir = mkdtempSync(join(tmpdir(), "guard-hook-"))
+    writeFileSync(join(dir, "c.sh"), "GIT_AUTHOR_NAME=Robot git commit -m x\n")
+    const hook = createManagedProcessGuardHook({ enforceLongRunning: true, directory: dir })
+    await expect(hook["tool.execute.before"]!({ tool: "bash", sessionID: "s", callID: "c" } as never, { args: { command: "sh c.sh" } } as never)).rejects.toThrow("git identity")
+    rmSync(dir, { recursive: true, force: true })
+  })
+})
