@@ -73,7 +73,18 @@ async function finishedSubtask(client: Client, parentID: string): Promise<boolea
  */
 const STALL_MS = 420_000
 
-async function waitUntil(
+/**
+ * The agent kept working until its task's time budget ran out. Unlike a stall (no progress) or a server that never
+ * answers, this is the agent's behavior: it is scored as a task failure and never retried.
+ */
+export class OverBudgetError extends Error {
+  constructor(label: string, timeoutMs: number) {
+    super(`${label} went over its time budget of ${timeoutMs / 1000}s while still working`)
+    this.name = "OverBudgetError"
+  }
+}
+
+export async function waitUntil(
   condition: () => Promise<boolean>,
   progress: () => Promise<string>,
   timeoutMs: number,
@@ -87,7 +98,7 @@ async function waitUntil(
   while (!(await condition().catch(() => false))) {
     const quota = await stop().catch(() => undefined)
     if (quota !== undefined) throw new Error(`provider usage limit reached: ${quota}`)
-    if (Date.now() > deadline) throw new Error(`${label} timed out after ${timeoutMs / 1000}s`)
+    if (Date.now() > deadline) throw new OverBudgetError(label, timeoutMs)
     if (detector.stalled(await progress().catch(() => ""))) throw new Error(`${label} stalled: no progress for ${STALL_MS / 1000}s`)
     await Bun.sleep(POLL_MS)
   }
@@ -210,6 +221,13 @@ async function execute(client: Client, task: Task, workdir: string, stats: RunSt
   const session = await client.session.create({ title: `bench ${task.id}` })
   const parentID = (session.data as { id?: string } | undefined)?.id
   if (parentID === undefined) throw new Error(`server error creating session: ${JSON.stringify(session.error ?? {}).slice(0, 200)}`)
+  // Over budget, the run still yields what the agent did so far: it is graded (and fails), not thrown away.
+  let overBudget: OverBudgetError | undefined
+  const keepOverBudget = (error: unknown): void => {
+    if (!(error instanceof OverBudgetError)) throw error
+    overBudget = error
+  }
+  const withOverBudget = (transcript: Transcript): Transcript => (overBudget === undefined ? transcript : { ...transcript, error: overBudget.message })
   if (task.mode === "primary") {
     await client.session.promptAsync({ sessionID: parentID, agent: task.agent, parts: [{ type: "text", text: task.prompt }] })
     try {
@@ -221,11 +239,11 @@ async function execute(client: Client, task: Task, workdir: string, stats: RunSt
         const asked = (await answerQuestions(client)) + (await answerPermissions(client, stats.permissions))
         const idle = asked === 0 && (await isIdle(client, parentID)) && !managedProcessesBusy(workdir) && !(await subagentsBusy(client, parentID))
         return quiet.settled(idle)
-      }, () => sessionProgress(client, parentID), task.budget.timeoutMs, task.id, () => quotaStop(client))
+      }, () => sessionProgress(client, parentID), task.budget.timeoutMs, task.id, () => quotaStop(client)).catch(keepOverBudget)
     } finally {
       await client.session.abort({ sessionID: parentID }).catch(() => undefined)
     }
-    return toTranscript(await messagesOf(client, parentID), await delegatedAgents(client, parentID))
+    return withOverBudget(toTranscript(await messagesOf(client, parentID), await delegatedAgents(client, parentID)))
   }
 
   // Subtask: OpenCode runs the real `task` tool with this agent as a subagent, exactly like an orchestrator's delegation.
@@ -238,7 +256,7 @@ async function execute(client: Client, task: Task, workdir: string, stats: RunSt
       await answerQuestions(client)
       await answerPermissions(client, stats.permissions)
       return finishedSubtask(client, parentID)
-    }, () => sessionProgress(client, parentID), task.budget.timeoutMs, task.id, () => quotaStop(client))
+    }, () => sessionProgress(client, parentID), task.budget.timeoutMs, task.id, () => quotaStop(client)).catch(keepOverBudget)
   } finally {
     // Stop the parent's follow-up turn: only the subagent is evaluated, and the parent must not keep working.
     await client.session.abort({ sessionID: parentID }).catch(() => undefined)
@@ -247,7 +265,7 @@ async function execute(client: Client, task: Task, workdir: string, stats: RunSt
   const transcript = childID === undefined ? toTranscript([]) : toTranscript(await messagesOf(client, childID), await delegatedAgents(client, childID))
   // When the subagent never answered, the reason is on the parent's task part (e.g. its model does not exist).
   const taskError = transcript.turns === 0 ? (await subtaskPart(client, parentID))?.state?.error : undefined
-  return taskError === undefined ? transcript : { ...transcript, error: taskError }
+  return withOverBudget(taskError === undefined ? transcript : { ...transcript, error: taskError })
 }
 
 /** Informational: how many permission prompts the run hit (each one would have blocked a real user's agent). */
