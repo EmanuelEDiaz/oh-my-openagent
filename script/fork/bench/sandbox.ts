@@ -89,6 +89,9 @@ export function prepareWorkdir(sandbox: Sandbox, fixtureDir: string, name: strin
     if (result.exitCode !== 0) throw new Error(`git ${args.join(" ")} failed: ${result.stderr.toString()}`)
   }
   git("init", "-q")
+  // Like a configured repo: plain `git commit` works and the agent never has to pick an identity (fork incident H50).
+  git("config", "user.name", "bench")
+  git("config", "user.email", "bench@example.invalid")
   git("add", "-A")
   git("commit", "-qm", "fixture")
   return workdir

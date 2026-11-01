@@ -6,7 +6,7 @@
 
 export type CommandClass =
   | { readonly block: false; readonly kind?: undefined; readonly message?: undefined }
-  | { readonly block: true; readonly kind: "long-running" | "self-kill" | "privileged"; readonly message: string }
+  | { readonly block: true; readonly kind: "long-running" | "self-kill" | "privileged" | "forced-git-identity"; readonly message: string }
 
 const LONG_RUNNING: readonly RegExp[] = [
   // package installs
@@ -57,6 +57,20 @@ const SELF_KILL: readonly RegExp[] = [
 // Runs as root: passwordless sudo let the agent start a system service (fork incident H46).
 const PRIVILEGED = /^(sudo|doas|pkexec|run0)\b|^su\s+(-\S+\s+)*-c\b/
 
+// A git identity the agent picks instead of the repository's configured one (fork incident H50): more than one person
+// commits on the user's machine, so a made-up or copied author is a real error.
+const IDENTITY_ENV = /(^|\s)(export\s+)?GIT_(AUTHOR|COMMITTER)_(NAME|EMAIL)=/
+const IDENTITY_FLAG = /\bgit\s+(-C\s+\S+\s+|-c\s+\S+\s+)*-c\s+user\.(name|email)=/
+const AUTHOR_FLAG = /\bgit\s+(-C\s+\S+\s+|-c\s+\S+\s+)*commit\b.*\s--author(=|\s)/
+// Setting it (a value follows), not reading it; a redirect such as `2>/dev/null` is not a value.
+const IDENTITY_CONFIG = /\bgit\s+(-C\s+\S+\s+)*config\s+(--(local|global|system|worktree)\s+)?user\.(name|email)\s+(?!\d*>)\S/
+
+function forcesGitIdentity(command: string): boolean {
+  if (!/\bgit\b/.test(command)) return false
+  return segments(command).some((part) =>
+    IDENTITY_ENV.test(part) || IDENTITY_FLAG.test(part) || AUTHOR_FLAG.test(part) || IDENTITY_CONFIG.test(part))
+}
+
 // Only version or help flags: the tool prints and exits (fork incident H45).
 const INFORMATIONAL = /^\S+(\s+(-v|-V|-version|--version|-h|-help|--help|version|help))+$/
 const LOCAL_URL = /\bhttps?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(:\d+)?(\/|\s|$)/
@@ -105,6 +119,18 @@ export function classifyCommand(command: string): CommandClass {
         `Blocked: \`${trimmed}\` runs as root. Root actions on the user's machine are theirs to take:`,
         "ask the user to run it themselves (they can type",
         `\`! ${trimmed}\` in the prompt) or find a way without root.`,
+      ].join(" "),
+    }
+  }
+  if (forcesGitIdentity(trimmed)) {
+    return {
+      block: true,
+      kind: "forced-git-identity",
+      message: [
+        `Blocked: \`${trimmed}\` picks a git identity instead of the repository's configured one.`,
+        "More than one person commits on this machine: never invent an author or copy another commit's.",
+        "Commit with plain `git commit`; if it fails for lack of an identity, stop and ask the user which name and email to use",
+        '(they can set it themselves with `! git config user.name "<name>"` and `! git config user.email "<email>"`).',
       ].join(" "),
     }
   }

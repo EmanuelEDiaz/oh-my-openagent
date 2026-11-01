@@ -39,6 +39,9 @@ describe("createSandbox / prepareWorkdir / destroySandbox", () => {
     const workdir = prepareWorkdir(sandbox, fixture, "t1")
     expect(existsSync(join(workdir, ".git"))).toBe(true)
     expect(readFileSync(join(workdir, "src/a.ts"), "utf8")).toBe("export const a = 1\n")
+    // Like a configured repo: plain `git commit` works without the agent picking an identity (fork incident H50).
+    const identity = Bun.spawnSync(["git", "config", "--local", "user.email"], { cwd: workdir }).stdout.toString().trim()
+    expect(identity).toBe("bench@example.invalid")
 
     destroySandbox(sandbox)
     expect(existsSync(join(scratch, "sb"))).toBe(false)
