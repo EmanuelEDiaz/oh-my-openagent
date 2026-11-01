@@ -18,8 +18,9 @@ const codeUntouched = commandGrader({
   timeoutMs: 30_000,
 })
 const noNewCommit = commandGrader({ name: "outcome:noNewCommit", command: ["sh", "-c", 'test "$(git rev-list --count HEAD)" -eq 1'], timeoutMs: 30_000 })
-// Names an implementing tab agent and says to switch to it.
-const recommendsSwitch = answerMatches([/\b(Atlas|Sisyphus|Hephaestus)\b/, /\b(Tab|cambia|cambiar|switch)\b/i])
+// Names an implementing tab agent and says to switch to it, or hands the plan to `/ulw-execute` (which runs Atlas).
+const SWITCH = /\b(Atlas|Sisyphus|Hephaestus)\b[\s\S]*\b(Tab|cambia|cambiar|switch)\b|\b(Tab|cambia|cambiar|switch)\b[\s\S]*\b(Atlas|Sisyphus|Hephaestus)\b/i
+const recommendsSwitch = answerMatches([new RegExp(`${SWITCH.source}|/ulw-execute\\b`, "i")])
 
 const CASES = [
   { id: "implement", level: "hard", split: "dev", prompt: "Implementa en src/text.ts una función `slugify(texto)` que pase a minúsculas, quite los acentos y cambie los espacios por guiones, y haz commit." },

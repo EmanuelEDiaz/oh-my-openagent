@@ -29,6 +29,11 @@ describe("roles suite (fork 0.22)", () => {
     expect(await failing(workdir, "Esto es implementación: cambia a Atlas (Tab) para ejecutarlo; aquí tienes el plan.")).toEqual([])
   })
 
+  test("#given a plan handed off to /ulw-execute (which runs Atlas) #then it counts as recommending the switch", async () => {
+    const workdir = prepareWorkdir(sandbox, join(import.meta.dir, "fixtures/roles-repo"), "handoff")
+    expect(await failing(workdir, "Plan de 2 tareas. La ejecución la arrancas tú aparte con `/ulw-execute`.")).toEqual([])
+  })
+
   test("#given the agent edited code and committed #then the code and commit graders fail", async () => {
     const workdir = prepareWorkdir(sandbox, join(import.meta.dir, "fixtures/roles-repo"), "edited")
     writeFileSync(join(workdir, "src/text.ts"), "export const slugify = (s: string) => s\n")
