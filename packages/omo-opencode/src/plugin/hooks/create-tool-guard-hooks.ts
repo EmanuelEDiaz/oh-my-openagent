@@ -158,6 +158,7 @@ export function createToolGuardHooks(args: {
     ? safeHook("managed-process-guard", () => createManagedProcessGuardHook({
       enforceLongRunning: pluginConfig.processes?.enforce !== false,
       tabAgentRoles: pluginConfig.tab_agent_roles?.enabled ?? true,
+      directory: ctx.directory,
     }))
     : null
 

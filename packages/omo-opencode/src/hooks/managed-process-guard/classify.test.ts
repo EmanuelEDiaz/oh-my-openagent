@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { classifyCommand } from "./classify"
+import { classifyCommand, classifyScriptText } from "./classify"
 
 const blocked = (command: string) => classifyCommand(command).block
 const kind = (command: string) => classifyCommand(command).kind
@@ -127,5 +127,18 @@ describe("commits never use an identity the agent picked (fork incident H50)", (
     const result = classifyCommand('git -c user.name=bench commit -m x')
     expect(result.message).toContain("ask the user")
     expect(result.message).toContain("! git config user.name")
+  })
+})
+
+describe("the identity block cannot be dodged (fork incident H50)", () => {
+  test("the message forbids workarounds and sends an explicit request back to the user", () => {
+    const message = classifyCommand('git commit --author="Robot <r@x.invalid>" -m x').message ?? ""
+    expect(message).toContain("do not work around")
+    expect(message).toContain("! git commit")
+  })
+
+  test("a script's text is judged like a command", () => {
+    expect(classifyScriptText("GIT_AUTHOR_NAME=Robot git commit -m x", "sh commit.sh").kind).toBe("forced-git-identity")
+    expect(classifyScriptText("git commit -m x", "sh commit.sh").block).toBe(false)
   })
 })

@@ -10,10 +10,13 @@ Generado por `script/fork/bench/run.ts` (plan: `docs/fork/plans/test-bench.md`).
 | 2026-11-01 | roles-on-smoke | dev | opencode/mimo-v2.6-flash-free | 0 % | — | 38034 | 0 |
 | 2026-11-01 | sisyphus-on-smoke | dev | opencode/deepseek-v4.1-flash-free | 0 % | — | 33389 | 0 |
 | 2026-11-01 | sisyphus-off-smoke | dev | opencode/deepseek-v4.1-flash-free | 0 % | — | 35476 | 0 |
+| 2026-11-01 | sisyphus-on-v2 | dev | opencode/deepseek-v4.1-flash-free | 100 % | — | 41634 | 0 |
+| 2026-11-01 | sisyphus-off-v2 | dev | opencode/deepseek-v4.1-flash-free | 100 % | — | 21782 | 0 |
+| 2026-11-01 | sisyphus-off-v3 | dev | opencode/deepseek-v4.1-flash-free | 0 % | — | 117704 | 0 |
 <!-- history:end -->
 
-## Última ejecución — 2026-11-01, sisyphus-off-smoke
-- k = 3; turnos medios 10.0; tiempo medio 55 s.
+## Última ejecución — 2026-11-01, sisyphus-off-v3
+- k = 3; turnos medios 8.0; tiempo medio 331 s.
 
 | Tarea | Pasa | pass^k | Fallos infra | Correctores que fallan |
 |---|---|---|---|---|
