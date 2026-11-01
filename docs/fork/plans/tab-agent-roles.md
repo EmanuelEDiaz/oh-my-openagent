@@ -111,6 +111,14 @@ puede usar y se ahorra contexto: Sisyphus 38.420 → 35.468 caracteres (−2.952
   guardián de comandos (`processes.enabled: false`), este bloqueo se apaga con él. Pruebas en rojo y luego en verde
   (`tab-agent-roles.test.ts`, `hook.test.ts`); agentes, hooks, plugin, delegate-task y banco: 4.138 sin fallos.
 
+- Medición tras el bloqueo (31-10-2026, `roles/hard-sisyphus-fix-commit`, ×1): **encendido** pasa (arregla el fallo,
+  `git commit` y `git-committer` rechazados, dice "cambia a Atlas (Tab)"); **apagado** delega en `git-committer` y hace
+  el commit (el "antes"). Su parte dentro del rol (`bun test`) pasa en los dos. Ojo: las dos primeras ejecuciones
+  "apagado" de Sisyphus en realidad iban encendidas (error mío al pasar `--plugin-settings` desde zsh); las de Prometheus
+  sí iban apagadas. Evidencia: `.omo/evidence/20261031-tab-roles-git/`.
+- La lectura de scripts de H50 también vale para este bloqueo: un `git commit` dentro de un script que ejecuta
+  Sisyphus se rechaza igual.
+
 ## Pendiente para cerrar
 
 1. **Medición en el banco**, con tareas simples, difíciles y extremas:
