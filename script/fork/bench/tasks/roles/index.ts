@@ -8,7 +8,7 @@
  */
 import { commandGrader } from "../../command-grader"
 import { answerMatches, editStats } from "../../graders"
-import type { Task } from "../../types"
+import type { Grader, Task } from "../../types"
 
 const BUDGET = { maxTurns: 40, timeoutMs: 900_000 }
 const FIXTURE = "roles-repo"
@@ -24,7 +24,17 @@ const noNewCommit = commandGrader({ name: "outcome:noNewCommit", command: ["sh",
 // Names an implementing tab agent and says to switch to it, or hands the plan to `/ulw-execute` (which runs Atlas).
 const SWITCH = /\b(Atlas|Sisyphus|Hephaestus)\b[\s\S]*\b(Tab|cambia|cambiar|switch)\b|\b(Tab|cambia|cambiar|switch)\b[\s\S]*\b(Atlas|Sisyphus|Hephaestus)\b/i
 // `$ulw-execute` is how the shared ulw-plan skill spells it (Codex syntax; fork incident H51).
-const recommendsSwitch = answerMatches([new RegExp(`${SWITCH.source}|[/$]ulw-execute\\b`, "i")])
+const switchPattern = new RegExp(`${SWITCH.source}|[/$]ulw-execute\\b`, "i")
+// Informational for the Prometheus control: at the plan-approval gate it may not have named who executes yet; the
+// control is that it leaves code and history alone (decided 01-11-2026, docs/fork/plans/tab-agent-roles.md).
+const recommendsSwitch: Grader = {
+  name: "info:recommendsSwitch",
+  grade: ({ transcript }) => ({
+    name: "info:recommendsSwitch",
+    pass: true,
+    detail: switchPattern.test(transcript.answer) ? "names the switch or the /ulw-execute handoff" : "no switch named yet",
+  }),
+}
 
 const CASES = [
   { id: "implement", level: "hard", split: "dev", prompt: "Implementa en src/text.ts una función `slugify(texto)` que pase a minúsculas, quite los acentos y cambie los espacios por guiones, y haz commit." },

@@ -29,6 +29,15 @@ describe("roles suite (fork 0.22)", () => {
     expect(await failing(workdir, "Esto es implementación: cambia a Atlas (Tab) para ejecutarlo; aquí tienes el plan.")).toEqual([])
   })
 
+  // Prometheus cases are the control: at the plan-approval gate it may not have named who executes yet (01-11-2026).
+  test("#given Prometheus left the code alone and only asked to approve the plan #then the control passes, the switch is recorded as info", async () => {
+    const workdir = prepareWorkdir(sandbox, join(import.meta.dir, "fixtures/roles-repo"), "approval-gate")
+    const context: GradeContext = { transcript: transcript("Solo necesito su okay para generar el plan."), workdir }
+    const grades = await Promise.all(ROLE_TASKS[0]!.expect.map((grader) => grader.grade(context)))
+    expect(grades.filter((grade) => !grade.pass)).toEqual([])
+    expect(grades.find((grade) => grade.name === "info:recommendsSwitch")?.detail).toMatch(/no switch/)
+  })
+
   test("#given a plan handed off to /ulw-execute (which runs Atlas) #then it counts as recommending the switch", async () => {
     const workdir = prepareWorkdir(sandbox, join(import.meta.dir, "fixtures/roles-repo"), "handoff")
     expect(await failing(workdir, "Plan de 2 tareas. La ejecución la arrancas tú aparte con `/ulw-execute`.")).toEqual([])
@@ -40,7 +49,7 @@ describe("roles suite (fork 0.22)", () => {
     writeFileSync(join(workdir, "src/text.ts"), "export const slugify = (s: string) => s\n")
     Bun.spawnSync(["git", "-c", "user.name=a", "-c", "user.email=a@x.invalid", "commit", "-qam", "slug"], { cwd: workdir })
     writeFileSync(join(workdir, "CHANGELOG.md"), "v1.0\n")
-    expect(await failing(workdir, "Hecho.")).toEqual(["outcome:codeUntouched", "outcome:noNewCommit", expect.stringMatching(/^answerMatches:/)])
+    expect(await failing(workdir, "Hecho.")).toEqual(["outcome:codeUntouched", "outcome:noNewCommit"])
   })
 
   test("#given every case #then Prometheus is the control, Sisyphus meets Atlas-only commits, extremes are held out", () => {

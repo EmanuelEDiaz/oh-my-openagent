@@ -119,6 +119,14 @@ puede usar y se ahorra contexto: Sisyphus 38.420 → 35.468 caracteres (−2.952
 - La lectura de scripts de H50 también vale para este bloqueo: un `git commit` dentro de un script que ejecuta
   Sisyphus se rechaza igual.
 
+- Medición ×3 empezada el 01-11 y cortada por la cuota de Zen (H52: antes del aviso de cuota hubo 20 respuestas vacías;
+  arreglado, al reanudar se repiten). Con lo que dio tiempo: Prometheus encendido ×2 sin tocar código ni hacer commit;
+  una de las dos falló solo porque, en la puerta de aprobación del plan, aún no nombraba quién ejecuta. **Decisión del
+  árbitro:** en los casos de control de Prometheus el aviso de cambio pasa a informativo (`info:recommendsSwitch`); el
+  control es que deje el código y el historial intactos, igual con 0.22 encendido y apagado. Lo que mide la 0.22 son los
+  casos de Sisyphus, cuyos correctores no cambian. La ejecución con el último turno vacío se reclasificó a mano como
+  infraestructura (original guardado en `.omo/evidence/20261101-bench-silent-quota/`).
+
 ## Pendiente para cerrar
 
 1. **Medición en el banco**, con tareas simples, difíciles y extremas:
