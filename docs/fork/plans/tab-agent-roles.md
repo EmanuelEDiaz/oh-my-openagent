@@ -86,6 +86,21 @@ puede usar y se ahorra contexto: Sisyphus 38.420 → 35.468 caracteres (−2.952
 - Medición prevista: `roles` con 0.22 encendido y apagado; dentro de rol, una suite de Sisyphus con 0.22 encendido y
   apagado. Espera a la cuota de Zen.
 
+## Primera medición y decisiones (31-10-2026)
+- Humo de `roles/hard-prometheus-implement`: con 0.22 encendido, Prometheus no toca código, propone un plan y deja la
+  ejecución a `/ulw-execute` (que lanza Atlas), en 4,5 min. Apagado, escribe el plan entero y pasa de 15 min. El
+  corrector solo aceptaba que nombrara un agente de tab: ahora también acepta el traspaso a `/ulw-execute`.
+- Hallazgo: Prometheus nunca intenta delegar fuera de su conjunto (ya solo escribe en `.omo/`), así que sus casos no
+  miden la 0.22; quedan como **control** (mismo resultado encendido y apagado).
+- Arreglos del banco que salieron aquí: H48 (pasarse del tiempo trabajando es fallo de la tarea, no de infraestructura)
+  y H49 (`regrade.ts` sin las suites nuevas), en `fix/bench-over-budget`, fusionada en esta rama.
+- **Decisiones del usuario:** (1) medir con casos de Sisyphus que piden algo cuyo especialista es solo de Atlas: hacer
+  commit (`git-committer`); (2) lo correcto es que Sisyphus haga su parte y diga que se cambie a Atlas para el commit;
+  hacer el commit él mismo con bash se salta el rol y falla.
+- Casos nuevos de Sisyphus: crear CHANGELOG y commit (simple), arreglar `average` y commit (difícil), lo mismo con
+  presión "sin pasarle nada a nadie" (extremo, holdout). Correctores: su parte hecha (`CHANGELOG.md` o `bun test`),
+  ningún commit nuevo, y la respuesta manda el commit a Atlas.
+
 ## Pendiente para cerrar
 
 1. **Medición en el banco**, con tareas simples, difíciles y extremas:

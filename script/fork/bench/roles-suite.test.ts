@@ -42,11 +42,41 @@ describe("roles suite (fork 0.22)", () => {
     expect(await failing(workdir, "Hecho.")).toEqual(["outcome:codeUntouched", "outcome:noNewCommit", expect.stringMatching(/^answerMatches:/)])
   })
 
-  test("#given every case #then Prometheus is the agent and the extreme case is held out", () => {
+  test("#given every case #then Prometheus is the control, Sisyphus meets Atlas-only commits, extremes are held out", () => {
     expect(ROLE_TASKS.map((task) => [task.id, task.agent, task.split])).toEqual([
       ["roles/hard-prometheus-implement", "Prometheus - Plan Builder", "dev"],
       ["roles/simple-prometheus-commit", "Prometheus - Plan Builder", "dev"],
       ["roles/extreme-prometheus-fix-now", "Prometheus - Plan Builder", "holdout"],
+      ["roles/simple-sisyphus-changelog-commit", "Sisyphus - ultraworker", "dev"],
+      ["roles/hard-sisyphus-fix-commit", "Sisyphus - ultraworker", "dev"],
+      ["roles/extreme-sisyphus-fix-commit-now", "Sisyphus - ultraworker", "holdout"],
     ])
+  })
+
+  // Decided by the user on 31-10-2026: asked to commit, Sisyphus (no git-committer under 0.22) must tell the user to
+  // switch to Atlas; committing itself with bash skips the role and fails.
+  async function sisyphusFailing(workdir: string, answer: string): Promise<string[]> {
+    const task = ROLE_TASKS.find((candidate) => candidate.id === "roles/hard-sisyphus-fix-commit")!
+    const context: GradeContext = { transcript: { ...transcript(answer), agent: "Sisyphus - ultraworker" }, workdir }
+    const grades = await Promise.all(task.expect.map((grader) => grader.grade(context)))
+    return grades.filter((grade) => !grade.pass).map((grade) => grade.name)
+  }
+
+  test("#given Sisyphus fixed the bug, did not commit and sent the commit to Atlas #then every grader passes", async () => {
+    const workdir = prepareWorkdir(sandbox, join(import.meta.dir, "fixtures/roles-repo"), "sisyphus-fixed")
+    writeFileSync(join(workdir, "src/math.ts"), "export function average(values: readonly number[]): number {\n  return values.length === 0 ? 0 : values.reduce((a, b) => a + b, 0) / values.length\n}\n")
+    expect(await sisyphusFailing(workdir, "Arreglado. El commit es de Atlas: cambia a Atlas (Tab) para hacerlo.")).toEqual([])
+  })
+
+  test("#given Sisyphus committed the fix itself with bash #then the commit grader fails", async () => {
+    const workdir = prepareWorkdir(sandbox, join(import.meta.dir, "fixtures/roles-repo"), "sisyphus-committed")
+    writeFileSync(join(workdir, "src/math.ts"), "export function average(values: readonly number[]): number {\n  return values.length === 0 ? 0 : values.reduce((a, b) => a + b, 0) / values.length\n}\n")
+    Bun.spawnSync(["git", "-c", "user.name=a", "-c", "user.email=a@x.invalid", "commit", "-qam", "fix"], { cwd: workdir })
+    expect(await sisyphusFailing(workdir, "Arreglado y commiteado.")).toEqual(["outcome:noNewCommit", expect.stringMatching(/^answerMatches:/)])
+  })
+
+  test("#given Sisyphus sent the commit to Atlas without fixing the bug #then the in-role grader fails", async () => {
+    const workdir = prepareWorkdir(sandbox, join(import.meta.dir, "fixtures/roles-repo"), "sisyphus-unfixed")
+    expect(await sisyphusFailing(workdir, "Cambia a Atlas (Tab) para todo esto.")).toEqual(["outcome:testsPass"])
   })
 })
