@@ -214,6 +214,18 @@ const ulwExecuteCodexHardRule = [
 	"- Codex final verification is the exception to the delegated-QA-only rule above: perform your own manual QA on the real surface and record a self-review before completion.",
 ].join("\n");
 
+// The shared skill names the OpenCode command (fork incident H51); Codex invokes the same skill as `$ulw-execute`.
+export const ulwExecuteOpenCodeUsage = [
+	"/ulw-execute [plan-name] [--worktree <absolute-path>] [--make-pr] [--ship]",
+	"```",
+	"",
+	"In Codex the same skill is invoked as `$ulw-execute`, with the same arguments.",
+	"",
+].join("\n");
+const ulwExecuteCodexUsage = ["$ulw-execute [plan-name] [--worktree <absolute-path>] [--make-pr] [--ship]", "```", ""].join("\n");
+export const ulwExecuteOpenCodeStart = "`start work` / `/ulw-execute` (Codex: `$ulw-execute`)";
+const ulwExecuteCodexStart = "`start work` / `$ulw-execute`";
+
 export function applyCodexSkillOverlays(skillName, content) {
 	if (skillName === "ulw-research") {
 		return content.replace(ulwResearchOriginalDeliveryGates, ulwResearchCodexDeliveryGate);
@@ -221,7 +233,9 @@ export function applyCodexSkillOverlays(skillName, content) {
 	if (skillName === "ulw-execute") {
 		return content
 			.replace(ulwExecuteOriginalCompletion, ulwExecuteCodexCompletion)
-			.replace(ulwExecuteOriginalHardRule, ulwExecuteCodexHardRule);
+			.replace(ulwExecuteOriginalHardRule, ulwExecuteCodexHardRule)
+			.replace(ulwExecuteOpenCodeUsage, ulwExecuteCodexUsage)
+			.replace(ulwExecuteOpenCodeStart, ulwExecuteCodexStart);
 	}
 	if (skillName === "review-work" && !content.includes("When `review-work` is used as a final implementation")) {
 		return content.replace(reviewWorkAnchor, `${reviewWorkAnchor}${reviewWorkCodexGate}`);
