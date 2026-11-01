@@ -97,6 +97,26 @@ function backgrounded(command: string): boolean {
   return /(^|[^&])&\s*$/.test(command.trim())
 }
 
+function identityVerdict(shown: string): CommandClass {
+  return {
+    block: true,
+    kind: "forced-git-identity",
+    message: [
+      `Blocked: \`${shown}\` picks a git identity instead of the repository's configured one.`,
+      "More than one person commits on this machine: never invent an author or copy another commit's,",
+      "and do not work around this block (scripts, aliases, other tools).",
+      "Commit with plain `git commit`; if it fails for lack of an identity, stop and ask the user which name and email to use",
+      '(they can set it with `! git config user.name "<name>"` and `! git config user.email "<email>"`).',
+      "If the user asked for this author, tell them to run the commit themselves, e.g. `! git commit --author=\"<name> <email>\" -m \"<message>\"`.",
+    ].join(" "),
+  }
+}
+
+/** A script the command runs (scripts.ts), judged for what cannot be dodged by moving it into a file. */
+export function classifyScriptText(text: string, shown: string): CommandClass {
+  return forcesGitIdentity(text) ? identityVerdict(shown) : { block: false }
+}
+
 export function classifyCommand(command: string): CommandClass {
   const trimmed = command.trim()
   // A kill pipeline (`pgrep -f x | xargs kill`) must be judged whole, before splitting.
@@ -122,18 +142,7 @@ export function classifyCommand(command: string): CommandClass {
       ].join(" "),
     }
   }
-  if (forcesGitIdentity(trimmed)) {
-    return {
-      block: true,
-      kind: "forced-git-identity",
-      message: [
-        `Blocked: \`${trimmed}\` picks a git identity instead of the repository's configured one.`,
-        "More than one person commits on this machine: never invent an author or copy another commit's.",
-        "Commit with plain `git commit`; if it fails for lack of an identity, stop and ask the user which name and email to use",
-        '(they can set it themselves with `! git config user.name "<name>"` and `! git config user.email "<email>"`).',
-      ].join(" "),
-    }
-  }
+  if (forcesGitIdentity(trimmed)) return identityVerdict(trimmed)
   const longRunning = backgrounded(trimmed)
     || segments(trimmed).some((part) => {
       const head = part.replace(/\s*\|.*$/, "")
