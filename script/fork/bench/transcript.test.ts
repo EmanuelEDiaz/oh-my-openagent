@@ -59,4 +59,23 @@ describe("toTranscript", () => {
     expect(transcript.agent).toBe("")
     expect(transcript.error).toContain("no assistant message")
   })
+
+  // Fork incident H52: while Zen's free quota ran out, sessions ended on an assistant turn with 0 tokens and nothing in
+  // it; the empty final answer was scored as the agent's failure.
+  test("#given work, then a final turn with 0 tokens and no output #then the run carries an infrastructure error", () => {
+    const transcript = toTranscript([
+      { info: { role: "user", time: { created: 500 } }, parts: [{ type: "text", text: "plan it" }] },
+      { info: assistant("prometheus"), parts: [{ type: "tool", tool: "read", state: { status: "completed", input: {}, output: "x" } }] },
+      { info: assistant("prometheus", { tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } } }), parts: [] },
+    ])
+    expect(transcript.error).toMatch(/model produced no output in the final turn/)
+  })
+
+  test("#given a final turn with tokens but no text (it ended on a tool call) #then there is no error", () => {
+    const transcript = toTranscript([
+      { info: assistant("prometheus"), parts: [{ type: "tool", tool: "read", state: { status: "completed", input: {}, output: "x" } }] },
+    ])
+    expect(transcript.error).toBeUndefined()
+  })
 })
+

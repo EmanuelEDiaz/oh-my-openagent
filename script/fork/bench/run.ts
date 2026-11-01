@@ -21,12 +21,13 @@ import { renderReport } from "./report"
 import { pendingRuns } from "./resume"
 import { runTask } from "./runner"
 import { createSandbox, destroySandbox, isHealthy, overrideAgentModels, overridePluginConfig, saveServerLogs, startServer, warmUp, type Sandbox, type Server } from "./sandbox"
-import { isConfigError, isConnectivityError, isQuotaError, summarize } from "./score"
+import { isConfigError, isConnectivityError, isQuotaError, silentStreak, summarize } from "./score"
 import { SUITES } from "./suites"
 import type { RunResult, Task } from "./types"
 
 const REPO = join(import.meta.dir, "../../..")
 const INFRA_RETRIES = 2
+const SILENT_STREAK_STOP = 4
 // A lost connection is waited out and retried without using up INFRA_RETRIES, a few times per run at most.
 const CONNECTION_RETRIES = 5
 const CONNECTION_WAIT_MS = 30 * 60_000
@@ -186,6 +187,11 @@ async function main(): Promise<void> {
           }
           if (result.error !== undefined && isQuotaError(result.error)) {
             throw new Error(`the provider's quota is spent, not the agent's fault: ${result.error}\nResume this run once it resets with --resume ${rawFile}`)
+          }
+          // A spent quota first shows as empty answers, task after task (fork incident H52): stop instead of burning
+          // every remaining run; the silent ones are rerun on --resume.
+          if (silentStreak(results) >= SILENT_STREAK_STOP) {
+            throw new Error(`the provider answered nothing ${SILENT_STREAK_STOP} times in a row (usually a spent quota)\nResume this run later with --resume ${rawFile}`)
           }
           if (result.failure !== "infra") break
           if (result.error !== undefined && isConnectivityError(result.error) && connectionRetries < CONNECTION_RETRIES) {
