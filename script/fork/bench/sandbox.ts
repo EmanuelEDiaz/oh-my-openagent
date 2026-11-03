@@ -158,6 +158,25 @@ export async function warmUp(sandbox: Sandbox, server: Server, timeoutMs = 120_0
   return false
 }
 
+/** Resident memory of the server process in MB, or undefined when it is gone (Linux /proc). */
+export function serverRssMb(pid: number, procDir = "/proc"): number | undefined {
+  try {
+    const kb = readFileSync(join(procDir, String(pid), "status"), "utf8").match(/^VmRSS:\s+(\d+)\s+kB/m)?.[1]
+    return kb === undefined ? undefined : Math.round(Number(kb) / 1024)
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Above this the bench restarts the server between tasks, so a leak never lets the memory cap kill a long measurement
+ * (fork incident H53: 868 MB after 13 tasks under a 1.5 GB cap). Override with OMO_BENCH_SERVER_RSS_MB.
+ */
+export function serverRssLimitMb(env: Readonly<Record<string, string | undefined>> = process.env): number {
+  const value = Number(env.OMO_BENCH_SERVER_RSS_MB)
+  return Number.isFinite(value) && value > 0 ? value : 900
+}
+
 /** True when the server answers within the timeout. */
 export async function isHealthy(server: Server, timeoutMs = 10_000): Promise<boolean> {
   return fetch(`${server.baseUrl}/config`, { signal: AbortSignal.timeout(timeoutMs) }).then((response) => response.ok, () => false)

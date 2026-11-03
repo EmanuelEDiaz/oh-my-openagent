@@ -84,6 +84,9 @@ export function createAutoUpdateCheckerHook(
 
   let hasChecked = false
   let hasScheduled = false
+  // After dispose, a late check would make OpenCode recreate this folder's instance (fork incident H53).
+  let disposed = false
+  let cancelScheduled: (() => void) | undefined
 
   return {
     event: ({ event }: { event: { type: string; properties?: unknown } }) => {
@@ -94,7 +97,9 @@ export function createAutoUpdateCheckerHook(
 
       hasScheduled = true
 
-      scheduleDeferredStartupCheck(() => {
+      const cancel = scheduleDeferredStartupCheck(() => {
+        cancelScheduled = undefined
+        if (disposed) return
         hasChecked = true
         void (async () => {
           const bundledVersion = deps.getBundledVersion?.()
@@ -108,10 +113,15 @@ export function createAutoUpdateCheckerHook(
           const displayVersion = localDevVersion ?? bundledVersion ?? deps.getCachedVersion()
 
           await deps.showConfigErrorsIfAny(ctx)
+          if (disposed) return
           await deps.updateAndShowConnectedProvidersCacheStatus(ctx)
+          if (disposed) return
           await deps.refreshModelCapabilitiesOnStartup(modelCapabilities)
+          if (disposed) return
           await deps.showModelCacheWarningIfNeeded(ctx)
+          if (disposed) return
           await deps.showAgentRegistrationWarningIfNeeded?.(ctx)
+          if (disposed) return
 
           if (localDevVersion) {
             if (showStartupToast) {
@@ -130,6 +140,12 @@ export function createAutoUpdateCheckerHook(
           })
         })()
       })
+      cancelScheduled = typeof cancel === "function" ? cancel : undefined
+    },
+    dispose: (): void => {
+      disposed = true
+      cancelScheduled?.()
+      cancelScheduled = undefined
     },
   }
 }

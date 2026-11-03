@@ -4,7 +4,7 @@ import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 
 import { assertSafeSandboxRoot, createSandbox, destroySandbox, overrideAgentModels, overridePluginConfig, prepareWorkdir, sandboxProcesses } from "./sandbox"
-import { onStopSignal } from "./sandbox"
+import { onStopSignal, serverRssMb, serverRssLimitMb } from "./sandbox"
 
 const scratch = mkdtempSync(join(tmpdir(), "bench-sandbox-"))
 afterAll(() => rmSync(scratch, { recursive: true, force: true }))
@@ -114,5 +114,22 @@ describe("onStopSignal", () => {
     expect(existsSync(marker)).toBe(false)
     expect(code).toBe(130)
     rmSync(root, { recursive: true, force: true })
+  })
+})
+
+describe("serverRssMb / serverRssLimitMb (fork incident H53)", () => {
+  test("reads the server's resident memory in MB from /proc", () => {
+    const proc = mkdtempSync(join(tmpdir(), "fake-proc-"))
+    mkdirSync(join(proc, "4242"))
+    writeFileSync(join(proc, "4242", "status"), "Name:\topencode\nVmRSS:\t  921600 kB\nThreads:\t30\n")
+    expect(serverRssMb(4242, proc)).toBe(900)
+    expect(serverRssMb(4243, proc)).toBeUndefined()
+    rmSync(proc, { recursive: true, force: true })
+  })
+
+  test("restarts above 900 MB by default; OMO_BENCH_SERVER_RSS_MB overrides it", () => {
+    expect(serverRssLimitMb({})).toBe(900)
+    expect(serverRssLimitMb({ OMO_BENCH_SERVER_RSS_MB: "1200" })).toBe(1200)
+    expect(serverRssLimitMb({ OMO_BENCH_SERVER_RSS_MB: "lots" })).toBe(900)
   })
 })
