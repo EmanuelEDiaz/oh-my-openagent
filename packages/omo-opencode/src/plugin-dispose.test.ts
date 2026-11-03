@@ -259,5 +259,16 @@ describe("createPluginDispose", () => {
     expect(stallSpy).toHaveBeenCalledTimes(1)
     expect(networkSpy).toHaveBeenCalledTimes(1)
   })
-})
 
+  test("#given the auto-update checker #when OpenCode disposes the instance #then its deferred startup check is cancelled (incident H53)", () => {
+    // given
+    const autoUpdateChecker = { dispose: (): void => {} }
+    const spy = spyOn(autoUpdateChecker, "dispose")
+
+    // when
+    disposeCreatedHooks({ autoUpdateChecker })
+
+    // then
+    expect(spy).toHaveBeenCalledTimes(1)
+  })
+})

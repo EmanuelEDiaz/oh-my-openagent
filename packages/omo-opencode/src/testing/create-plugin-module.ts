@@ -37,8 +37,11 @@ import { recordPluginTelemetry } from "../shared/posthog"
 import {
   initLiveServerRoute,
   setLiveParentWakeRoutingDisabled,
+  unregisterLiveServerRoute,
   warmLiveServerProbe,
 } from "../shared/live-server-route"
+import { fenceClientAfterDispose } from "../shared/disposable-client"
+import { releaseKnowledgeService } from "../features/knowledge/service"
 import { startBackgroundCheck as startTmuxCheck } from "../tools/interactive-bash"
 import { runOpenCodeStartupMigration } from "../startup-migration"
 import { releasePluginProcessManager } from "../features/managed-process/plugin"
@@ -73,6 +76,8 @@ export type PluginModuleDeps = {
   initLiveServerRoute: typeof initLiveServerRoute
   setLiveParentWakeRoutingDisabled: typeof setLiveParentWakeRoutingDisabled
   warmLiveServerProbe: typeof warmLiveServerProbe
+  unregisterLiveServerRoute: typeof unregisterLiveServerRoute
+  releaseKnowledgeService: typeof releaseKnowledgeService
   loadConfigChain: typeof validatePluginConfig
   loadPluginConfig: typeof loadPluginConfig
   recordPluginTelemetry: typeof recordPluginTelemetry
@@ -107,6 +112,8 @@ const defaultPluginModuleDeps: PluginModuleDeps = {
   initLiveServerRoute,
   setLiveParentWakeRoutingDisabled,
   warmLiveServerProbe,
+  unregisterLiveServerRoute,
+  releaseKnowledgeService,
   loadConfigChain: validatePluginConfig,
   loadPluginConfig,
   recordPluginTelemetry,
@@ -219,6 +226,8 @@ export function createPluginModule(overrides: Partial<PluginModuleDeps> = {}): P
     }
 
     deps.injectServerAuthIntoClient(input.client)
+    // After dispose, a late request would make OpenCode recreate this folder's instance (fork incident H53).
+    const clientFence = fenceClientAfterDispose(input.client, deps.log)
 
     const pluginConfig = startupValidation.config
     try {
@@ -349,6 +358,10 @@ export function createPluginModule(overrides: Partial<PluginModuleDeps> = {}): P
         releasePluginProcessManager(input.directory)
         releasePluginWebResearch(input.directory)
         releaseTaskToastManager(input.directory)
+        deps.unregisterLiveServerRoute(input.client)
+        deps.releaseKnowledgeService(input.directory)
+        // Last: the shutdown above may still need the client (aborting background sessions).
+        clientFence.close()
       },
     }
 
