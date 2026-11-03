@@ -234,7 +234,8 @@ export function onStopSignal(cleanup: () => void): () => void {
   }
 }
 
-export function destroySandbox(sandbox: Sandbox): void {
+/** Stops the background helpers the sandboxed OpenCode started (LSP daemon, tsserver) that outlive the server. */
+export function stopSandboxProcesses(sandbox: Sandbox): void {
   for (const pid of sandboxProcesses(sandbox.root)) {
     try {
       process.kill(pid, "SIGTERM")
@@ -242,6 +243,10 @@ export function destroySandbox(sandbox: Sandbox): void {
       // already gone
     }
   }
+}
+
+export function destroySandbox(sandbox: Sandbox): void {
+  stopSandboxProcesses(sandbox)
   rmSync(sandbox.root, { recursive: true, force: true })
 }
 
