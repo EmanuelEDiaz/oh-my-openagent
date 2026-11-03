@@ -20,7 +20,8 @@ import { defaultFixtureCache, resolveFixture } from "./fixtures"
 import { renderReport } from "./report"
 import { pendingRuns } from "./resume"
 import { runTask } from "./runner"
-import { createSandbox, destroySandbox, isHealthy, overrideAgentModels, overridePluginConfig, saveServerLogs, serverRssLimitMb, serverRssMb, startServer, warmUp, type Sandbox, type Server } from "./sandbox"
+import { formatMemory, needsServerRestart, processMemory, scopeMemory, type BenchMemory } from "./memory"
+import { createSandbox, destroySandbox, isHealthy, overrideAgentModels, overridePluginConfig, sandboxProcesses, saveServerLogs, serverRssLimitMb, serverRssMb, startServer, stopSandboxProcesses, warmUp, type Sandbox, type Server } from "./sandbox"
 import { isConfigError, isConnectivityError, isQuotaError, silentStreak, summarize } from "./score"
 import { SUITES } from "./suites"
 import type { RunResult, Task } from "./types"
@@ -75,6 +76,10 @@ async function fetchStatus(url: string): Promise<number> {
   const request = (method: string) => fetch(url, { method, redirect: "follow", signal: AbortSignal.timeout(10_000) }).then((response) => response.status)
   const status = await request("HEAD")
   return status === 405 || status === 403 ? request("GET") : status
+}
+
+function benchMemory(server: Server): BenchMemory {
+  return { serverRssMb: server.pid === undefined ? undefined : serverRssMb(server.pid), scope: scopeMemory() }
 }
 
 async function main(): Promise<void> {
@@ -167,10 +172,12 @@ async function main(): Promise<void> {
             server.stop()
             server = await start(sandbox)
           }
-          const rss = server.pid === undefined ? undefined : serverRssMb(server.pid)
-          if (rss !== undefined && rss > serverRssLimitMb()) {
-            console.log(`server at ${rss} MB (limit ${serverRssLimitMb()}); restarting it to stay under the memory cap`)
+          // The cap counts the server and all it started (LSP daemon, tsserver, graders): fork incidents H53/H54.
+          const memory = benchMemory(server)
+          if (needsServerRestart(memory, { serverRssLimitMb: serverRssLimitMb() })) {
+            console.log(`memory: ${formatMemory(memory, processMemory(sandboxProcesses(sandbox.root)))}; restarting the server to stay under the cap`)
             server.stop()
+            stopSandboxProcesses(sandbox)
             server = await start(sandbox)
           }
           const startedAt = Date.now()
@@ -188,6 +195,7 @@ async function main(): Promise<void> {
           appendFileSync(rawFile, `${JSON.stringify(result)}\n`)
           const verdict = result.pass === undefined ? `INFRA (${result.error?.slice(0, 120)})` : result.pass ? "PASS" : `FAIL ${result.grades.filter((grade) => !grade.pass).map((grade) => grade.name).join(", ") || result.error}`
           console.log(`${task.id} #${repeat + 1}${attempt > 0 ? ` retry ${attempt}` : ""}: ${verdict}`)
+          console.log(`  memory: ${formatMemory(benchMemory(server), processMemory(sandboxProcesses(sandbox.root)))}`)
           if (result.error !== undefined && isConfigError(result.error)) {
             throw new Error(`configuration problem, not the agent's: ${result.error}\nFix the models with /omo-models and run again.`)
           }
