@@ -26,6 +26,7 @@ export type DisposableCreatedHooks = {
   stallWatchdog?: DisposableHook
   networkGuard?: DisposableHook
   loopBreaker?: DisposableHook
+  autoUpdateChecker?: DisposableHook
 }
 
 export function disposeCreatedHooks(hooks: DisposableCreatedHooks): void {
@@ -40,6 +41,8 @@ export function disposeCreatedHooks(hooks: DisposableCreatedHooks): void {
   hooks.stallWatchdog?.dispose?.()
   hooks.networkGuard?.dispose?.()
   hooks.loopBreaker?.dispose?.()
+  // A late startup check would recreate the disposed folder's instance (fork incident H53).
+  hooks.autoUpdateChecker?.dispose?.()
 }
 
 export function createHooks(args: {

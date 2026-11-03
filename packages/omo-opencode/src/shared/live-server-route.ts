@@ -88,6 +88,14 @@ export function initLiveServerRoute(opts: {
   })
 }
 
+/** A disposed instance's route must not keep its client alive or be probed again (fork incident H53). */
+export function unregisterLiveServerRoute(inProcessClient: unknown): void {
+  const registration = registrations.get(inProcessClient)
+  if (registration === undefined) return
+  registrations.delete(inProcessClient)
+  if (lastRegistration === registration) lastRegistration = [...registrations.values()].at(-1)
+}
+
 export function warmLiveServerProbe(): void {
   if (lastRegistration) {
     void probe(lastRegistration)

@@ -21,7 +21,7 @@ import { defaultFixtureCache, resolveFixture } from "./fixtures"
 import { renderReport } from "./report"
 import { pendingRuns } from "./resume"
 import { runTask } from "./runner"
-import { createSandbox, destroySandbox, isHealthy, overrideAgentModels, overridePluginConfig, saveServerLogs, startServer, warmUp, type Sandbox, type Server } from "./sandbox"
+import { createSandbox, destroySandbox, isHealthy, overrideAgentModels, overridePluginConfig, saveServerLogs, serverRssLimitMb, serverRssMb, startServer, warmUp, type Sandbox, type Server } from "./sandbox"
 import { isConfigError, isConnectivityError, isQuotaError, silentStreak, summarize } from "./score"
 import { SUITES } from "./suites"
 import type { RunResult, Task } from "./types"
@@ -167,6 +167,12 @@ async function main(): Promise<void> {
           // A stalled model can leave the server unresponsive: restart it rather than failing every later task.
           if (!(await isHealthy(server))) {
             console.log("warning: server unresponsive; restarting it")
+            server.stop()
+            server = await start(sandbox)
+          }
+          const rss = server.pid === undefined ? undefined : serverRssMb(server.pid)
+          if (rss !== undefined && rss > serverRssLimitMb()) {
+            console.log(`server at ${rss} MB (limit ${serverRssLimitMb()}); restarting it to stay under the memory cap`)
             server.stop()
             server = await start(sandbox)
           }

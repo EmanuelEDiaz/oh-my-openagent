@@ -6,6 +6,7 @@ import {
   _setLiveClientForTesting,
   _setFetchImplementationForTesting,
   initLiveServerRoute,
+  unregisterLiveServerRoute,
   isPreSendConnectionFailure,
   markLiveRouteUnavailable,
   resetLiveServerRouteForTesting,
@@ -536,6 +537,41 @@ describe("live-server-route", () => {
       expect(syncResult?.route).toBe("in-process")
       expect(syncResult?.reason).toBe("affinity")
       expect(urls().length).toBe(fetchCountAfterAsync)
+    })
+  })
+
+  describe("unregisterLiveServerRoute", () => {
+    test("#given a disposed instance's route #when it is unregistered #then it is no longer probed or routed", async () => {
+      //#given
+      const { fetch: fakeFetch, callCount } = makeFakeFetch([{ ok: true, status: 200 }])
+      _setFetchImplementationForTesting(fakeFetch)
+      initLiveServerRoute({ serverUrl: FAKE_SERVER_URL, directory: "/tmp/disposed", inProcessClient: fakeInProcessClient })
+
+      //#when
+      unregisterLiveServerRoute(fakeInProcessClient)
+      warmLiveServerProbe()
+      const result = await resolveDispatchClient(fakeInProcessClient, "ses_disposed")
+
+      //#then
+      expect(result.route).toBe("in-process")
+      expect(callCount()).toBe(0)
+    })
+
+    test("#given two routes #when the newest is unregistered #then the warm-up probes the remaining one", async () => {
+      //#given
+      const { fetch: fakeFetch, callCount } = makeFakeFetch([{ ok: true, status: 200 }])
+      _setFetchImplementationForTesting(fakeFetch)
+      const otherClient = { _marker: "other" } as unknown
+      initLiveServerRoute({ serverUrl: FAKE_SERVER_URL, directory: "/tmp/kept", inProcessClient: otherClient })
+      initLiveServerRoute({ serverUrl: FAKE_SERVER_URL, directory: "/tmp/disposed", inProcessClient: fakeInProcessClient })
+
+      //#when
+      unregisterLiveServerRoute(fakeInProcessClient)
+      warmLiveServerProbe()
+      await new Promise<void>((resolve) => setTimeout(resolve, 0))
+
+      //#then
+      expect(callCount()).toBe(1)
     })
   })
 })

@@ -5,7 +5,7 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
-import { createKnowledgeService, knowledgeStorePath } from "./service"
+import { createKnowledgeService, getKnowledgeService, knowledgeStorePath, releaseKnowledgeService } from "./service"
 
 describe("knowledge service", () => {
   let project: string
@@ -64,6 +64,22 @@ describe("knowledge service", () => {
     // then
     expect(await service.search("anything")).toBeNull()
     expect(existsSync(join(project, ".omo", "cache", "knowledge.db"))).toBe(false)
+  })
+
+  test("a released folder's service is forgotten, so a disposed instance keeps nothing open (fork incident H53)", () => {
+    // given
+    const first = getKnowledgeService(project, undefined)
+
+    // when
+    const again = getKnowledgeService(project, undefined)
+    releaseKnowledgeService(project)
+    const afterRelease = getKnowledgeService(project, undefined)
+
+    // then
+    expect(again).toBe(first)
+    expect(afterRelease).not.toBe(first)
+    expect(existsSync(join(project, ".omo", "cache", "knowledge.db"))).toBe(false)
+    releaseKnowledgeService(project)
   })
 })
 
