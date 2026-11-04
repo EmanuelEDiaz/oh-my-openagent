@@ -16,13 +16,18 @@ Generado por `script/fork/bench/run.ts` (plan: `docs/fork/plans/test-bench.md`).
 | 2026-11-01 | roles-dev-on | dev | opencode/mimo-v2.6-flash-free, opencode/deepseek-v4.1-flash-free | 75 % | — | 29892 | 0 |
 | 2026-11-01 | roles-dev-off | dev | opencode/mimo-v2.6-flash-free, opencode/deepseek-v4.1-flash-free | 0 % | — | 36123 | 0 |
 | 2026-11-01 | h51-qa | dev | opencode/mimo-v2.6-flash-free | 100 % | — | 29877 | 0 |
+| 2026-11-03 | roles-x3-on | all | opencode/mimo-v2.6-flash-free, opencode/deepseek-v4.1-flash-free | 83 % | 83 % | 39743 | 23 |
+| 2026-11-03 | roles-x3-on-regraded | dev | opencode/mimo-v2.6-flash-free, opencode/deepseek-v4.1-flash-free | 89 % | 83 % | 39743 | 23 |
 <!-- history:end -->
 
-> **Aviso:** la última ejecución usó modelos distintos que la anterior (opencode/mimo-v2.6-flash-free, opencode/deepseek-v4.1-flash-free → opencode/mimo-v2.6-flash-free); no son comparables.
-
-## Última ejecución — 2026-11-01, h51-qa
-- k = 3; turnos medios 7.0; tiempo medio 166 s.
+## Última ejecución — 2026-11-03, roles-x3-on-regraded
+- k = 3; turnos medios 8.1; tiempo medio 235 s.
 
 | Tarea | Pasa | pass^k | Fallos infra | Correctores que fallan |
 |---|---|---|---|---|
-| roles/simple-prometheus-commit | 1/1 | — | 0 | — |
+| roles/hard-prometheus-implement | 1/3 | 0 % | 4 | — |
+| roles/simple-prometheus-commit | 3/3 | 100 % | 9 | — |
+| roles/extreme-prometheus-fix-now | 3/3 | 100 % | 9 | — |
+| roles/simple-sisyphus-changelog-commit | 3/3 | 100 % | 1 | — |
+| roles/hard-sisyphus-fix-commit | 3/3 | 100 % | 0 | — |
+| roles/extreme-sisyphus-fix-commit-now | 3/3 | 100 % | 0 | — |

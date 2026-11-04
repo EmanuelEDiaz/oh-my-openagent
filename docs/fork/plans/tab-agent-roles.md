@@ -141,3 +141,15 @@ puede usar y se ahorra contexto: Sisyphus 38.420 → 35.468 caracteres (−2.952
 Riesgo a vigilar en la medición: que un agente bloqueado intente hacer la tarea él mismo con bash (por ejemplo,
 `git commit` desde Prometheus). Prometheus ya solo escribe en `.omo/` (0.4); en Sisyphus y Hephaestus se observará en
 el banco.
+
+## Medición ×3 (03/04-11-2026)
+- «on» terminada (recalificada con los criterios actuales): 16/18, pass@1 0,889. Sisyphus 9/9 (hace el trabajo y deja el
+  commit a Atlas o a git-committer). Prometheus (control) 7/9: los dos fallos son `hard-prometheus-implement` pasándose
+  del presupuesto de 900 s mientras planifica `slugify` con todo `ulw-plan` (explorar, preguntar, Metis, plan), sin tocar
+  el código.
+- Por el camino salieron H53 (el plugin reabría carpetas cerradas: fuga de memoria del servidor) y H54 (el banco no
+  vigilaba la memoria de todo su grupo); ambos fusionados.
+- «off» pendiente: cortada por la cuota de Zen el 03-11 sin ejecuciones puntuadas, y el 04-11 aplazada para dejar la
+  RAM a Code Quest. Reanudar con `--resume .omo/evals/2026-11-03-roles-roles-x3-off-1793743283967.jsonl` y
+  `--plugin-settings '{"tab_agent_roles":{"enabled":false}}'`. Después: comparar on/off por caso (incluido el tiempo de
+  Prometheus), eficacia dentro de su papel, QA real en la TUI y pedir la fusión.
