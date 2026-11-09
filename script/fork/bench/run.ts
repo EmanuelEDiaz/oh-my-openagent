@@ -21,7 +21,7 @@ import { renderReport } from "./report"
 import { pendingRuns } from "./resume"
 import { runTask } from "./runner"
 import { formatMemory, needsServerRestart, processMemory, scopeMemory, type BenchMemory } from "./memory"
-import { createSandbox, destroySandbox, isHealthy, overrideAgentModels, overridePluginConfig, sandboxProcesses, saveServerLogs, serverRssLimitMb, serverRssMb, startServer, stopSandboxProcesses, warmUp, type Sandbox, type Server } from "./sandbox"
+import { createSandbox, destroySandbox, isHealthy, overrideAgentModels, overridePluginConfig, runLogsDir, sandboxProcesses, saveServerLogs, serverRssLimitMb, serverRssMb, startServer, stopSandboxProcesses, warmUp, type Sandbox, type Server } from "./sandbox"
 import { isConfigError, isConnectivityError, isQuotaError, silentStreak, summarize } from "./score"
 import { SUITES } from "./suites"
 import type { RunResult, Task } from "./types"
@@ -118,6 +118,7 @@ async function main(): Promise<void> {
     ? []
     : readFileSync(resumeFile, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line) as RunResult)
 
+  const invocationStartedAt = new Date()
   let sandbox: Sandbox | undefined
   let server: Server | undefined
   // Every run records the context each request carries (fork roadmap 0.13); --no-context turns it off.
@@ -129,7 +130,7 @@ async function main(): Promise<void> {
     proxy?.stop()
     server?.stop()
     if (sandbox) {
-      saveServerLogs(sandbox, rawFile.replace(/\.jsonl$/, "-logs"))
+      saveServerLogs(sandbox, runLogsDir(rawFile, invocationStartedAt))
       destroySandbox(sandbox)
     }
     server = undefined

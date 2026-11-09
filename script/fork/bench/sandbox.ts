@@ -183,6 +183,14 @@ export async function isHealthy(server: Server, timeoutMs = 10_000): Promise<boo
 }
 
 /** Copies OpenCode's own logs out of the sandbox (never auth.json) before it is deleted. */
+/**
+ * Where one invocation of a run saves its server logs: a folder per start, so resuming a run never overwrites the logs
+ * of the previous invocation (fork incident H55: the timed logs of over-budget runs were lost on resume).
+ */
+export function runLogsDir(rawFile: string, startedAt: Date): string {
+  return join(rawFile.replace(/\.jsonl$/, "-logs"), startedAt.toISOString().replace(/\.\d{3}Z$/, "Z").replaceAll(":", "-"))
+}
+
 export function saveServerLogs(sandbox: Sandbox, to: string): void {
   const logs = join(sandbox.root, "data/opencode/log")
   if (existsSync(logs)) cpSync(logs, to, { recursive: true })
