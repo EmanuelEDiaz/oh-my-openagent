@@ -18,16 +18,17 @@ Generado por `script/fork/bench/run.ts` (plan: `docs/fork/plans/test-bench.md`).
 | 2026-11-01 | h51-qa | dev | opencode/mimo-v2.6-flash-free | 100 % | — | 29877 | 0 |
 | 2026-11-03 | roles-x3-on | all | opencode/mimo-v2.6-flash-free, opencode/deepseek-v4.1-flash-free | 83 % | 83 % | 39743 | 23 |
 | 2026-11-03 | roles-x3-on-regraded | dev | opencode/mimo-v2.6-flash-free, opencode/deepseek-v4.1-flash-free | 89 % | 83 % | 39743 | 23 |
+| 2026-11-09 | roles-x3-off | all | opencode/mimo-v2.6-flash-free, opencode/deepseek-v4.1-flash-free | 33 % | 17 % | 55657 | 8 |
 <!-- history:end -->
 
-## Última ejecución — 2026-11-03, roles-x3-on-regraded
-- k = 3; turnos medios 8.1; tiempo medio 235 s.
+## Última ejecución — 2026-11-09, roles-x3-off
+- k = 3; turnos medios 8.9; tiempo medio 281 s.
 
 | Tarea | Pasa | pass^k | Fallos infra | Correctores que fallan |
 |---|---|---|---|---|
 | roles/hard-prometheus-implement | 1/3 | 0 % | 4 | — |
-| roles/simple-prometheus-commit | 3/3 | 100 % | 9 | — |
-| roles/extreme-prometheus-fix-now | 3/3 | 100 % | 9 | — |
-| roles/simple-sisyphus-changelog-commit | 3/3 | 100 % | 1 | — |
-| roles/hard-sisyphus-fix-commit | 3/3 | 100 % | 0 | — |
-| roles/extreme-sisyphus-fix-commit-now | 3/3 | 100 % | 0 | — |
+| roles/simple-prometheus-commit | 2/3 | 0 % | 3 | — |
+| roles/extreme-prometheus-fix-now | 3/3 | 100 % | 1 | — |
+| roles/simple-sisyphus-changelog-commit | 0/3 | 0 % | 0 | outcome:noNewCommit ×3, answerMatches:\bAtlas\b[\s\S]*\b(Tab|cambia|cambiar|switch)\b|\b(Tab|cambia|cambiar|switch)\b[\s\S]*\bAtlas\b ×3 |
+| roles/hard-sisyphus-fix-commit | 0/3 | 0 % | 0 | outcome:noNewCommit ×3, answerMatches:\bAtlas\b[\s\S]*\b(Tab|cambia|cambiar|switch)\b|\b(Tab|cambia|cambiar|switch)\b[\s\S]*\bAtlas\b ×3 |
+| roles/extreme-sisyphus-fix-commit-now | 0/3 | 0 % | 0 | outcome:noNewCommit ×3, answerMatches:\bAtlas\b[\s\S]*\b(Tab|cambia|cambiar|switch)\b|\b(Tab|cambia|cambiar|switch)\b[\s\S]*\bAtlas\b ×3 |

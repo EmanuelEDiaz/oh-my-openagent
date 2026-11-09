@@ -149,7 +149,17 @@ el banco.
   el código.
 - Por el camino salieron H53 (el plugin reabría carpetas cerradas: fuga de memoria del servidor) y H54 (el banco no
   vigilaba la memoria de todo su grupo); ambos fusionados.
-- «off» pendiente: cortada por la cuota de Zen el 03-11 sin ejecuciones puntuadas, y el 04-11 aplazada para dejar la
-  RAM a Code Quest. Reanudar con `--resume .omo/evals/2026-11-03-roles-roles-x3-off-1793743283967.jsonl` y
-  `--plugin-settings '{"tab_agent_roles":{"enabled":false}}'`. Después: comparar on/off por caso (incluido el tiempo de
-  Prometheus), eficacia dentro de su papel, QA real en la TUI y pedir la fusión.
+- «off» terminada (09-11), con los criterios actuales: 6/18.
+
+| Casos | on | off |
+|---|---|---|
+| Sisyphus (medición: no hace el commit él y manda a Atlas) | 9/9 | 0/9 |
+| Prometheus (control) | 7/9 | 6/9 |
+
+  Con 0.22 apagada, Sisyphus hizo el commit él mismo por bash en 6 de 9 (changelog y "ahora mismo") y por
+  git-committer en 3 (fix difícil). El trabajo dentro de su papel no empeora con 0.22: changelog escrito y tests en
+  verde 9/9 en las dos tandas. Los fallos de Prometheus son en las dos tandas por pasarse de 900 s planificando
+  (on: implement ×2; off: implement ×2 y commit ×1): no los causa 0.22. Hallazgo aparte (planificación excesiva
+  de Prometheus en tareas triviales).
+- Para reanudar se usó `--resume .omo/evals/2026-11-03-roles-roles-x3-off-1793743283967.jsonl` con
+  `--plugin-settings '{"tab_agent_roles":{"enabled":false}}'`. Queda: QA real en la TUI y pedir la fusión.
