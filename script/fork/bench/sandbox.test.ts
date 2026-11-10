@@ -4,7 +4,7 @@ import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 
 import { assertSafeSandboxRoot, createSandbox, destroySandbox, overrideAgentModels, overridePluginConfig, prepareWorkdir, sandboxProcesses } from "./sandbox"
-import { onStopSignal, serverRssMb, serverRssLimitMb } from "./sandbox"
+import { onStopSignal, runLogsDir, serverRssMb, serverRssLimitMb } from "./sandbox"
 
 const scratch = mkdtempSync(join(tmpdir(), "bench-sandbox-"))
 afterAll(() => rmSync(scratch, { recursive: true, force: true }))
@@ -142,5 +142,15 @@ describe("serverRssMb / serverRssLimitMb (fork incident H53)", () => {
     expect(serverRssLimitMb({})).toBe(900)
     expect(serverRssLimitMb({ OMO_BENCH_SERVER_RSS_MB: "1200" })).toBe(1200)
     expect(serverRssLimitMb({ OMO_BENCH_SERVER_RSS_MB: "lots" })).toBe(900)
+  })
+})
+
+describe("runLogsDir (fork incident H55)", () => {
+  test("each invocation of a run, first or resumed, keeps its own logs folder", () => {
+    const raw = "/evals/2026-11-03-roles-x3-off-1.jsonl"
+    const first = runLogsDir(raw, new Date("2026-11-05T15:39:00Z"))
+    const resumed = runLogsDir(raw, new Date("2026-11-09T17:38:00Z"))
+    expect(first).toBe("/evals/2026-11-03-roles-x3-off-1-logs/2026-11-05T15-39-00Z")
+    expect(resumed).not.toBe(first)
   })
 })
