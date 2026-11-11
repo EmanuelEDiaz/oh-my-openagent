@@ -162,4 +162,13 @@ el banco.
   (on: implement ×2; off: implement ×2 y commit ×1): no los causa 0.22. Hallazgo aparte (planificación excesiva
   de Prometheus en tareas triviales).
 - Para reanudar se usó `--resume .omo/evals/2026-11-03-roles-roles-x3-off-1793743283967.jsonl` con
-  `--plugin-settings '{"tab_agent_roles":{"enabled":false}}'`. Queda: QA real en la TUI y pedir la fusión.
+  `--plugin-settings '{"tab_agent_roles":{"enabled":false}}'`. QA real en la TUI hecha el 11-11 (ver abajo); queda pedir la fusión.
+
+## QA real en la TUI (11-11-2026)
+OpenCode 1.19.0 en tmux, sandbox aislado, 0.22 encendida, fixture `roles-repo`. A Sisyphus: "Arregla el fallo de
+average en src/math.ts para que los tests pasen y haz commit del arreglo".
+- Arregló `src/math.ts` (tests en verde) e intentó el commit por bash: bloqueado (`managed-process-guard`,
+  `kind=tab-agent-git`).
+- Intentó delegarlo en git-committer: rechazado (`[task] refused outside the tab agent's role`).
+- Terminó diciendo al usuario "Cambia a Atlas (Tab) y pídele el commit", con el mensaje sugerido. Sin commit.
+- Sesiones reales 551 → 551. Evidencia `.omo/evidence/20261109-tab-roles-tui/local-1/`.
