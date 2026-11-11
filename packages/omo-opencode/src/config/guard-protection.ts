@@ -21,7 +21,7 @@ export const GUARD_HOOKS: readonly string[] = [
 ]
 
 /** Settings sections of those guards (and the Zen gate and the network guard). */
-export const GUARD_SECTIONS = ["test_integrity", "edit_diagnostics", "loop_breaker", "retry_budget", "resilience", "stall", "zen_free_gate"] as const
+export const GUARD_SECTIONS = ["test_integrity", "edit_diagnostics", "loop_breaker", "retry_budget", "resilience", "stall", "zen_free_gate", "tab_agent_roles"] as const
 
 export type GuardProtection = { readonly config: OhMyOpenCodeConfig; readonly ignored: readonly string[] }
 

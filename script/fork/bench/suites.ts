@@ -5,6 +5,7 @@ import { IMPACT_TASKS } from "./tasks/impact"
 import { IMPACT_HARD_TASKS } from "./tasks/impact-hard"
 import { LOOP_TASKS } from "./tasks/loops"
 import { LOOP_HARD_TASKS } from "./tasks/loops-hard"
+import { ROLE_TASKS } from "./tasks/roles"
 import { LIBRARIAN_WEB_TASKS, WEB_RESEARCHER_TASKS } from "./tasks/web-research"
 import { LIBRARIAN_HARD_TASKS, WEB_RESEARCHER_HARD_TASKS } from "./tasks/web-research-hard"
 import type { Task } from "./types"
@@ -20,4 +21,5 @@ export const SUITES: Record<string, readonly Task[]> = {
   "impact-hard": IMPACT_HARD_TASKS,
   loops: LOOP_TASKS,
   "loops-hard": LOOP_HARD_TASKS,
+  roles: ROLE_TASKS,
 }

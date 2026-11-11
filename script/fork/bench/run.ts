@@ -4,6 +4,7 @@
  *
  *   bun script/fork/bench/run.ts --agent explore [--split dev|holdout|all] [--repeat 3] [--label baseline]
  *                                [--task <id>] [--smoke] [--offline] [--allow-stale]
+ *                                [--plugin-settings '{"tab_agent_roles":{"enabled":false}}']
  *
  * Builds nothing: run the plugin build first (the bench refuses a dist/ older than the sources). Uses the models the
  * user picked with /omo-models; each result records the model each agent really used. Sandbox and its copy of
@@ -152,6 +153,8 @@ async function main(): Promise<void> {
     overridePluginConfig(sandbox, {
       ...(option("model-all") ? { allModels: option("model-all") as string } : {}),
       ...(option("disable-hooks") ? { disabledHooks: (option("disable-hooks") as string).split(",").map((hook) => hook.trim()).filter(Boolean) } : {}),
+      // --plugin-settings '{"tab_agent_roles":{"enabled":false}}': A/B runs of a plugin setting.
+      ...(option("plugin-settings") ? { settings: JSON.parse(option("plugin-settings") as string) as Record<string, Record<string, unknown>> } : {}),
     })
     overrideAgentModels(sandbox, modelOverrides())
     if (proxy) routeZenThrough(sandbox, proxy.url)
