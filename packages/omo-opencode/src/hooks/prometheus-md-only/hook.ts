@@ -7,10 +7,18 @@ import { getAgentDisplayName } from "../../shared/agent-display-names"
 import { getAgentFromSession } from "./agent-resolution"
 import { isPrometheusAgent } from "./agent-matcher"
 import { isAllowedFile } from "./path-policy"
+import { planWriteRefusal } from "../../features/ideas-mode/gate"
+import { readSessionUserTexts } from "../../features/ideas-mode/session-user-texts"
 
 const TASK_TOOLS = ["task", "call_omo_agent"]
 
-export function createPrometheusMdOnlyHook(ctx: PluginInput) {
+export type PrometheusMdOnlyDeps = {
+  /** The user's own message texts, oldest first; undefined when they cannot be read (ideas mode, roadmap 0.23). */
+  readonly readUserTexts?: (sessionID: string) => Promise<string[] | undefined>
+}
+
+export function createPrometheusMdOnlyHook(ctx: PluginInput, deps: PrometheusMdOnlyDeps = {}) {
+  const readUserTexts = deps.readUserTexts ?? ((sessionID: string) => readSessionUserTexts(ctx.client, sessionID))
   return {
     "tool.execute.before": async (
       input: { tool: string; sessionID: string; callID: string },
@@ -67,6 +75,12 @@ export function createPrometheusMdOnlyHook(ctx: PluginInput) {
 
       const writesPlan = targets.some((target) => target.toLowerCase().replace(/\\/g, "/").includes(".omo/plans/"))
       if (writesPlan) {
+        const userTexts = await readUserTexts(input.sessionID)
+        const refusal = userTexts === undefined ? undefined : planWriteRefusal(userTexts)
+        if (refusal) {
+          log(`[${HOOK_NAME}] Blocked plan write: ideas mode without the user's order`, { sessionID: input.sessionID, targets })
+          throw new Error(refusal)
+        }
         log(`[${HOOK_NAME}] Injecting workflow reminder for plan write`, {
           sessionID: input.sessionID,
           tool: toolName,

@@ -8,6 +8,7 @@ import { ULW_EXECUTE_TEMPLATE } from "./templates/ulw-execute"
 import { HANDOFF_TEMPLATE } from "./templates/handoff"
 import { REMOVE_AI_SLOPS_TEMPLATE, REMOVE_AI_SLOPS_TEAM_MODE_ADDENDUM } from "./templates/remove-ai-slops"
 import { HYPERPLAN_TEMPLATE } from "./templates/hyperplan"
+import { IDEAS_MODE_MARKER } from "../ideas-mode/gate"
 
 interface LoadBuiltinCommandsOptions {
   useRegisteredAgents?: boolean
@@ -73,6 +74,26 @@ Timestamp: $TIMESTAMP
 $ARGUMENTS
 </user-request>`,
       argumentHint: "[plan-name] [--worktree <path>] [--make-pr] [--ship]",
+    },
+    "omo-ideas": {
+      description: "(builtin) Brainstorm ideas with Prometheus; research them; nothing enters the plan until you say so (/omo-ideas off to leave)",
+      agent: "prometheus",
+      template: `${IDEAS_MODE_MARKER}
+<command-instruction>
+Ideas mode (the user's text is below; "off" means leave ideas mode and confirm it in one line).
+- Talk the idea through: ONE question per message, with options when you can. Critique it honestly: what is right,
+  what is wrong, why, and a better version.
+- To check whether something exists or works, delegate to web-researcher (open web) or explore (this repository) and
+  record the answer with its sources.
+- Keep every idea in .omo/ideas.md: title, date, status (raw | researched | in plan | discarded), summary, sources.
+  Read it first: earlier ideas live there.
+- Do NOT write .omo/plans/ until the user explicitly says to add an idea to the plan; the plugin refuses it otherwise.
+</command-instruction>
+
+<user-request>
+$ARGUMENTS
+</user-request>`,
+      argumentHint: "[idea | off]",
     },
     "omo-resume": {
       description: "(builtin) Resume work that stopped (retries spent, OpenCode closed, memory pressure) without losing it",

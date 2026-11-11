@@ -6,6 +6,7 @@ export const BuiltinCommandNameSchema = z.enum([
  "ulw-execute",
  "stop-continuation",
  "omo-resume",
+ "omo-ideas",
  "remove-ai-slops",
  "hyperplan",
 ])
