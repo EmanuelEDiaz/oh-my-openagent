@@ -4,7 +4,7 @@ import { homedir, tmpdir } from "node:os"
 import { join } from "node:path"
 
 import { assertSafeSandboxRoot, createSandbox, destroySandbox, overrideAgentModels, overridePluginConfig, prepareWorkdir, sandboxProcesses } from "./sandbox"
-import { onStopSignal } from "./sandbox"
+import { onStopSignal, runLogsDir, serverRssMb, serverRssLimitMb } from "./sandbox"
 
 const scratch = mkdtempSync(join(tmpdir(), "bench-sandbox-"))
 afterAll(() => rmSync(scratch, { recursive: true, force: true }))
@@ -39,6 +39,9 @@ describe("createSandbox / prepareWorkdir / destroySandbox", () => {
     const workdir = prepareWorkdir(sandbox, fixture, "t1")
     expect(existsSync(join(workdir, ".git"))).toBe(true)
     expect(readFileSync(join(workdir, "src/a.ts"), "utf8")).toBe("export const a = 1\n")
+    // Like a configured repo: plain `git commit` works without the agent picking an identity (fork incident H50).
+    const identity = Bun.spawnSync(["git", "config", "--local", "user.email"], { cwd: workdir }).stdout.toString().trim()
+    expect(identity).toBe("bench@example.invalid")
 
     destroySandbox(sandbox)
     expect(existsSync(join(scratch, "sb"))).toBe(false)
@@ -88,6 +91,17 @@ describe("createSandbox / prepareWorkdir / destroySandbox", () => {
     expect(scope.disabled_hooks).toEqual(["x", "test-integrity-guard"])
     rmSync(root, { recursive: true, force: true })
   })
+
+  // Fork 0.22 measurement: the same suite with a plugin setting on and off (tab_agent_roles.enabled), in the sandbox only.
+  test("A/B settings: plugin settings are merged into the sandbox's [opencode] block", () => {
+    const root = mkdtempSync(join(tmpdir(), "omo-bench-ab-settings-"))
+    mkdirSync(join(root, "home/.omo"), { recursive: true })
+    writeFileSync(join(root, "home/.omo/omo.jsonc"), '{ "[opencode]": { "tab_agent_roles": { "enabled": true, "other": 1 } } }')
+    overridePluginConfig({ root, env: {} }, { settings: { tab_agent_roles: { enabled: false } } })
+    const scope = JSON.parse(readFileSync(join(root, "home/.omo/omo.jsonc"), "utf8"))["[opencode]"]
+    expect(scope.tab_agent_roles).toEqual({ enabled: false, other: 1 })
+    rmSync(root, { recursive: true, force: true })
+  })
 })
 
 // Fork incidents H27 (20-10-2026): a QA run stopped by `systemctl stop` (the RAM guard, or a gap for another agent)
@@ -111,5 +125,32 @@ describe("onStopSignal", () => {
     expect(existsSync(marker)).toBe(false)
     expect(code).toBe(130)
     rmSync(root, { recursive: true, force: true })
+  })
+})
+
+describe("serverRssMb / serverRssLimitMb (fork incident H53)", () => {
+  test("reads the server's resident memory in MB from /proc", () => {
+    const proc = mkdtempSync(join(tmpdir(), "fake-proc-"))
+    mkdirSync(join(proc, "4242"))
+    writeFileSync(join(proc, "4242", "status"), "Name:\topencode\nVmRSS:\t  921600 kB\nThreads:\t30\n")
+    expect(serverRssMb(4242, proc)).toBe(900)
+    expect(serverRssMb(4243, proc)).toBeUndefined()
+    rmSync(proc, { recursive: true, force: true })
+  })
+
+  test("restarts above 900 MB by default; OMO_BENCH_SERVER_RSS_MB overrides it", () => {
+    expect(serverRssLimitMb({})).toBe(900)
+    expect(serverRssLimitMb({ OMO_BENCH_SERVER_RSS_MB: "1200" })).toBe(1200)
+    expect(serverRssLimitMb({ OMO_BENCH_SERVER_RSS_MB: "lots" })).toBe(900)
+  })
+})
+
+describe("runLogsDir (fork incident H55)", () => {
+  test("each invocation of a run, first or resumed, keeps its own logs folder", () => {
+    const raw = "/evals/2026-11-03-roles-x3-off-1.jsonl"
+    const first = runLogsDir(raw, new Date("2026-11-05T15:39:00Z"))
+    const resumed = runLogsDir(raw, new Date("2026-11-09T17:38:00Z"))
+    expect(first).toBe("/evals/2026-11-03-roles-x3-off-1-logs/2026-11-05T15-39-00Z")
+    expect(resumed).not.toBe(first)
   })
 })

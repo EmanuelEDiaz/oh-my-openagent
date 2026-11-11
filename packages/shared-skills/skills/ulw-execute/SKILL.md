@@ -38,8 +38,10 @@ Execute a work plan until every top-level checkbox is complete. This skill pairs
 ## Usage
 
 ```text
-$ulw-execute [plan-name] [--worktree <absolute-path>] [--make-pr] [--ship]
+/ulw-execute [plan-name] [--worktree <absolute-path>] [--make-pr] [--ship]
 ```
+
+In Codex the same skill is invoked as `$ulw-execute`, with the same arguments.
 
 - `plan-name` (optional): a full or partial file stem under `.omo/plans/`.
 - `--worktree` (optional): reuse an existing task-owned worktree for the first phase instead of creating one; every phase runs in a task-owned worktree regardless.
@@ -66,7 +68,7 @@ Do ALL of this immediately after the plan is selected, BEFORE the first implemen
 
 ### No-plan bootstrap
 
-When the user explicitly said `start work` / `$ulw-execute` and no selectable plan exists, treat that phrase as approval: bootstrap `ulw-plan` to create the approved plan before execution and implementation, instead of stalling or asking for generic approval again. A brief or notes file without waves, checkboxes, and acceptance criteria is NOT decision-complete — enter this bootstrap too.
+When the user explicitly said `start work` / `/ulw-execute` (Codex: `$ulw-execute`) and no selectable plan exists, treat that phrase as approval: bootstrap `ulw-plan` to create the approved plan before execution and implementation, instead of stalling or asking for generic approval again. A brief or notes file without waves, checkboxes, and acceptance criteria is NOT decision-complete — enter this bootstrap too.
 
 1. Invoke the `ulw-plan` skill from the current request and require its dynamic adversarial workflow: collect, verify, design, adversarial plan-review, synthesize.
 2. The generated work plan must be saved under `.omo/plans/<slug>.md` before implementation or Boulder state writes that point at plan work.
