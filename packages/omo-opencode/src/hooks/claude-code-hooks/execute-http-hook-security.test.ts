@@ -3,7 +3,7 @@
 import { describe, it, expect, mock, beforeEach, afterEach } from "bun:test"
 import { fileURLToPath } from "node:url"
 import type { HookHttp } from "./types"
-import * as sharedModule from "../../shared"
+import * as loggerModule from "../../shared/logger"
 import { unsafeTestValue } from "../../../../../test-support/unsafe-test-value"
 
 const mockFetch = mock(() =>
@@ -17,16 +17,10 @@ async function importFreshExecuteHttpHook() {
   return import(modulePath)
 }
 
+// The logger's test sink sees every log call; replacing the shared barrel with mock.module leaked into later test files
+// (fork incident H47).
 function installSharedLogMock(logCalls: Array<{ message: string; data?: unknown }>): void {
-  const sharedMockFactory = () => ({
-    ...sharedModule,
-    log: (message: string, data?: unknown) => {
-      logCalls.push({ message, data })
-    },
-  })
-
-  mock.module("../../shared", sharedMockFactory)
-  mock.module("../../shared/index.ts", sharedMockFactory)
+  loggerModule._setLoggerForTesting({ sink: (message, data) => logCalls.push({ message, data }) })
 }
 
 describe("executeHttpHook TLS security", () => {
@@ -46,6 +40,7 @@ describe("executeHttpHook TLS security", () => {
     process.env = { ...originalEnv }
     mockFetch.mockReset()
     mock.restore()
+    loggerModule._resetLoggerForTesting()
   })
 
   describe("#given production mode", () => {

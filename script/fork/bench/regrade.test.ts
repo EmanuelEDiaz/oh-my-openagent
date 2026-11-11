@@ -4,7 +4,8 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 
 import { answerMatches, citationsExist, outcome } from "./graders"
-import { regradeResult } from "./regrade"
+import { findTask, regradeResult } from "./regrade"
+import { SUITES } from "./suites"
 import type { RunResult, Task } from "./types"
 
 const fixture = mkdtempSync(join(tmpdir(), "bench-regrade-"))
@@ -50,5 +51,13 @@ describe("regradeResult", () => {
   test("infrastructure failures stay unscored", async () => {
     const infra: RunResult = { taskId: "explore/x", repeat: 0, attempt: 0, failure: "infra", grades: [], error: "403" }
     expect(await regradeResult(infra, task, fixture)).toEqual(infra)
+  })
+})
+
+describe("findTask", () => {
+  test("#given a run of any built-in suite #then regrade finds its task", () => {
+    for (const [name, tasks] of Object.entries(SUITES)) {
+      expect(findTask(tasks[0]!.id)?.id, name).toBe(tasks[0]!.id)
+    }
   })
 })

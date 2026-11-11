@@ -22,6 +22,13 @@ function errorText(error: unknown): string {
   return [name, data?.message ?? JSON.stringify(data ?? error)].filter(Boolean).join(": ")
 }
 
+/** An assistant turn with no tokens and nothing in it: the provider never answered (fork incident H52). */
+function silentTurn(message: RawMessage): boolean {
+  const tokens = message.info.tokens
+  const used = (tokens?.input ?? 0) + (tokens?.output ?? 0) + (tokens?.reasoning ?? 0) + (tokens?.cache?.read ?? 0) + (tokens?.cache?.write ?? 0)
+  return used === 0 && !message.parts.some((part) => part.type === "tool" || (part.type === "text" && (part.text ?? "").trim() !== ""))
+}
+
 export function toTranscript(messages: readonly RawMessage[], delegatedAgents: readonly string[] = []): Transcript {
   const assistants = messages.filter((message) => message.info.role === "assistant")
   const last = assistants.at(-1)
@@ -42,7 +49,9 @@ export function toTranscript(messages: readonly RawMessage[], delegatedAgents: r
   // Only an error on the last message broke the run; an earlier one the session recovered from did not.
   const error = last === undefined
     ? "no assistant message in the session"
-    : last.info.error === undefined ? undefined : errorText(last.info.error)
+    : last.info.error !== undefined ? errorText(last.info.error)
+    : silentTurn(last) ? "model produced no output in the final turn (0 tokens, nothing written): the provider went silent, usually a spent quota"
+    : undefined
   return {
     agent: last?.info.agent ?? "",
     model: last ? `${last.info.providerID}/${last.info.modelID}` : "",

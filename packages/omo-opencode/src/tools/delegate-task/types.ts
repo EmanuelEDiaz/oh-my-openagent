@@ -111,6 +111,8 @@ export interface DelegateTaskToolOptions {
   availableCategories?: AvailableCategory[]
   availableSkills?: AvailableSkill[]
   agentOverrides?: AgentOverrides
+  /** Fixed specialist sets per tab agent (fork roadmap 0.22): refuse delegations outside the caller's role. */
+  enforceTabAgentRoles?: boolean
   /** Reload model-bearing config at task invocation time so edits are honored without rebuilding tools. */
   loadCurrentModelConfig?: () => Pick<OhMyOpenCodeConfig, "agents" | "categories">
   sisyphusAgentConfig?: SisyphusAgentConfig

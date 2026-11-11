@@ -52,6 +52,25 @@ export function silentModelError(transcript: Transcript): string | undefined {
   return `model produced no output (0 tokens, no tool calls, empty answer after ${Math.round(transcript.durationMs / 1000)}s)`
 }
 
+// The provider answered nothing (silentModelError, or a silent final turn from transcript.ts). Zen does this for a
+// while before it reports the spent quota (fork incident H52), so these runs never use up retries.
+const SILENT_PATTERN = /model produced no output/i
+
+export function isSilentModelError(error: string): boolean {
+  return SILENT_PATTERN.test(error)
+}
+
+/** How many of the latest runs in a row the provider left silent. */
+export function silentStreak(results: readonly RunResult[]): number {
+  let streak = 0
+  for (let index = results.length - 1; index >= 0; index--) {
+    const error = results[index]?.error
+    if (error === undefined || !isSilentModelError(error)) break
+    streak++
+  }
+  return streak
+}
+
 export function classifyFailure(error: string): FailureKind {
   return isConfigError(error) || INFRA_PATTERNS.some((pattern) => pattern.test(error)) ? "infra" : "task"
 }
