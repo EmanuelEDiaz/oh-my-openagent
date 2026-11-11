@@ -21,6 +21,7 @@ import { defaultFixtureCache, resolveFixture } from "./fixtures"
 import { renderReport } from "./report"
 import { pendingRuns } from "./resume"
 import { runTask } from "./runner"
+import { assertPluginLoads } from "./plugin-check"
 import { formatMemory, needsServerRestart, processMemory, scopeMemory, type BenchMemory } from "./memory"
 import { createSandbox, destroySandbox, isHealthy, overrideAgentModels, overridePluginConfig, runLogsDir, sandboxProcesses, saveServerLogs, serverRssLimitMb, serverRssMb, startServer, stopSandboxProcesses, warmUp, type Sandbox, type Server } from "./sandbox"
 import { isConfigError, isConnectivityError, isQuotaError, silentStreak, summarize } from "./score"
@@ -149,6 +150,8 @@ async function main(): Promise<void> {
   if (resumeFile !== undefined) console.log(`resuming ${resumeFile}: ${previousResults.length} saved result(s), ${pending.length} run(s) to go`)
   try {
     // OMO_BENCH_ROOT: a whole project per task (with node_modules and builds) does not fit a RAM-backed /tmp.
+    // A plugin that cannot load would fail every prompt as "UnknownError" (fork incident H57).
+    await assertPluginLoads(plugin)
     sandbox = createSandbox(join(process.env.OMO_BENCH_ROOT ?? tmpdir(), `omo-bench-${process.pid}-${Date.now()}`), plugin)
     overridePluginConfig(sandbox, {
       ...(option("model-all") ? { allModels: option("model-all") as string } : {}),
