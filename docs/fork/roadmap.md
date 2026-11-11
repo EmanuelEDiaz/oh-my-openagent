@@ -64,12 +64,20 @@ Una sola estructura que se quede con **lo mejor** de oh-my-openagent y de tu bib
 rama propia → test RED → implementación → tests → QA real en OpenCode aislado → evidencia local →
 merge --no-ff a mis-mejoras → actualizar este roadmap`.
 
+*Por tandas (usuario, 11-11-2026, "casi no se avanza por día"):* se programan **3-5 ítems seguidos**, cada uno con sus
+tests, una QA sin modelo y su propio interruptor; después **una prueba real por tanda** en el proyecto real (inventario,
+luego codegenerator) con todo encendido; cada fallo se cierra con su test, y para encontrar al culpable se apagan los
+interruptores de uno en uno. El banco ×3 encendido/apagado queda solo para ítems que cambian el comportamiento de los
+agentes. Las pruebas con modelo empiezan solo cuando el usuario lo dice (no automáticas a las 20:20). Descartado:
+"programar todo y probar al final" (un fallo tardío entre muchos cambios no se puede atribuir; la QA de Team Mode
+destapó H56, un hueco de 0.22 que solo se veía con las dos encendidas).
+
 ## Reglas transversales del usuario (se aplican a todos los pasos)
 1. **Sin pendientes:** ningún paso se cierra con cosas a medias; se terminan o se pregunta.
 2. **Cada elección del usuario va al plan y al roadmap**; lo descartado queda con su motivo.
 3. **Criticar las ideas antes de integrarlas:** qué está bien, dónde falla y por qué, versión mejorada; o "medir
    primero".
-4. **Medir la eficacia de todo** (no basta con que funcione): cada paso tiene su medición en el banco y se reporta, **incluido el consumo de contexto por agente y tarea** (0.13).
+4. **Medir la eficacia de todo** (no basta con que funcione; desde el 11-11-2026, por tanda, ver arriba): cada paso tiene su medición en el banco y se reporta, **incluido el consumo de contexto por agente y tarea** (0.13).
 5. **Integración del sistema entero:** la QA de cada paso prueba cómo convive con lo ya hecho; 5.2 hace la matriz
    completa.
 6. **Arquitectura:** solo los agentes de tab orquestan; los de "@" son atómicos y nunca delegan; cada "@" tiene su
