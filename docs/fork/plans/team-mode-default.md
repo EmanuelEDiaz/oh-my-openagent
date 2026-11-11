@@ -34,3 +34,15 @@ Decisión del usuario (11-11): **medir primero y decidir** el valor por defecto 
 ## Límites de la ejecución
 - Solo en esta PC (el ASUS no se usa ahora), cediendo la RAM a Code Quest (`omo-run.sh`, suelo 1 GB).
 - Cuota gratis de Zen: un equipo gasta varias sesiones a la vez; las tandas se cortan y se reanudan.
+
+## Paso 1 hecho: QA real (11-11-2026)
+Fixture nuevo `team-repo` (dos utilidades independientes sin implementar, con sus tests). Con Team Mode encendido solo en
+el sandbox, a Sisyphus: crea un equipo de dos, uno por utilidad, cada uno en su worktree, y une el trabajo.
+- Sisyphus creó el equipo (`utilities-implementers`: `duration-dev`, `roman-dev`); los miembros (Sisyphus-Junior)
+  trabajaron en paralelo en su worktree e hicieron commit en su rama; Sisyphus recogió los resultados, unió las ramas,
+  verificó (`bun test` 6/6) y borró worktrees, ramas y equipo. 5 minutos. Sesiones reales 551 → 551.
+- Convivencia con 0.22: la unión fue un `git merge` de Sisyphus, un commit que la regla no cubría → **H56** (decisión del
+  usuario: bloquear todo lo que crea commits; los commits de los miembros en sus ramas se aceptan). Con H56, la misma
+  prueba deja las ramas listas y Sisyphus manda a Atlas a unirlas.
+- Evidencia `.omo/evidence/20261111-team-mode-qa/`.
+- Siguiente: el banco encendido/apagado va en la tanda 1 (decisión del usuario de trabajar por tandas, 11-11).
