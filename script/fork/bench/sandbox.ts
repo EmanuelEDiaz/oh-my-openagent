@@ -89,6 +89,9 @@ export function prepareWorkdir(sandbox: Sandbox, fixtureDir: string, name: strin
     if (result.exitCode !== 0) throw new Error(`git ${args.join(" ")} failed: ${result.stderr.toString()}`)
   }
   git("init", "-q")
+  // Like a configured repo: plain `git commit` works and the agent never has to pick an identity (fork incident H50).
+  git("config", "user.name", "bench")
+  git("config", "user.email", "bench@example.invalid")
   git("add", "-A")
   git("commit", "-qm", "fixture")
   return workdir
@@ -155,12 +158,39 @@ export async function warmUp(sandbox: Sandbox, server: Server, timeoutMs = 120_0
   return false
 }
 
+/** Resident memory of the server process in MB, or undefined when it is gone (Linux /proc). */
+export function serverRssMb(pid: number, procDir = "/proc"): number | undefined {
+  try {
+    const kb = readFileSync(join(procDir, String(pid), "status"), "utf8").match(/^VmRSS:\s+(\d+)\s+kB/m)?.[1]
+    return kb === undefined ? undefined : Math.round(Number(kb) / 1024)
+  } catch {
+    return undefined
+  }
+}
+
+/**
+ * Above this the bench restarts the server between tasks, so a leak never lets the memory cap kill a long measurement
+ * (fork incident H53: 868 MB after 13 tasks under a 1.5 GB cap). Override with OMO_BENCH_SERVER_RSS_MB.
+ */
+export function serverRssLimitMb(env: Readonly<Record<string, string | undefined>> = process.env): number {
+  const value = Number(env.OMO_BENCH_SERVER_RSS_MB)
+  return Number.isFinite(value) && value > 0 ? value : 900
+}
+
 /** True when the server answers within the timeout. */
 export async function isHealthy(server: Server, timeoutMs = 10_000): Promise<boolean> {
   return fetch(`${server.baseUrl}/config`, { signal: AbortSignal.timeout(timeoutMs) }).then((response) => response.ok, () => false)
 }
 
 /** Copies OpenCode's own logs out of the sandbox (never auth.json) before it is deleted. */
+/**
+ * Where one invocation of a run saves its server logs: a folder per start, so resuming a run never overwrites the logs
+ * of the previous invocation (fork incident H55: the timed logs of over-budget runs were lost on resume).
+ */
+export function runLogsDir(rawFile: string, startedAt: Date): string {
+  return join(rawFile.replace(/\.jsonl$/, "-logs"), startedAt.toISOString().replace(/\.\d{3}Z$/, "Z").replaceAll(":", "-"))
+}
+
 export function saveServerLogs(sandbox: Sandbox, to: string): void {
   const logs = join(sandbox.root, "data/opencode/log")
   if (existsSync(logs)) cpSync(logs, to, { recursive: true })
@@ -212,7 +242,8 @@ export function onStopSignal(cleanup: () => void): () => void {
   }
 }
 
-export function destroySandbox(sandbox: Sandbox): void {
+/** Stops the background helpers the sandboxed OpenCode started (LSP daemon, tsserver) that outlive the server. */
+export function stopSandboxProcesses(sandbox: Sandbox): void {
   for (const pid of sandboxProcesses(sandbox.root)) {
     try {
       process.kill(pid, "SIGTERM")
@@ -220,6 +251,10 @@ export function destroySandbox(sandbox: Sandbox): void {
       // already gone
     }
   }
+}
+
+export function destroySandbox(sandbox: Sandbox): void {
+  stopSandboxProcesses(sandbox)
   rmSync(sandbox.root, { recursive: true, force: true })
 }
 
@@ -244,8 +279,11 @@ export function overrideAgentModels(sandbox: Sandbox, overrides: Readonly<Record
  * Sandbox-only plugin settings for an A/B run: every agent and category on one model, and hooks to switch off
  * (e.g. measuring a guard with and without it). The user's real configuration is never touched.
  */
-export function overridePluginConfig(sandbox: Sandbox, options: { readonly allModels?: string; readonly disabledHooks?: readonly string[] }): void {
-  if (!options.allModels && !options.disabledHooks?.length) return
+export function overridePluginConfig(
+  sandbox: Sandbox,
+  options: { readonly allModels?: string; readonly disabledHooks?: readonly string[]; readonly settings?: Readonly<Record<string, Record<string, unknown>>> },
+): void {
+  if (!options.allModels && !options.disabledHooks?.length && !options.settings) return
   const path = join(sandbox.root, "home/.omo/omo.jsonc")
   const config = (existsSync(path) ? parseJsonc<Record<string, unknown>>(readFileSync(path, "utf8")) : {}) ?? {}
   const scope = ((config["[opencode]"] as Record<string, unknown> | undefined) ?? (config["[opencode]"] = {})) as Record<string, unknown>
@@ -261,6 +299,10 @@ export function overridePluginConfig(sandbox: Sandbox, options: { readonly allMo
   }
   if (options.disabledHooks?.length) {
     scope["disabled_hooks"] = [...new Set([...((scope["disabled_hooks"] as string[] | undefined) ?? []), ...options.disabledHooks])]
+  }
+  // One level deep: `{ tab_agent_roles: { enabled: false } }` keeps the section's other keys.
+  for (const [section, values] of Object.entries(options.settings ?? {})) {
+    scope[section] = { ...((scope[section] as Record<string, unknown> | undefined) ?? {}), ...values }
   }
   writeFileSync(path, JSON.stringify(config, null, 2))
 }

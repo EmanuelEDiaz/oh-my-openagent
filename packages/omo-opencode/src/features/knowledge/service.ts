@@ -198,7 +198,9 @@ export function createKnowledgeService(projectDir: string, config: KnowledgeConf
     },
     close: () => {
       if (timer) clearTimeout(timer)
-      void store().then((opened) => opened?.close())
+      timer = undefined
+      // Never opens the index just to close it.
+      void storePromise?.then((opened) => opened?.close())
     },
   }
 }
@@ -213,4 +215,12 @@ export function getKnowledgeService(projectDir: string, config: KnowledgeConfig 
     services.set(projectDir, service)
   }
   return service
+}
+
+/** Called when the folder's plugin instance is disposed: closes its index and forgets it (fork incident H53). */
+export function releaseKnowledgeService(projectDir: string): void {
+  const service = services.get(projectDir)
+  if (!service) return
+  services.delete(projectDir)
+  service.close()
 }

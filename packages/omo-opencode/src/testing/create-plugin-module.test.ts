@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { getLocale, initI18n, t } from "../shared/i18n"
 import { PLUGIN_NAME } from "../shared"
+import { createOpencodeClient } from "@opencode-ai/sdk"
 import { createPluginModule } from "./create-plugin-module"
 
 const sourcePlugin = new URL("../index.ts", import.meta.url).href
@@ -295,6 +296,40 @@ describe("createPluginModule()", () => {
 
       // then
       expect(mockTuiStateMirrorStop).toHaveBeenCalledTimes(1)
+    })
+
+    it("#then after dispose the instance's client never reaches OpenCode again (fork incident H53)", async () => {
+      // given
+      const calls: string[] = []
+      const client = createOpencodeClient({
+        baseUrl: "http://127.0.0.1:4096",
+        directory: "/tmp/project",
+        fetch: async (request: Request) => {
+          calls.push(new URL(request.url).pathname)
+          return new Response("true", { status: 200, headers: { "content-type": "application/json" } })
+        },
+      })
+      const unregisterLiveServerRoute = mock(() => {})
+      const releaseKnowledgeService = mock(() => {})
+      const pluginModule = createTestPluginModule({ unregisterLiveServerRoute, releaseKnowledgeService })
+      const input: Parameters<typeof pluginModule.server>[0] = Object.assign(
+        { directory: "/tmp/project" } as Parameters<typeof pluginModule.server>[0],
+        { client },
+      )
+      const hooks: Awaited<ReturnType<typeof pluginModule.server>> & {
+        dispose?: () => Promise<void>
+      } = await pluginModule.server(input)
+      await client.tui.showToast({ body: { message: "open", variant: "info" } })
+
+      // when
+      await hooks.dispose?.()
+      const late = client.tui.showToast({ body: { message: "late", variant: "info" } })
+
+      // then
+      await expect(late).rejects.toThrow("disposed")
+      expect(calls).toEqual(["/tui/show-toast"])
+      expect(unregisterLiveServerRoute).toHaveBeenCalledWith(client)
+      expect(releaseKnowledgeService).toHaveBeenCalledWith("/tmp/project")
     })
 
     it("#then dispose stops the runtime skill source", async () => {

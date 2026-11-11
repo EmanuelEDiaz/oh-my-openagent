@@ -1,6 +1,9 @@
 import { tool, type ToolDefinition } from "@opencode-ai/plugin"
 import type { DelegatedModelConfig, ToolContextWithMetadata, DelegateTaskToolOptions } from "./types"
 import { log } from "../../shared/logger"
+import { tabAgentDelegationError } from "../../agents/tab-agent-roles"
+import { SISYPHUS_JUNIOR_AGENT } from "./sisyphus-junior-agent"
+import { sanitizeSubagentType } from "./subagent-discovery"
 import { buildSystemContent } from "./prompt-builder"
 import {
   resolveSkillContent,
@@ -129,6 +132,15 @@ export function createDelegateTask(options: DelegateTaskToolOptions): ToolDefini
 
       if (!delegateTaskArgs.category && !delegateTaskArgs.subagent_type) {
         return `Invalid arguments: Must provide either category or subagent_type.`
+      }
+
+      if (options.enforceTabAgentRoles) {
+        const target = delegateTaskArgs.category ? SISYPHUS_JUNIOR_AGENT : sanitizeSubagentType(delegateTaskArgs.subagent_type ?? "")
+        const refusal = tabAgentDelegationError(parentContext.agent, target)
+        if (refusal) {
+          log("[task] refused outside the tab agent's role", { parentAgent: parentContext.agent, target })
+          return refusal
+        }
       }
 
       let systemDefaultModel: string | undefined
