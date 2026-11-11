@@ -10,8 +10,11 @@ import {
   countWatchdogRecoveries,
   createIdleDebounce,
   managedProcessesBusy,
+  OverBudgetError,
   permissionsInfo,
+  waitUntil,
 } from "./runner"
+import { classifyFailure } from "./score"
 
 describe("answerQuestions", () => {
   test("replies to every pending question with one answer per sub-question", async () => {
@@ -121,5 +124,20 @@ describe("countWatchdogRecoveries", () => {
     ].join("\n")
     expect(countWatchdogRecoveries(log)).toBe(3)
     expect(countWatchdogRecoveries("")).toBe(0)
+  })
+})
+
+describe("waitUntil", () => {
+  test("#given an agent still working when its time budget ends #then it is the agent's failure, not infrastructure", async () => {
+    // given
+    let step = 0
+    const progress = async () => String(step++)
+
+    // when
+    const outcome = await waitUntil(async () => false, progress, 1, "roles/x", async () => undefined).catch((error: unknown) => error)
+
+    // then
+    expect(outcome).toBeInstanceOf(OverBudgetError)
+    expect(classifyFailure((outcome as Error).message)).toBe("task")
   })
 })

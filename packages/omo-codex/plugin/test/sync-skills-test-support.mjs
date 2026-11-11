@@ -161,6 +161,12 @@ const reviewWorkCodexGatePattern = new RegExp(reviewWorkCodexGate.replace(/[.*+?
 const ulwResearchOriginalDeliveryGates = "Reading the source markup is not visual QA; inspect the pixels.\n4. **Proofread gate \u2014 `task(category=\"writing\", ...)`.** Hand the final text to a dedicated `writing` worker whose only job is language: grammar, spelling, punctuation, terminology consistency, and whether the prose reads NATIVELY in the report's own language. It proofreads only and never composes. It returns a defect list; fix every item and re-run the gate on the delta. Deliver only on a clean pass \u2014 this gate runs BEFORE the first delivery, not after the user finds the typo.";
 const ulwResearchCodexDeliveryGate = "Reading the source markup is not visual QA; inspect the pixels.";
 
+// Fork incident H51: the shared skill names the OpenCode command; the Codex copy restores `$ulw-execute`.
+const ulwExecuteOpenCodeUsage = "/ulw-execute [plan-name] [--worktree <absolute-path>] [--make-pr] [--ship]\n```\n\nIn Codex the same skill is invoked as `$ulw-execute`, with the same arguments.\n\n";
+const ulwExecuteCodexUsage = "$ulw-execute [plan-name] [--worktree <absolute-path>] [--make-pr] [--ship]\n```\n\n";
+const ulwExecuteOpenCodeStart = "`start work` / `/ulw-execute` (Codex: `$ulw-execute`)";
+const ulwExecuteCodexStart = "`start work` / `$ulw-execute`";
+
 export function removeCodexSkillOverlays(skillName, content) {
 	if (skillName === "ulw-research") {
 		return content.replace(ulwResearchCodexDeliveryGate, ulwResearchOriginalDeliveryGates);
@@ -168,7 +174,9 @@ export function removeCodexSkillOverlays(skillName, content) {
 	if (skillName === "ulw-execute") {
 		return content
 			.replace(ulwExecuteCodexCompletion, ulwExecuteOriginalCompletion)
-			.replace(ulwExecuteCodexHardRule, ulwExecuteOriginalHardRule);
+			.replace(ulwExecuteCodexHardRule, ulwExecuteOriginalHardRule)
+			.replace(ulwExecuteCodexUsage, ulwExecuteOpenCodeUsage)
+			.replace(ulwExecuteCodexStart, ulwExecuteOpenCodeStart);
 	}
 	if (skillName === "review-work") {
 		return content.replace(reviewWorkCodexGatePattern, "");

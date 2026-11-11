@@ -4,6 +4,7 @@
  *
  *   bun script/fork/bench/run.ts --agent explore [--split dev|holdout|all] [--repeat 3] [--label baseline]
  *                                [--task <id>] [--smoke] [--offline] [--allow-stale]
+ *                                [--plugin-settings '{"tab_agent_roles":{"enabled":false}}']
  *
  * Builds nothing: run the plugin build first (the bench refuses a dist/ older than the sources). Uses the models the
  * user picked with /omo-models; each result records the model each agent really used. Sandbox and its copy of
@@ -20,21 +21,15 @@ import { defaultFixtureCache, resolveFixture } from "./fixtures"
 import { renderReport } from "./report"
 import { pendingRuns } from "./resume"
 import { runTask } from "./runner"
-import { createSandbox, destroySandbox, isHealthy, overrideAgentModels, overridePluginConfig, saveServerLogs, startServer, warmUp, type Sandbox, type Server } from "./sandbox"
-import { isConfigError, isConnectivityError, isQuotaError, summarize } from "./score"
-import { EXPLORE_TASKS } from "./tasks/explore"
-import { FIX_INTEGRITY_TASKS } from "./tasks/fix-integrity"
-import { IMPACT_TASKS } from "./tasks/impact"
-import { IMPACT_HARD_TASKS } from "./tasks/impact-hard"
-import { LOOP_TASKS } from "./tasks/loops"
-import { LOOP_HARD_TASKS } from "./tasks/loops-hard"
-import { LIBRARIAN_WEB_TASKS, WEB_RESEARCHER_TASKS } from "./tasks/web-research"
-import { LIBRARIAN_HARD_TASKS, WEB_RESEARCHER_HARD_TASKS } from "./tasks/web-research-hard"
+import { formatMemory, needsServerRestart, processMemory, scopeMemory, type BenchMemory } from "./memory"
+import { createSandbox, destroySandbox, isHealthy, overrideAgentModels, overridePluginConfig, runLogsDir, sandboxProcesses, saveServerLogs, serverRssLimitMb, serverRssMb, startServer, stopSandboxProcesses, warmUp, type Sandbox, type Server } from "./sandbox"
+import { isConfigError, isConnectivityError, isQuotaError, silentStreak, summarize } from "./score"
+import { SUITES } from "./suites"
 import type { RunResult, Task } from "./types"
 
 const REPO = join(import.meta.dir, "../../..")
-const SUITES: Record<string, readonly Task[]> = { explore: EXPLORE_TASKS, "web-researcher": WEB_RESEARCHER_TASKS, "librarian-web": LIBRARIAN_WEB_TASKS, "web-researcher-hard": WEB_RESEARCHER_HARD_TASKS, "librarian-hard": LIBRARIAN_HARD_TASKS, "fix-integrity": FIX_INTEGRITY_TASKS, impact: IMPACT_TASKS, "impact-hard": IMPACT_HARD_TASKS, loops: LOOP_TASKS, "loops-hard": LOOP_HARD_TASKS }
 const INFRA_RETRIES = 2
+const SILENT_STREAK_STOP = 4
 // A lost connection is waited out and retried without using up INFRA_RETRIES, a few times per run at most.
 const CONNECTION_RETRIES = 5
 const CONNECTION_WAIT_MS = 30 * 60_000
@@ -84,6 +79,10 @@ async function fetchStatus(url: string): Promise<number> {
   return status === 405 || status === 403 ? request("GET") : status
 }
 
+function benchMemory(server: Server): BenchMemory {
+  return { serverRssMb: server.pid === undefined ? undefined : serverRssMb(server.pid), scope: scopeMemory() }
+}
+
 async function main(): Promise<void> {
   const agent = option("agent")
   // Private suites (docs/fork/plans/real-project-bench.md): results, arbiter packages and reports stay in their folder.
@@ -120,6 +119,7 @@ async function main(): Promise<void> {
     ? []
     : readFileSync(resumeFile, "utf8").trim().split("\n").filter(Boolean).map((line) => JSON.parse(line) as RunResult)
 
+  const invocationStartedAt = new Date()
   let sandbox: Sandbox | undefined
   let server: Server | undefined
   // Every run records the context each request carries (fork roadmap 0.13); --no-context turns it off.
@@ -131,7 +131,7 @@ async function main(): Promise<void> {
     proxy?.stop()
     server?.stop()
     if (sandbox) {
-      saveServerLogs(sandbox, rawFile.replace(/\.jsonl$/, "-logs"))
+      saveServerLogs(sandbox, runLogsDir(rawFile, invocationStartedAt))
       destroySandbox(sandbox)
     }
     server = undefined
@@ -153,6 +153,8 @@ async function main(): Promise<void> {
     overridePluginConfig(sandbox, {
       ...(option("model-all") ? { allModels: option("model-all") as string } : {}),
       ...(option("disable-hooks") ? { disabledHooks: (option("disable-hooks") as string).split(",").map((hook) => hook.trim()).filter(Boolean) } : {}),
+      // --plugin-settings '{"tab_agent_roles":{"enabled":false}}': A/B runs of a plugin setting.
+      ...(option("plugin-settings") ? { settings: JSON.parse(option("plugin-settings") as string) as Record<string, Record<string, unknown>> } : {}),
     })
     overrideAgentModels(sandbox, modelOverrides())
     if (proxy) routeZenThrough(sandbox, proxy.url)
@@ -174,6 +176,14 @@ async function main(): Promise<void> {
             server.stop()
             server = await start(sandbox)
           }
+          // The cap counts the server and all it started (LSP daemon, tsserver, graders): fork incidents H53/H54.
+          const memory = benchMemory(server)
+          if (needsServerRestart(memory, { serverRssLimitMb: serverRssLimitMb() })) {
+            console.log(`memory: ${formatMemory(memory, processMemory(sandboxProcesses(sandbox.root)))}; restarting the server to stay under the cap`)
+            server.stop()
+            stopSandboxProcesses(sandbox)
+            server = await start(sandbox)
+          }
           const startedAt = Date.now()
           const result = await runTask(task, {
             baseUrl: server.baseUrl,
@@ -189,11 +199,17 @@ async function main(): Promise<void> {
           appendFileSync(rawFile, `${JSON.stringify(result)}\n`)
           const verdict = result.pass === undefined ? `INFRA (${result.error?.slice(0, 120)})` : result.pass ? "PASS" : `FAIL ${result.grades.filter((grade) => !grade.pass).map((grade) => grade.name).join(", ") || result.error}`
           console.log(`${task.id} #${repeat + 1}${attempt > 0 ? ` retry ${attempt}` : ""}: ${verdict}`)
+          console.log(`  memory: ${formatMemory(benchMemory(server), processMemory(sandboxProcesses(sandbox.root)))}`)
           if (result.error !== undefined && isConfigError(result.error)) {
             throw new Error(`configuration problem, not the agent's: ${result.error}\nFix the models with /omo-models and run again.`)
           }
           if (result.error !== undefined && isQuotaError(result.error)) {
             throw new Error(`the provider's quota is spent, not the agent's fault: ${result.error}\nResume this run once it resets with --resume ${rawFile}`)
+          }
+          // A spent quota first shows as empty answers, task after task (fork incident H52): stop instead of burning
+          // every remaining run; the silent ones are rerun on --resume.
+          if (silentStreak(results) >= SILENT_STREAK_STOP) {
+            throw new Error(`the provider answered nothing ${SILENT_STREAK_STOP} times in a row (usually a spent quota)\nResume this run later with --resume ${rawFile}`)
           }
           if (result.failure !== "infra") break
           if (result.error !== undefined && isConnectivityError(result.error) && connectionRetries < CONNECTION_RETRIES) {

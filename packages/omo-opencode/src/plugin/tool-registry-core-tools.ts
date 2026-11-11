@@ -81,6 +81,7 @@ export function createCoreTools(args: {
     browserProvider: skillContext.browserProvider,
     disabledSkills: skillContext.disabledSkills,
     teamModeEnabled: pluginConfig.team_mode?.enabled ?? false,
+    enforceTabAgentRoles: pluginConfig.tab_agent_roles?.enabled ?? true,
     availableCategories,
     availableSkills: skillContext.availableSkills,
     nativeSkills,

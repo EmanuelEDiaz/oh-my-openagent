@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test"
 
-import { classifyFailure, isConfigError, isConnectivityError, isQuotaError, passHatK, silentModelError, summarize } from "./score"
+import { classifyFailure, isConfigError, isConnectivityError, isQuotaError, isSilentModelError, passHatK, silentModelError, silentStreak, summarize } from "./score"
 import type { RunResult, Transcript } from "./types"
 
 describe("classifyFailure", () => {
@@ -152,5 +152,26 @@ describe("summarize", () => {
   test("mean tokens are over scored runs only", () => {
     const summary = summarize([run("a", 0, true, 100), run("a", 1, false, 300), run("a", 2, undefined)], 3)
     expect(summary.meanTokens).toBe(200)
+  })
+})
+
+// Fork incident H52: a spent quota first shows up as empty answers, task after task.
+describe("silentStreak", () => {
+  const run = (error?: string): RunResult => ({ taskId: "t", repeat: 0, attempt: 0, grades: [], ...(error ? { failure: "infra" as const, error } : { pass: true }) })
+  const silent = "model produced no output (0 tokens, no tool calls, empty answer after 1s)"
+
+  test("#given the latest runs were all silent #then the streak counts them", () => {
+    expect(silentStreak([run(), run(silent), run(silent), run(silent)])).toBe(3)
+  })
+
+  test("#given a scored or other failed run last #then the streak is broken", () => {
+    expect(silentStreak([run(silent), run(silent), run()])).toBe(0)
+    expect(silentStreak([run(silent), run("503 Service Unavailable")])).toBe(0)
+  })
+
+  test("#given silent errors, including a silent final turn #then they are recognised", () => {
+    expect(isSilentModelError(silent)).toBe(true)
+    expect(isSilentModelError("model produced no output in the final turn (0 tokens)")).toBe(true)
+    expect(isSilentModelError("429 Too Many Requests")).toBe(false)
   })
 })

@@ -333,4 +333,20 @@ describe("auto-update-checker hook", () => {
       expect.any(String),
     )
   })
+
+  test("a disposed instance never runs its deferred startup check (fork incident H53)", async () => {
+    // given
+    resetDeferredState()
+    const { hook, mocks } = await createHook()
+    triggerSessionCreated(hook)
+
+    // when
+    hook.dispose()
+    await runScheduledCheck()
+
+    // then
+    expect(mocks.showConfigErrorsIfAny).not.toHaveBeenCalled()
+    expect(mocks.showVersionToast).not.toHaveBeenCalled()
+    expect(mocks.runBackgroundUpdateCheck).not.toHaveBeenCalled()
+  })
 })

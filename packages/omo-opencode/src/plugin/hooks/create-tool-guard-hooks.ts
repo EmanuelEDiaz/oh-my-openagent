@@ -155,7 +155,11 @@ export function createToolGuardHooks(args: {
 
   // Long-running commands must use process_start; self-destructive kills are refused (fork roadmap 0.8b).
   const managedProcessGuard = isHookEnabled("managed-process-guard") && pluginConfig.processes?.enabled !== false
-    ? safeHook("managed-process-guard", () => createManagedProcessGuardHook({ enforceLongRunning: pluginConfig.processes?.enforce !== false }))
+    ? safeHook("managed-process-guard", () => createManagedProcessGuardHook({
+      enforceLongRunning: pluginConfig.processes?.enforce !== false,
+      tabAgentRoles: pluginConfig.tab_agent_roles?.enabled ?? true,
+      directory: ctx.directory,
+    }))
     : null
 
   // Existing tests are read-only while fixing and cheating edits are refused (fork roadmap 0.9a).

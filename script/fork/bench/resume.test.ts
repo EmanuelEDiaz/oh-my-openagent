@@ -27,4 +27,11 @@ describe("pendingRuns", () => {
     expect(pendingRuns([quota(0), quota(1), quota(2)], ["a"], 1, 2)).toEqual([{ taskId: "a", repeat: 0, nextAttempt: 0 }])
     expect(pendingRuns([done("a", 0, 0, undefined), quota(1)], ["a"], 1, 2)).toEqual([{ taskId: "a", repeat: 0, nextAttempt: 1 }])
   })
+
+  // Fork incident H52: before Zen said "usage exceeded", it answered with empty turns; those runs must be rerun later.
+  test("#given attempts where the provider answered nothing #then they do not use up the repeat's retries either", () => {
+    const silent = (attempt: number): RunResult => ({ ...done("a", 0, attempt, undefined), error: "model produced no output (0 tokens, no tool calls, empty answer after 1s)" })
+    expect(pendingRuns([silent(0), silent(1), silent(2)], ["a"], 1, 2)).toEqual([{ taskId: "a", repeat: 0, nextAttempt: 0 }])
+  })
 })
+
