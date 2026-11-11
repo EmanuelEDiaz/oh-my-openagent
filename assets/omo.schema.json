@@ -12195,6 +12195,19 @@
           ],
           "additionalProperties": false
         },
+        "shell_safety": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "default": true,
+              "type": "boolean"
+            }
+          },
+          "required": [
+            "enabled"
+          ],
+          "additionalProperties": false
+        },
         "resilience": {
           "type": "object",
           "properties": {
@@ -30571,6 +30584,19 @@
                 "additionalProperties": false
               },
               "tab_agent_roles": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "default": true,
+                    "type": "boolean"
+                  }
+                },
+                "required": [
+                  "enabled"
+                ],
+                "additionalProperties": false
+              },
+              "shell_safety": {
                 "type": "object",
                 "properties": {
                   "enabled": {

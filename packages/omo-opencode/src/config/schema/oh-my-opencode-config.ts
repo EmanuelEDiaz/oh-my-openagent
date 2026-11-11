@@ -118,6 +118,8 @@ export const OhMyOpenCodeConfigSchema = z.object({
   loop_breaker: LoopBreakerConfigSchema.optional(),
   /** Each tab agent delegates only to its fixed specialist set; outside it, the user is told which agent to switch to (fork roadmap 0.22) */
   tab_agent_roles: z.object({ enabled: z.boolean().default(true) }).optional(),
+  /** Kill only what the agent started; nothing destructive without the user's approval; no destroying after a password failure (fork roadmap 0.21) */
+  shell_safety: z.object({ enabled: z.boolean().default(true) }).optional(),
   resilience: ResilienceConfigSchema.optional(),
   /** One retry budget per task for stalls and loops; spent → paused and the user is told (fork roadmap 0.9b) */
   retry_budget: RetryBudgetConfigSchema.optional(),

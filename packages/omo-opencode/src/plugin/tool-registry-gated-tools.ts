@@ -7,6 +7,8 @@ import type { ToolRegistryFactories } from "./tool-registry-factories"
 import { isTaskSystemEnabled } from "../shared"
 import { createProcessTools } from "../tools/process/tools"
 import { createHandoffTools, createResumeTools } from "../tools/resume/tools"
+import { createCredentialTools } from "../tools/credentials/tools"
+import { createCredentialStore } from "../features/credentials/store"
 import { createPluginWebResearch } from "../features/web-research/plugin"
 import { createWebResearchTools } from "../tools/web-research/tools"
 
@@ -55,6 +57,15 @@ export function createProcessToolsRecord(args: {
   readonly managers: Pick<Managers, "processManager">
 }): Record<string, ToolDefinition> {
   return args.managers.processManager ? createProcessTools(args.managers.processManager) : {}
+}
+
+/** `credential`: saved test passwords (fork roadmap 0.21); off with the shell safety guard (user config only). */
+export function createCredentialToolsRecord(args: {
+  readonly pluginConfig: OhMyOpenCodeConfig
+  readonly directory: string
+}): Record<string, ToolDefinition> {
+  const off = args.pluginConfig.shell_safety?.enabled === false || (args.pluginConfig.disabled_hooks ?? []).includes("shell-safety-guard")
+  return off ? {} : createCredentialTools(createCredentialStore(args.directory))
 }
 
 export function createResumeToolsRecord(args: {

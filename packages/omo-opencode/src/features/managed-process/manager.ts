@@ -297,6 +297,11 @@ export function createProcessManager(deps: ProcessManagerDeps) {
       return processes.get(id)?.tail.slice(-lines) ?? []
     },
 
+    /** PIDs of every live process the agent started (each leads its own process group on POSIX). */
+    runningPids(): number[] {
+      return [...processes.values()].flatMap(({ record }) => (record.status === "running" && record.pid !== undefined ? [record.pid] : []))
+    },
+
     list(sessionID: string): ProcessRecord[] {
       return [...processes.values()].map((internal) => internal.record).filter((record) => record.sessionID === sessionID)
     },
