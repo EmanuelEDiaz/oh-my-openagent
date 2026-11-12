@@ -364,6 +364,37 @@ describe("createTeamRun", () => {
     expect(await pathExists(path.resolve(baseDir, "./worktrees/member-1"))).toBe(false)
   })
 
+  // Fork roadmap 0.28 (user decision 12-11-2026): Sisyphus may not merge (H56), so its members share the folder.
+  test("#given worktree members and a Sisyphus lead #then creation is refused before anything is created", async () => {
+    // given
+    const baseDir = await mkdtemp(path.join(tmpdir(), "team-runtime-worktree-sisyphus-"))
+    temporaryDirectories.push(baseDir)
+    await initGitRepo(baseDir)
+    const { manager, launchMock } = createManager(baseDir, async () => ({ id: "task-1", sessionId: "session-1", status: "running" } as BackgroundTask))
+
+    // when
+    const attempt = createTeamRun(createSpec(1, true), "lead-session", createContext(baseDir, manager), createConfig(baseDir), manager, undefined, { callerAgentTypeId: "sisyphus" })
+
+    // then
+    await expect(attempt).rejects.toThrow("share the project folder")
+    expect(await pathExists(path.resolve(baseDir, "./worktrees/member-1"))).toBe(false)
+    expect(launchMock).not.toHaveBeenCalled()
+  })
+
+  test("#given a Sisyphus lead #then each member session is registered with its lead agent", async () => {
+    // given
+    const baseDir = await mkdtemp(path.join(tmpdir(), "team-runtime-lead-agent-"))
+    temporaryDirectories.push(baseDir)
+    const { manager } = createManager(baseDir, async () => ({ id: "task-1", sessionId: "session-1", status: "running" } as BackgroundTask))
+
+    // when
+    // member-1 is the lead (it reuses the caller's session); member-2 is a spawned member.
+    await createTeamRun(createSpec(2, false), "lead-session", createContext(baseDir, manager), createConfig(baseDir), manager, undefined, { callerAgentTypeId: "sisyphus" })
+
+    // then
+    expect(lookupTeamSession("session-1")?.leadAgent).toBe("sisyphus")
+  })
+
   test("omits cwd when the member has no worktree", async () => {
     // given
     const baseDir = await mkdtemp(path.join(tmpdir(), "team-runtime-no-worktree-cwd-"))

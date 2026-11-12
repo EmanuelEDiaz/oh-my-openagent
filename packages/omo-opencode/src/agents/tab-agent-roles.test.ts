@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "bun:test"
 
-import { isAllowedForTabAgent, TAB_AGENT_SPECIALISTS, tabAgentDelegationError, tabAgentGitError } from "./tab-agent-roles"
+import { isAllowedForTabAgent, TAB_AGENT_SPECIALISTS, tabAgentDelegationError, tabAgentGitError, teamMemberGitError } from "./tab-agent-roles"
 
 describe("fixed specialist sets per tab agent (roadmap 0.22)", () => {
   test("a specialist inside the agent's set is allowed, by config key or display name", () => {
@@ -82,5 +82,32 @@ describe("git commit and push stay with Atlas (roadmap 0.22)", () => {
     [undefined, "git commit -m fix"],
   ])("%s may run: %s", (agent, command) => {
     expect(tabAgentGitError(agent, command)).toBeUndefined()
+  })
+})
+
+// Decided by the user on 12-11-2026 (fork roadmap 0.28): in a team led by a tab agent without git-committer, members
+// share the project folder; no worktrees, branches or commits, so nothing lands on the user's branch without Atlas.
+describe("members of a team led by Sisyphus share the folder (roadmap 0.28)", () => {
+  test.each([
+    ["sisyphus", "git worktree add ../wt-roman -b feat/roman"],
+    ["Sisyphus - ultraworker", "git checkout -b feat/duration"],
+    ["sisyphus", "git switch -c feat/x"],
+    ["hephaestus", "git branch feat/new"],
+    ["sisyphus", "git add -A && git commit -m wip"],
+    ["prometheus", "git merge feat/x"],
+  ])("lead %s: member refused: %s", (lead, command) => {
+    expect(teamMemberGitError(lead, command)).toContain("shared folder")
+  })
+
+  test.each([
+    ["sisyphus", "git status && git diff"],
+    ["sisyphus", "git add src/roman.ts"],
+    ["sisyphus", "git branch --show-current"],
+    ["sisyphus", "git worktree list"],
+    ["atlas", "git worktree add ../wt -b feat/x"],
+    ["atlas", "git commit -m done"],
+    [undefined, "git commit -m done"],
+  ])("lead %s: member may run: %s", (lead, command) => {
+    expect(teamMemberGitError(lead, command)).toBeUndefined()
   })
 })

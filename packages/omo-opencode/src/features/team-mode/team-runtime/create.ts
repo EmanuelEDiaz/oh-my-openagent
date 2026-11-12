@@ -20,6 +20,7 @@ import { sweepStaleTeamSessions } from "../team-layout-tmux/sweep-stale-team-ses
 import { registerTeamRunForSessionCleanup } from "./session-team-run-registry"
 import { assertNoUnresolvedTeamMembers, hasUnresolvedTeamMembers } from "./unresolved-team-members"
 import { createWorktree, validateWorktreeSpec } from "../team-worktree/manager"
+import { tabAgentLacksCommitter } from "../../../agents/tab-agent-roles"
 
 const SESSION_ID_POLL_MS = 25
 
@@ -112,9 +113,13 @@ function buildMemberPrompt(
   teamRunId: string,
   config: TeamModeConfig,
   worktreePath?: string,
+  sharedFolderOnly = false,
 ): string {
   const promptLines = [`Team: ${spec.name}`, `TeamRunId: ${teamRunId}`, `Member: ${member.name}`]
   if (worktreePath) promptLines.push(`Worktree: ${worktreePath}`)
+  if (sharedFolderOnly) {
+    promptLines.push("Work directly in the shared project folder, only on the files of your part. Do not create git worktrees or branches and do not commit: leave your changes uncommitted and report back; the commit goes to Atlas.")
+  }
   if (member.prompt) promptLines.push(member.prompt)
   promptLines.push(buildTeammateCommunicationAddendum(config))
   return promptLines.join("\n")
@@ -145,6 +150,12 @@ export async function createTeamRun(
 ): Promise<RuntimeState> {
   const existingRuntime = await findExistingRuntime(spec, leadSessionId, config)
   if (existingRuntime) return existingRuntime
+  // The lead cannot merge member branches (fork incident H56), so its members share the folder (fork roadmap 0.28).
+  const leadAgent = options?.callerAgentTypeId
+  const sharedFolderOnly = tabAgentLacksCommitter(leadAgent)
+  if (sharedFolderOnly && spec.members.some((member) => member.worktreePath)) {
+    throw new Error(`team_create denied: members of a team led by ${leadAgent} share the project folder, so worktreePath is not allowed (the lead cannot merge their branches; fork roadmap 0.28). Remove worktreePath, or ask the user to switch to Atlas (Tab) for a worktree team.`)
+  }
 
   const activeTeams = await listActiveTeams(config)
   const activeRunIds = new Set(activeTeams.map((t) => t.teamRunId))
@@ -207,7 +218,7 @@ export async function createTeamRun(
           const resolvedMember = await resolveMember(member, ctx, categoryExamples, spec.leadAgentId)
           const task = await bgMgr.launch({
             description: `Create team member ${spec.name}/${member.name}`,
-            prompt: buildMemberPrompt(spec, member, runtimeState.teamRunId, config, resource.worktreePath),
+            prompt: buildMemberPrompt(spec, member, runtimeState.teamRunId, config, resource.worktreePath, sharedFolderOnly),
             agent: resolvedMember.agentToUse,
             parentSessionId: leadSessionId,
             parentMessageId: options?.parentMessageID ?? `team-create:${runtimeState.teamRunId}:${member.name}`,
@@ -224,6 +235,7 @@ export async function createTeamRun(
                 teamRunId: runtimeState.teamRunId,
                 memberName: member.name,
                 role: member.name === spec.leadAgentId ? "lead" : "member",
+                ...(leadAgent ? { leadAgent } : {}),
               })
               runtimeState = await updateMemberInRuntimeState(runtimeState.teamRunId, member.name, (currentMember) => ({
                 ...currentMember,
@@ -238,6 +250,7 @@ export async function createTeamRun(
             teamRunId: runtimeState.teamRunId,
             memberName: member.name,
             role: member.name === spec.leadAgentId ? "lead" : "member",
+            ...(leadAgent ? { leadAgent } : {}),
           })
           const persistedModel = resolvedMember.model
             ? {

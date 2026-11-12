@@ -77,3 +77,26 @@ export function tabAgentGitError(agent: string | undefined, command: string): st
   return `${label} cannot run git commands that write or publish commits (commit, merge, rebase, cherry-pick, revert, am, pull, push): commits belong to Atlas (git-committer), outside this agent's role (fork roadmap 0.22). `
     + "Finish your own part of the request, then stop and tell the user to switch to Atlas (Tab) for the commit; do not work around this refusal."
 }
+
+/** True for a tab agent whose fixed set has no git-committer (Sisyphus, Hephaestus, Prometheus): Atlas commits for it. */
+export function tabAgentLacksCommitter(agent: string | undefined): boolean {
+  return Boolean(agent) && isTabAgent(agent) && !isAllowedForTabAgent(agent as string, COMMITTER)
+}
+
+// A new worktree, or a new branch by checkout/switch/branch (listing flags such as `--show-current` stay allowed).
+const GIT_BRANCHING = /^(\w+=\S*\s+)*git\s+(-C\s+\S+\s+|-c\s+\S+\s+)*(worktree\s+add\b|checkout\s+(-[bB])\b|switch\s+(-[cC]|--create)\b|branch\s+(?!-)[\w./-]+)/
+
+/**
+ * Undefined when a team member may run this shell command; otherwise its refusal. In a team led by a tab agent without
+ * git-committer, members share the project folder: no worktrees, branches or commits, so nothing reaches the user's
+ * branch without Atlas (user decision 12-11-2026, fork roadmap 0.28; the lead cannot merge branches, H56).
+ */
+export function teamMemberGitError(leadAgent: string | undefined, command: string): string | undefined {
+  if (!tabAgentLacksCommitter(leadAgent)) return undefined
+  const parts = command.split(/&&|\|\||;|\n/).map((part) => part.trim())
+  const blocked = parts.some((part) => GIT_BRANCHING.test(part) || (GIT_WRITE.test(part) && !GIT_STOP.test(part)))
+  if (!blocked) return undefined
+  const label = TAB_AGENT_LABELS[getAgentConfigKey(leadAgent as string)] ?? leadAgent
+  return `Members of a team led by ${label} work in the shared folder on their own files: no git worktrees, new branches or commits (fork roadmap 0.28). `
+    + "Leave your changes uncommitted and report back to the team lead; the commit is handed to Atlas (Tab). Do not work around this refusal."
+}

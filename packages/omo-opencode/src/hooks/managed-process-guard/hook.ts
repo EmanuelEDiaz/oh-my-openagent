@@ -1,6 +1,7 @@
 import type { Hooks } from "@opencode-ai/plugin"
 
-import { tabAgentGitError } from "../../agents/tab-agent-roles"
+import { tabAgentGitError, teamMemberGitError } from "../../agents/tab-agent-roles"
+import { lookupTeamSession } from "../../features/team-mode/team-session-registry"
 import { getSessionAgent } from "../../features/claude-code-session-state"
 import { log } from "../../shared/logger"
 import { classifyCommand, classifyScriptText } from "./classify"
@@ -28,6 +29,13 @@ ${scripts}`) : undefined
       if (roleError) {
         log("[managed-process-guard] blocked", { sessionID: input.sessionID, kind: "tab-agent-git", command })
         throw new Error(roleError)
+      }
+      // Members of a team led by a tab agent without git-committer share the folder (fork roadmap 0.28).
+      const team = options.tabAgentRoles ? lookupTeamSession(input.sessionID) : undefined
+      const memberError = team?.role === "member" ? teamMemberGitError(team.leadAgent, `${command}\n${scripts}`) : undefined
+      if (memberError) {
+        log("[managed-process-guard] blocked", { sessionID: input.sessionID, kind: "team-member-git", command })
+        throw new Error(memberError)
       }
       const direct = classifyCommand(command)
       const verdict = direct.block ? direct : classifyScriptText(scripts, command)

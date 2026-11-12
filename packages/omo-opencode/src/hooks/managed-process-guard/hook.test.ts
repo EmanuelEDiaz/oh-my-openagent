@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 
 import { _resetForTesting, setSessionAgent } from "../../features/claude-code-session-state"
+import { clearTeamSessionRegistry, registerTeamSession } from "../../features/team-mode/team-session-registry"
 import { createManagedProcessGuardHook } from "./hook"
 
 const run = (enforce: boolean, tool: string, command: string) =>
@@ -84,5 +85,31 @@ describe("a tab agent's commit cannot move into a script either (fork 0.22, H50)
     await expect(hook["tool.execute.before"]!({ tool: "bash", sessionID: "s", callID: "c" } as never, { args: { command: "bash c.sh" } } as never)).rejects.toThrow("switch to Atlas (Tab)")
     _resetForTesting()
     rmSync(dir, { recursive: true, force: true })
+  })
+})
+
+describe("members of a Sisyphus-led team stay in the shared folder (fork 0.28)", () => {
+  const runMember = (leadAgent: string, tabAgentRoles: boolean, command: string) => {
+    _resetForTesting()
+    clearTeamSessionRegistry()
+    setSessionAgent("m", "Sisyphus-Junior")
+    registerTeamSession("m", { teamRunId: "t1", memberName: "roman-dev", role: "member", leadAgent })
+    return createManagedProcessGuardHook({ enforceLongRunning: true, tabAgentRoles })["tool.execute.before"]!(
+      { tool: "bash", sessionID: "m", callID: "c" } as never,
+      { args: { command } } as never,
+    )
+  }
+
+  test("a member of Sisyphus's team is refused a worktree and a commit", async () => {
+    await expect(runMember("sisyphus", true, "git worktree add ../wt-roman -b feat/roman")).rejects.toThrow("shared folder")
+    await expect(runMember("sisyphus", true, "git commit -m wip")).rejects.toThrow("shared folder")
+    clearTeamSessionRegistry()
+  })
+
+  test("a member of Atlas's team may, and so may Sisyphus's with tab_agent_roles off", async () => {
+    await expect(runMember("atlas", true, "git worktree add ../wt -b feat/x")).resolves.toBeUndefined()
+    await expect(runMember("sisyphus", false, "git commit -m wip")).resolves.toBeUndefined()
+    clearTeamSessionRegistry()
+    _resetForTesting()
   })
 })

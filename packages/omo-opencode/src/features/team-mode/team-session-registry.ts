@@ -4,6 +4,8 @@ export type TeamSessionEntry = {
   teamRunId: string
   memberName: string
   role: TeamSessionRole
+  /** Agent type of the session that created the team (fork roadmap 0.28: members of a Sisyphus team share the folder). */
+  leadAgent?: string
 }
 
 const registry = new Map<string, TeamSessionEntry>()
