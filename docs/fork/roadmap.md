@@ -64,12 +64,20 @@ Una sola estructura que se quede con **lo mejor** de oh-my-openagent y de tu bib
 rama propia → test RED → implementación → tests → QA real en OpenCode aislado → evidencia local →
 merge --no-ff a mis-mejoras → actualizar este roadmap`.
 
+*Por tandas (usuario, 11-11-2026, "casi no se avanza por día"):* se programan **3-5 ítems seguidos**, cada uno con sus
+tests, una QA sin modelo y su propio interruptor; después **una prueba real por tanda** en el proyecto real (inventario,
+luego codegenerator) con todo encendido; cada fallo se cierra con su test, y para encontrar al culpable se apagan los
+interruptores de uno en uno. El banco ×3 encendido/apagado queda solo para ítems que cambian el comportamiento de los
+agentes. Las pruebas con modelo empiezan solo cuando el usuario lo dice (no automáticas a las 20:20). Descartado:
+"programar todo y probar al final" (un fallo tardío entre muchos cambios no se puede atribuir; la QA de Team Mode
+destapó H56, un hueco de 0.22 que solo se veía con las dos encendidas).
+
 ## Reglas transversales del usuario (se aplican a todos los pasos)
 1. **Sin pendientes:** ningún paso se cierra con cosas a medias; se terminan o se pregunta.
 2. **Cada elección del usuario va al plan y al roadmap**; lo descartado queda con su motivo.
 3. **Criticar las ideas antes de integrarlas:** qué está bien, dónde falla y por qué, versión mejorada; o "medir
    primero".
-4. **Medir la eficacia de todo** (no basta con que funcione): cada paso tiene su medición en el banco y se reporta, **incluido el consumo de contexto por agente y tarea** (0.13).
+4. **Medir la eficacia de todo** (no basta con que funcione; desde el 11-11-2026, por tanda, ver arriba): cada paso tiene su medición en el banco y se reporta, **incluido el consumo de contexto por agente y tarea** (0.13).
 5. **Integración del sistema entero:** la QA de cada paso prueba cómo convive con lo ya hecho; 5.2 hace la matriz
    completa.
 6. **Arquitectura:** solo los agentes de tab orquestan; los de "@" son atómicos y nunca delegan; cada "@" tiene su
@@ -360,6 +368,7 @@ Orden por impacto (los que alimentan a todos, luego los "porteros", luego los qu
 - 03-11-2026 — **H53** (rama `fix/disposed-instance-quiet`): una instancia cerrada del plugin ya no vuelve a abrir su carpeta (el cliente queda cortado tras `dispose`; se liberan ruta viva e índice de conocimiento); el banco reinicia el servidor si pasa de 900 MB. Plan `docs/fork/plans/disposed-instance-quiet.md`, evidencia `.omo/evidence/20261103-disposed-instance-quiet/`. Fusionado a petición del usuario.
 - 03-11-2026 — **H54** (rama `fix/bench-scope-memory`): el banco vigila la memoria de todo su grupo (servidor y ayudantes) frente al tope de `omo-run.sh`, reinicia antes de llegar y registra un desglose por tarea. Evidencia `.omo/evidence/20261103-bench-scope-memory/`. Fusionado a petición del usuario.
 - 09-11-2026 — **H55** (rama `fix/bench-keep-resume-logs`): cada vuelta de una medición guarda sus logs en su propia carpeta; reanudar ya no borra los de la vuelta anterior. Evidencia `.omo/evidence/20261109-bench-keep-resume-logs/`. Fusionado a petición del usuario.
+- 11-11-2026 — **H57** (rama `fix/bench-plugin-load-check`): el banco comprueba que el plugin carga antes de empezar y, si no, para con el motivo. Evidencia `.omo/evidence/20261111-bench-plugin-load-check/`. Fusionado a petición del usuario.
 - 11-11-2026 — **0.22 roles fijos por agente de tab** fusionada a petición del usuario. Medición ×3 (`roles`): Sisyphus no hace el commit y manda a Atlas 9/9 con 0.22 frente a 0/9 sin ella (sin ella: commit por bash 6, por git-committer 3); su trabajo dentro del papel igual (9/9 en ambas); Prometheus (control) 7/9 frente a 6/9, fallos por planificar más de 900 s en las dos. QA real en la TUI: bash bloqueado (`tab-agent-git`), delegación a git-committer rechazada, recomienda cambiar a Atlas. Plan `docs/fork/plans/tab-agent-roles.md`. Pendiente aparte: planificación excesiva de Prometheus en tareas triviales (medir con logs, luego proponer).
 - 11-11-2026 — **0.28** nuevo (usuario): Team Mode encendido por defecto si los datos lo justifican; primero QA real y banco encendido/apagado (decisión del usuario "medir primero y decidir").
 - 30-10-2026 — Banco sobre proyectos reales del usuario (`plans/real-project-bench.md`, código genérico fusionado; proyectos y resultados solo en local). Decisión del usuario ("Hitos"): tras la sesión 2 sobre el inventario se vuelve al orden de trabajo; los proyectos reales (inventario y `codegenerator`) se miden como línea base, al cerrar las 5 ramas pendientes del 11-10 y en la Fase 5, y sus hallazgos del plugin se arreglan en el momento.
