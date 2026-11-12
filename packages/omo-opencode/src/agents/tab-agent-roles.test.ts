@@ -57,6 +57,13 @@ describe("git commit and push stay with Atlas (roadmap 0.22)", () => {
     ["Hephaestus - Deep Agent", "git -C repo push origin main"],
     ["prometheus", "git status; git push"],
     ["sisyphus", "GIT_EDITOR=true git commit --amend"],
+    // Fork incident H56: these write commits to the branch too; Team Mode QA saw Sisyphus join the members' branches.
+    ["Sisyphus - ultraworker", "git merge --no-ff feat/roman -m merge"],
+    ["sisyphus", "git rebase main"],
+    ["sisyphus", "git cherry-pick abc123"],
+    ["hephaestus", "git revert HEAD"],
+    ["sisyphus", "git am 0001-fix.patch"],
+    ["prometheus", "git pull origin main"],
   ])("%s is refused: %s", (agent, command) => {
     const error = tabAgentGitError(agent, command)
     expect(error).toContain("switch to Atlas (Tab)")
@@ -66,6 +73,10 @@ describe("git commit and push stay with Atlas (roadmap 0.22)", () => {
     ["Atlas - Plan Executor", "git commit -m fix"],
     ["sisyphus", "git status && git diff && git log --oneline -3"],
     ["sisyphus", "echo git commit"],
+    ["sisyphus", "git merge-base main HEAD"],
+    ["sisyphus", "git merge --abort"],
+    ["sisyphus", "git rebase --abort"],
+    ["sisyphus", "git log --merges --oneline"],
     ["git-committer", "git commit -m fix"],
     ["sisyphus-junior", "git commit -m fix"],
     [undefined, "git commit -m fix"],
