@@ -57,3 +57,18 @@ commits; el commit va a Atlas. Los equipos de Atlas conservan worktrees, ramas y
   `team_create` rechaza `worktreePath` con esos agentes.
 - Pruebas en rojo y luego en verde (agents, managed-process-guard, team-mode, plugin: 1.502/1.502), typecheck limpio.
 - QA real pendiente (usa la cuota de modelo que ahora gasta la prueba del inventario en el ASUS).
+
+## Nueva decisión del usuario (12-11-2026, sustituye a la de la carpeta compartida)
+"Team mode debe poder usar worktrees de GitHub; si lo autorizo la primera vez deberían trabajar solos". Crítica dada
+(permiso guardado y revocable; no volver a meter commits en la rama del usuario sin su decisión) y elegido
+**rama de integración + permiso único**:
+1. Los miembros trabajan en sus worktrees, cada uno en su rama, con commits allí.
+2. El jefe (Sisyphus, Hephaestus, Prometheus) une solo las ramas de su equipo en una rama nueva `team/<nombre>` y
+   pasa allí los tests; `git merge` se le permite únicamente estando en esa rama de integración.
+3. Al terminar avisa de que `team/<nombre>` está lista; unirla a la rama del usuario lo hace el usuario o Atlas…
+4. …salvo que el usuario lo haya autorizado una vez: la primera vez se le pregunta y, si acepta, queda guardado en
+   su `~/.omo/omo.jsonc` (p. ej. `team_mode.lead_merges_to_branch: true`, solo capa de usuario, revocable); desde
+   entonces el jefe une `team/<nombre>` él mismo.
+Pendiente de implementar: deshacer la regla de carpeta compartida (commit 0715b2da9) salvo el registro del jefe;
+regla de merge del jefe en el guardián; ajuste protegido + comando para concederlo (modelo: `/omo-models`); pruebas
+en rojo primero y QA real. Trabajo parado a petición del usuario ("espera cierra por ahora el trabajo").
