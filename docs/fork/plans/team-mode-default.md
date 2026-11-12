@@ -46,3 +46,14 @@ el sandbox, a Sisyphus: crea un equipo de dos, uno por utilidad, cada uno en su 
   prueba deja las ramas listas y Sisyphus manda a Atlas a unirlas.
 - Evidencia `.omo/evidence/20261111-team-mode-qa/`.
 - Siguiente: el banco encendido/apagado va en la tanda 1 (decisión del usuario de trabajar por tandas, 11-11).
+
+## Decisión del usuario (12-11-2026): miembros en la carpeta compartida
+Con H56, Sisyphus no puede unir las ramas de los miembros, así que un equipo suyo con worktrees nunca terminaba (la QA
+lo dejó en "cambia a Atlas para unir"). Elegido: **si dirige un agente de tab sin git-committer (Sisyphus, Hephaestus,
+Prometheus), los miembros trabajan en la carpeta compartida**, cada uno en sus archivos, sin worktrees, ramas ni
+commits; el commit va a Atlas. Los equipos de Atlas conservan worktrees, ramas y commits.
+- El registro de sesiones de equipo guarda el agente que dirige; el prompt del miembro lo indica; el guardián rechaza
+  a esos miembros `git worktree add`, ramas nuevas y los comandos que escriben commits (`teamMemberGitError`);
+  `team_create` rechaza `worktreePath` con esos agentes.
+- Pruebas en rojo y luego en verde (agents, managed-process-guard, team-mode, plugin: 1.502/1.502), typecheck limpio.
+- QA real pendiente (usa la cuota de modelo que ahora gasta la prueba del inventario en el ASUS).
