@@ -47,5 +47,12 @@ export function protectGuards(config: OhMyOpenCodeConfig, userConfig: Partial<Oh
     ignored.push("knowledge.evidence_gate")
     next["knowledge"] = { ...config.knowledge, evidence_gate: userGate ?? "block" }
   }
+  // The team lead's merge permission (fork roadmap 0.28) is the user's alone: a project cannot grant it.
+  const userMerge = userConfig.team_mode?.lead_merges_to_branch
+  if (config.team_mode?.lead_merges_to_branch !== undefined && config.team_mode.lead_merges_to_branch !== userMerge) {
+    ignored.push("team_mode.lead_merges_to_branch")
+    const { lead_merges_to_branch: _projectValue, ...teamMode } = config.team_mode
+    next["team_mode"] = userMerge === undefined ? teamMode : { ...teamMode, lead_merges_to_branch: userMerge }
+  }
   return { config: next as OhMyOpenCodeConfig, ignored }
 }

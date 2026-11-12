@@ -2,7 +2,7 @@
 
 import { describe, expect, test } from "bun:test"
 
-import { isAllowedForTabAgent, TAB_AGENT_SPECIALISTS, tabAgentDelegationError, tabAgentGitError, teamMemberGitError } from "./tab-agent-roles"
+import { isAllowedForTabAgent, TAB_AGENT_SPECIALISTS, tabAgentDelegationError, tabAgentGitError, teamLeadGitError, teamMemberGitError } from "./tab-agent-roles"
 
 describe("fixed specialist sets per tab agent (roadmap 0.22)", () => {
   test("a specialist inside the agent's set is allowed, by config key or display name", () => {
@@ -85,29 +85,36 @@ describe("git commit and push stay with Atlas (roadmap 0.22)", () => {
   })
 })
 
-// Decided by the user on 12-11-2026 (fork roadmap 0.28): in a team led by a tab agent without git-committer, members
-// share the project folder; no worktrees, branches or commits, so nothing lands on the user's branch without Atlas.
-describe("members of a team led by Sisyphus share the folder (roadmap 0.28)", () => {
+// Decided by the user on 12-11-2026 (fork roadmap 0.28, "rama de integración + permiso único"): members work on their
+// own branches in worktrees; the lead joins them only in a team/<name> branch, and joins that branch into the user's
+// only with the user's one-time permission (team_mode.lead_merges_to_branch).
+describe("a Sisyphus team lead joins branches in team/<name> (roadmap 0.28)", () => {
   test.each([
-    ["sisyphus", "git worktree add ../wt-roman -b feat/roman"],
-    ["Sisyphus - ultraworker", "git checkout -b feat/duration"],
-    ["sisyphus", "git switch -c feat/x"],
-    ["hephaestus", "git branch feat/new"],
-    ["sisyphus", "git add -A && git commit -m wip"],
-    ["prometheus", "git merge feat/x"],
-  ])("lead %s: member refused: %s", (lead, command) => {
-    expect(teamMemberGitError(lead, command)).toContain("shared folder")
+    ["team/utils", "git merge --no-ff feat/roman -m join", false],
+    ["team/utils", "git add src/roman.ts && git commit -m 'resolve conflict'", false],
+    ["master", "git merge --no-ff team/utils -m done", true],
+    ["master", "git status && git log --oneline -3", false],
+  ])("on %s: allowed: %s (permission %s)", (branch, command, permission) => {
+    expect(teamLeadGitError(branch, command, permission)).toBeUndefined()
   })
 
   test.each([
-    ["sisyphus", "git status && git diff"],
-    ["sisyphus", "git add src/roman.ts"],
-    ["sisyphus", "git branch --show-current"],
-    ["sisyphus", "git worktree list"],
-    ["atlas", "git worktree add ../wt -b feat/x"],
-    ["atlas", "git commit -m done"],
-    [undefined, "git commit -m done"],
-  ])("lead %s: member may run: %s", (lead, command) => {
-    expect(teamMemberGitError(lead, command)).toBeUndefined()
+    ["master", "git merge feat/roman", false, "team/"],
+    ["master", "git merge --no-ff team/utils", false, "/omo-team-merge"],
+    ["master", "git merge feat/roman", true, "team/"],
+    ["master", "git commit -m x", true, "team/"],
+    ["team/utils", "git push origin team/utils", false, "team/"],
+    ["team/utils", "git rebase master", false, "team/"],
+  ])("on %s: refused: %s (permission %s)", (branch, command, permission, hint) => {
+    expect(teamLeadGitError(branch, command, permission)).toContain(hint)
+  })
+})
+
+describe("members of a Sisyphus team commit only in their own worktree (roadmap 0.28)", () => {
+  test("a commit in the project's main folder is refused, in a linked worktree it is not", () => {
+    expect(teamMemberGitError("sisyphus", "git commit -m wip", false)).toContain("worktree")
+    expect(teamMemberGitError("sisyphus", "git commit -m wip", true)).toBeUndefined()
+    expect(teamMemberGitError("sisyphus", "git worktree add ../wt -b feat/x && git status", false)).toBeUndefined()
+    expect(teamMemberGitError("atlas", "git commit -m wip", false)).toBeUndefined()
   })
 })

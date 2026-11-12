@@ -20,6 +20,7 @@ import type { LiveAgentModel } from "./chat-message/live-agent-model"
 import { runUlwExecuteHookIfApplicable } from "./chat-message/ulw-execute-message"
 import { consumeNativeGoalCommandMarker } from "./command-execute-before"
 import { stopContinuation } from "./stop-continuation"
+import { applyTeamMergeCommand, teamMergeChoiceFromPrompt } from "../features/team-mode/team-merge-permission"
 import type {
   ChatMessageHandlerOutput,
   ChatMessageHooks,
@@ -125,6 +126,15 @@ export function createChatMessageHandler(args: {
         hooks,
         sessionID: input.sessionID,
       })
+    }
+
+    // /omo-team-merge on|off: only the user's own message grants or withdraws the team merge permission (fork roadmap 0.28).
+    const teamMergeChoice = teamMergeChoiceFromPrompt(extractPromptText(output.parts))
+    if (teamMergeChoice) {
+      const result = teamMergeChoice === "invalid" ? { ok: false, message: "Usage: /omo-team-merge on | off" } : applyTeamMergeCommand(teamMergeChoice)
+      log("[omo-team-merge] user choice", { sessionID: input.sessionID, choice: teamMergeChoice, ok: result.ok })
+      const textPart = output.parts.find((part) => part.type === "text" && typeof part.text === "string") as { text: string } | undefined
+      if (textPart) textPart.text = `${textPart.text}\n\n[omo-team-merge] ${result.message}`
     }
 
     // "reanuda" / "sigue con lo de antes" works without a command when there is paused work (fork roadmap 0.8c).

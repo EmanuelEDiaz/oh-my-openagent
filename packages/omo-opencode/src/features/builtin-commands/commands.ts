@@ -3,6 +3,7 @@ import { isAgentRegistered } from "../claude-code-session-state"
 import type { BuiltinCommandName, BuiltinCommands } from "./types"
 import { GOAL_TEMPLATE } from "./templates/goal"
 import { STOP_CONTINUATION_TEMPLATE } from "./templates/stop-continuation"
+import { OMO_TEAM_MERGE_TEMPLATE } from "./templates/omo-team-merge"
 import { REFACTOR_TEMPLATE, REFACTOR_TEAM_MODE_ADDENDUM } from "./templates/refactor"
 import { ULW_EXECUTE_TEMPLATE } from "./templates/ulw-execute"
 import { HANDOFF_TEMPLATE } from "./templates/handoff"
@@ -92,6 +93,14 @@ $ARGUMENTS
       template: `<command-instruction>
 ${STOP_CONTINUATION_TEMPLATE}
 </command-instruction>`,
+    },
+    "omo-team-merge": {
+      description: "(builtin) Allow (on) or withdraw (off) team leads merging their verified team/ branch into your branch",
+      template: `<omo-team-merge>$ARGUMENTS</omo-team-merge>
+<command-instruction>
+${OMO_TEAM_MERGE_TEMPLATE}
+</command-instruction>`,
+      argumentHint: "on | off",
     },
     "remove-ai-slops": {
       description: "(builtin) Remove AI-generated code smells from branch changes and critically review the results",

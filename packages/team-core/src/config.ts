@@ -12,6 +12,8 @@ export const TeamModeConfigSchema = z.object({
   message_payload_max_bytes: z.number().int().min(1024).default(32768),
   recipient_unread_max_bytes: z.number().int().min(1024).default(262144),
   mailbox_poll_interval_ms: z.number().int().min(500).default(3000),
+  /** The user's one-time permission for a team lead without git-committer to merge its team/ branch into the user's branch (fork roadmap 0.28; user config only, set with /omo-team-merge). */
+  lead_merges_to_branch: z.boolean().optional(),
 })
 
 export type TeamModeConfig = z.infer<typeof TeamModeConfigSchema>

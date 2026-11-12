@@ -19,4 +19,20 @@ describe("guards switched off only from the user config", () => {
     expect(config.tab_agent_roles?.enabled).toBe(false)
     expect(ignored).toEqual([])
   })
+
+  // Fork roadmap 0.28: the permission for a team lead to merge into the user's branch is the user's alone.
+  test("a project config cannot grant the team lead's merge permission", () => {
+    const merged = { team_mode: { enabled: true, lead_merges_to_branch: true } } as unknown as OhMyOpenCodeConfig
+    const { config, ignored } = protectGuards(merged, { team_mode: { enabled: true } } as Partial<OhMyOpenCodeConfig>)
+    expect(config.team_mode?.lead_merges_to_branch).toBeUndefined()
+    expect(config.team_mode?.enabled).toBe(true)
+    expect(ignored).toContain("team_mode.lead_merges_to_branch")
+  })
+
+  test("the user's own permission is kept", () => {
+    const user = { team_mode: { enabled: true, lead_merges_to_branch: true } } as unknown as Partial<OhMyOpenCodeConfig>
+    const { config, ignored } = protectGuards(user as OhMyOpenCodeConfig, user)
+    expect(config.team_mode?.lead_merges_to_branch).toBe(true)
+    expect(ignored).toEqual([])
+  })
 })

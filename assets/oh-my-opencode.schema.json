@@ -63,6 +63,7 @@
           "refactor",
           "ulw-execute",
           "stop-continuation",
+          "omo-team-merge",
           "omo-resume",
           "remove-ai-slops",
           "hyperplan"
@@ -10049,6 +10050,9 @@
           "type": "integer",
           "minimum": 500,
           "maximum": 9007199254740991
+        },
+        "lead_merges_to_branch": {
+          "type": "boolean"
         }
       },
       "required": [

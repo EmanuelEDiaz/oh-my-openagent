@@ -1,4 +1,7 @@
 import { describe, expect, test } from "bun:test"
+import { mkdtempSync, rmSync } from "node:fs"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
 
 import { _resetForTesting, setSessionAgent } from "../../features/claude-code-session-state"
 import { clearTeamSessionRegistry, registerTeamSession } from "../../features/team-mode/team-session-registry"
@@ -88,27 +91,45 @@ describe("a tab agent's commit cannot move into a script either (fork 0.22, H50)
   })
 })
 
-describe("members of a Sisyphus-led team stay in the shared folder (fork 0.28)", () => {
-  const runMember = (leadAgent: string, tabAgentRoles: boolean, command: string) => {
+describe("Sisyphus team: integration branch for the lead, own worktree for members (fork 0.28)", () => {
+  const git = (cwd: string, ...args: string[]) => Bun.spawnSync(["git", "-c", "user.name=t", "-c", "user.email=t@t", ...args], { cwd })
+  const repo = (): string => {
+    const dir = mkdtempSync(join(tmpdir(), "team-guard-"))
+    git(dir, "init", "-q", "-b", "master")
+    git(dir, "commit", "-q", "--allow-empty", "-m", "init")
+    return dir
+  }
+  const run = (session: string, role: "lead" | "member", workdir: string, command: string, leadMergesToBranch = false) => {
     _resetForTesting()
     clearTeamSessionRegistry()
-    setSessionAgent("m", "Sisyphus-Junior")
-    registerTeamSession("m", { teamRunId: "t1", memberName: "roman-dev", role: "member", leadAgent })
-    return createManagedProcessGuardHook({ enforceLongRunning: true, tabAgentRoles })["tool.execute.before"]!(
-      { tool: "bash", sessionID: "m", callID: "c" } as never,
-      { args: { command } } as never,
+    setSessionAgent(session, role === "lead" ? "Sisyphus - ultraworker" : "Sisyphus-Junior")
+    registerTeamSession(session, { teamRunId: "t1", memberName: role === "lead" ? "lead" : "roman-dev", role, leadAgent: "sisyphus" })
+    return createManagedProcessGuardHook({ enforceLongRunning: true, tabAgentRoles: true, leadMergesToBranch: () => leadMergesToBranch })["tool.execute.before"]!(
+      { tool: "bash", sessionID: session, callID: "c" } as never,
+      { args: { command, workdir } } as never,
     )
   }
 
-  test("a member of Sisyphus's team is refused a worktree and a commit", async () => {
-    await expect(runMember("sisyphus", true, "git worktree add ../wt-roman -b feat/roman")).rejects.toThrow("shared folder")
-    await expect(runMember("sisyphus", true, "git commit -m wip")).rejects.toThrow("shared folder")
+  test("the lead merges in team/<name>, and joins team/<name> into the user's branch only with permission", async () => {
+    const dir = repo()
+    await expect(run("l", "lead", dir, "git merge feat/roman")).rejects.toThrow("team/")
+    await expect(run("l", "lead", dir, "git merge --no-ff team/utils -m done")).rejects.toThrow("/omo-team-merge")
+    await expect(run("l", "lead", dir, "git merge --no-ff team/utils -m done", true)).resolves.toBeUndefined()
+    git(dir, "switch", "-q", "-c", "team/utils")
+    await expect(run("l", "lead", dir, "git merge --no-ff feat/roman -m join")).resolves.toBeUndefined()
+    rmSync(dir, { recursive: true, force: true })
     clearTeamSessionRegistry()
   })
 
-  test("a member of Atlas's team may, and so may Sisyphus's with tab_agent_roles off", async () => {
-    await expect(runMember("atlas", true, "git worktree add ../wt -b feat/x")).resolves.toBeUndefined()
-    await expect(runMember("sisyphus", false, "git commit -m wip")).resolves.toBeUndefined()
+  test("a member commits in its own worktree, not in the main folder", async () => {
+    const dir = repo()
+    const worktree = `${dir}-wt`
+    git(dir, "worktree", "add", "-q", worktree, "-b", "feat/roman")
+    await expect(run("m", "member", dir, "git commit -m wip")).rejects.toThrow("worktree")
+    await expect(run("m", "member", worktree, "git commit -m wip")).resolves.toBeUndefined()
+    await expect(run("m", "member", dir, `cd ${worktree} && git commit -m wip`)).resolves.toBeUndefined()
+    rmSync(dir, { recursive: true, force: true })
+    rmSync(worktree, { recursive: true, force: true })
     clearTeamSessionRegistry()
     _resetForTesting()
   })

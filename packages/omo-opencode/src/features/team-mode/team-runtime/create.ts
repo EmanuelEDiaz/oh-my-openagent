@@ -113,12 +113,12 @@ function buildMemberPrompt(
   teamRunId: string,
   config: TeamModeConfig,
   worktreePath?: string,
-  sharedFolderOnly = false,
+  integrationBranchTeam = false,
 ): string {
   const promptLines = [`Team: ${spec.name}`, `TeamRunId: ${teamRunId}`, `Member: ${member.name}`]
   if (worktreePath) promptLines.push(`Worktree: ${worktreePath}`)
-  if (sharedFolderOnly) {
-    promptLines.push("Work directly in the shared project folder, only on the files of your part. Do not create git worktrees or branches and do not commit: leave your changes uncommitted and report back; the commit goes to Atlas.")
+  if (integrationBranchTeam) {
+    promptLines.push(`Work in your own git worktree on your own branch (git worktree add ../<name> -b <branch>) and commit only there, never in the project's main folder; do not push. Report your branch to the lead, who joins the team's branches in team/${spec.name}.`)
   }
   if (member.prompt) promptLines.push(member.prompt)
   promptLines.push(buildTeammateCommunicationAddendum(config))
@@ -150,12 +150,9 @@ export async function createTeamRun(
 ): Promise<RuntimeState> {
   const existingRuntime = await findExistingRuntime(spec, leadSessionId, config)
   if (existingRuntime) return existingRuntime
-  // The lead cannot merge member branches (fork incident H56), so its members share the folder (fork roadmap 0.28).
+  // A lead without git-committer joins its members' branches in team/<name> (fork roadmap 0.28): its members get told so.
   const leadAgent = options?.callerAgentTypeId
-  const sharedFolderOnly = tabAgentLacksCommitter(leadAgent)
-  if (sharedFolderOnly && spec.members.some((member) => member.worktreePath)) {
-    throw new Error(`team_create denied: members of a team led by ${leadAgent} share the project folder, so worktreePath is not allowed (the lead cannot merge their branches; fork roadmap 0.28). Remove worktreePath, or ask the user to switch to Atlas (Tab) for a worktree team.`)
-  }
+  const integrationBranchTeam = tabAgentLacksCommitter(leadAgent)
 
   const activeTeams = await listActiveTeams(config)
   const activeRunIds = new Set(activeTeams.map((t) => t.teamRunId))
@@ -166,12 +163,17 @@ export async function createTeamRun(
   const reusesCallerLeadSession = shouldReuseCallerLeadSession(spec, options?.callerAgentTypeId)
   let runtimeState = await createRuntimeState(spec, leadSessionId, await resolveSpecSource(spec, ctx, config), config)
   registerTeamRunForSessionCleanup(runtimeState.teamRunId)
+  // The guard recognises the lead by its session (fork roadmap 0.28), whether or not the spec names a lead member.
+  if (leadAgent) {
+    registerTeamSession(leadSessionId, { teamRunId: runtimeState.teamRunId, memberName: spec.leadAgentId ?? "lead", role: "lead", leadAgent })
+  }
   if (reusesCallerLeadSession && spec.leadAgentId) {
     const callerLeadSubagentType = options?.callerAgentTypeId
     registerTeamSession(leadSessionId, {
       teamRunId: runtimeState.teamRunId,
       memberName: spec.leadAgentId,
       role: "lead",
+      ...(leadAgent ? { leadAgent } : {}),
     })
     runtimeState = await updateMemberInRuntimeState(runtimeState.teamRunId, spec.leadAgentId, (member) => ({
       ...member,
@@ -218,7 +220,7 @@ export async function createTeamRun(
           const resolvedMember = await resolveMember(member, ctx, categoryExamples, spec.leadAgentId)
           const task = await bgMgr.launch({
             description: `Create team member ${spec.name}/${member.name}`,
-            prompt: buildMemberPrompt(spec, member, runtimeState.teamRunId, config, resource.worktreePath, sharedFolderOnly),
+            prompt: buildMemberPrompt(spec, member, runtimeState.teamRunId, config, resource.worktreePath, integrationBranchTeam),
             agent: resolvedMember.agentToUse,
             parentSessionId: leadSessionId,
             parentMessageId: options?.parentMessageID ?? `team-create:${runtimeState.teamRunId}:${member.name}`,

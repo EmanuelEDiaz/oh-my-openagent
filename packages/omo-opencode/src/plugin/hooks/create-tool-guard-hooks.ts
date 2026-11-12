@@ -39,6 +39,7 @@ import { createDecisionInjectorHook } from "../../hooks/decision-injector"
 import { createEvidenceGateHook } from "../../hooks/evidence-gate"
 import { createCitationCheckHook } from "../../hooks/citation-check"
 import { createPluginToolNameRepair } from "../../features/tool-name-repair/plugin"
+import { leadMergesToBranch, seedTeamMergePermission } from "../../features/team-mode/team-merge-permission"
 
 export type ToolGuardHooks = {
   commentChecker: ReturnType<typeof createCommentCheckerHooks> | null
@@ -154,10 +155,13 @@ export function createToolGuardHooks(args: {
     : null
 
   // Long-running commands must use process_start; self-destructive kills are refused (fork roadmap 0.8b).
+  // The user's one-time team merge permission (fork roadmap 0.28): seeded from their config, changed by /omo-team-merge.
+  seedTeamMergePermission(pluginConfig.team_mode?.lead_merges_to_branch)
   const managedProcessGuard = isHookEnabled("managed-process-guard") && pluginConfig.processes?.enabled !== false
     ? safeHook("managed-process-guard", () => createManagedProcessGuardHook({
       enforceLongRunning: pluginConfig.processes?.enforce !== false,
       tabAgentRoles: pluginConfig.tab_agent_roles?.enabled ?? true,
+      leadMergesToBranch,
       directory: ctx.directory,
     }))
     : null

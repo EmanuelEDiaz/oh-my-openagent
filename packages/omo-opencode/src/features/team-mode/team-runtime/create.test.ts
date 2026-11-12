@@ -364,8 +364,8 @@ describe("createTeamRun", () => {
     expect(await pathExists(path.resolve(baseDir, "./worktrees/member-1"))).toBe(false)
   })
 
-  // Fork roadmap 0.28 (user decision 12-11-2026): Sisyphus may not merge (H56), so its members share the folder.
-  test("#given worktree members and a Sisyphus lead #then creation is refused before anything is created", async () => {
+  // Fork roadmap 0.28 (user decision 12-11-2026, integration branch): Sisyphus teams keep worktrees.
+  test("#given worktree members and a Sisyphus lead #then the worktrees are created as usual", async () => {
     // given
     const baseDir = await mkdtemp(path.join(tmpdir(), "team-runtime-worktree-sisyphus-"))
     temporaryDirectories.push(baseDir)
@@ -373,12 +373,24 @@ describe("createTeamRun", () => {
     const { manager, launchMock } = createManager(baseDir, async () => ({ id: "task-1", sessionId: "session-1", status: "running" } as BackgroundTask))
 
     // when
-    const attempt = createTeamRun(createSpec(1, true), "lead-session", createContext(baseDir, manager), createConfig(baseDir), manager, undefined, { callerAgentTypeId: "sisyphus" })
+    await createTeamRun(createSpec(2, true), "lead-session", createContext(baseDir, manager), createConfig(baseDir), manager, undefined, { callerAgentTypeId: "sisyphus" })
 
     // then
-    await expect(attempt).rejects.toThrow("share the project folder")
-    expect(await pathExists(path.resolve(baseDir, "./worktrees/member-1"))).toBe(false)
-    expect(launchMock).not.toHaveBeenCalled()
+    expect(await pathExists(path.resolve(baseDir, "./worktrees/member-2"))).toBe(true)
+    expect(launchMock).toHaveBeenCalled()
+  })
+
+  test("#given a Sisyphus lead #then its own session is registered as the team lead", async () => {
+    // given
+    const baseDir = await mkdtemp(path.join(tmpdir(), "team-runtime-lead-registered-"))
+    temporaryDirectories.push(baseDir)
+    const { manager } = createManager(baseDir, async () => ({ id: "task-1", sessionId: "session-1", status: "running" } as BackgroundTask))
+
+    // when
+    await createTeamRun(createSpec(2, false), "lead-session", createContext(baseDir, manager), createConfig(baseDir), manager, undefined, { callerAgentTypeId: "sisyphus" })
+
+    // then
+    expect(lookupTeamSession("lead-session")).toMatchObject({ role: "lead", leadAgent: "sisyphus" })
   })
 
   test("#given a Sisyphus lead #then each member session is registered with its lead agent", async () => {

@@ -72,3 +72,20 @@ commits; el commit va a Atlas. Los equipos de Atlas conservan worktrees, ramas y
 Pendiente de implementar: deshacer la regla de carpeta compartida (commit 0715b2da9) salvo el registro del jefe;
 regla de merge del jefe en el guardián; ajuste protegido + comando para concederlo (modelo: `/omo-models`); pruebas
 en rojo primero y QA real. Trabajo parado a petición del usuario ("espera cierra por ahora el trabajo").
+
+## Implementado (12-11-2026): rama de integración + permiso único
+- Deshecha la carpeta compartida (0715b2da9); se conserva el registro del agente que dirige el equipo, y ahora la
+  sesión que crea el equipo queda siempre registrada como jefe.
+- Miembros de un equipo de Sisyphus/Hephaestus/Prometheus: su prompt les pide trabajar en su worktree y rama y
+  hacer commit solo ahí; el guardián les rechaza commits en la carpeta principal y push/pull (`teamMemberGitError`,
+  `git-context.ts` mira si el directorio es un worktree enlazado, también tras `cd …` o `git -C …`).
+- Jefe: en `team/<nombre>` puede `merge` y `commit` (resolver conflictos); fuera, solo `merge` de una rama `team/…`
+  y solo con el permiso; push, pull, rebase y lo demás siguen con Atlas (`teamLeadGitError`).
+- Permiso: `team_mode.lead_merges_to_branch` (solo capa de usuario: `guard-protection` ignora el del proyecto),
+  concedido o retirado por el usuario con `/omo-team-merge on|off`, que se aplica al momento y se guarda en
+  `~/.omo/omo.jsonc`; el agente no puede dárselo (la herramienta `skill` solo devuelve el texto de la plantilla).
+- Pruebas en rojo y luego en verde (agents, managed-process-guard, team-mode, plugin, config, builtin-commands,
+  team-core, tests/: 2.007/2.007 tras regenerar los esquemas); QA real del comando con modelo falso: ausente → on →
+  off guardado en el `omo.jsonc` del sandbox y en el log; sesiones reales 557 → 557.
+- Queda: QA real de un equipo completo con modelo (tras la prueba del inventario, por la cuota compartida) y el banco
+  encendido/apagado de 0.28.

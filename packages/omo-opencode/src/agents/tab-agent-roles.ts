@@ -83,20 +83,63 @@ export function tabAgentLacksCommitter(agent: string | undefined): boolean {
   return Boolean(agent) && isTabAgent(agent) && !isAllowedForTabAgent(agent as string, COMMITTER)
 }
 
-// A new worktree, or a new branch by checkout/switch/branch (listing flags such as `--show-current` stay allowed).
-const GIT_BRANCHING = /^(\w+=\S*\s+)*git\s+(-C\s+\S+\s+|-c\s+\S+\s+)*(worktree\s+add\b|checkout\s+(-[bB])\b|switch\s+(-[cC]|--create)\b|branch\s+(?!-)[\w./-]+)/
+const GIT_PREFIX = String.raw`^(\w+=\S*\s+)*git\s+(-C\s+\S+\s+|-c\s+\S+\s+)*`
+const GIT_MERGE = new RegExp(`${GIT_PREFIX}merge(?![\\w-])`)
+const GIT_COMMIT = new RegExp(`${GIT_PREFIX}commit(?![\\w-])`)
+const GIT_PUBLISH = new RegExp(`${GIT_PREFIX}(push|pull)(?![\\w-])`)
+const TEAM_BRANCH = /^team\//
+// Options of `git merge` that take a value, so the value is not mistaken for a branch.
+const MERGE_VALUE_OPTIONS = new Set(["-m", "--message", "-F", "--file", "-s", "--strategy", "-X", "--strategy-option"])
+
+function writingParts(command: string): string[] {
+  return command.split(/&&|\|\||;|\n/).map((part) => part.trim()).filter((part) => GIT_WRITE.test(part) && !GIT_STOP.test(part))
+}
+
+/** Branches a `git merge` command joins (quoted message values and options skipped). */
+function mergedRefs(part: string): string[] {
+  const words = part.replace(/(["'])(?:(?!\1).)*\1/g, "MSG").split(/\s+/)
+  const refs: string[] = []
+  for (let index = words.indexOf("merge") + 1; index > 0 && index < words.length; index++) {
+    const word = words[index] ?? ""
+    if (MERGE_VALUE_OPTIONS.has(word)) index++
+    else if (!word.startsWith("-")) refs.push(word)
+  }
+  return refs
+}
 
 /**
- * Undefined when a team member may run this shell command; otherwise its refusal. In a team led by a tab agent without
- * git-committer, members share the project folder: no worktrees, branches or commits, so nothing reaches the user's
- * branch without Atlas (user decision 12-11-2026, fork roadmap 0.28; the lead cannot merge branches, H56).
+ * Undefined when a team lead without git-committer may run this command; otherwise its refusal (user decision
+ * 12-11-2026, fork roadmap 0.28). In its integration branch `team/<name>` the lead merges its members' branches and
+ * commits conflict fixes; outside it, it may only merge a `team/` branch, and only with the user's one-time permission
+ * (`team_mode.lead_merges_to_branch`). Push, pull, rebase and other commits stay with Atlas.
  */
-export function teamMemberGitError(leadAgent: string | undefined, command: string): string | undefined {
+export function teamLeadGitError(currentBranch: string | undefined, command: string, leadMergesToBranch: boolean): string | undefined {
+  const onTeamBranch = TEAM_BRANCH.test(currentBranch ?? "")
+  for (const part of writingParts(command)) {
+    if (onTeamBranch && (GIT_MERGE.test(part) || GIT_COMMIT.test(part))) continue
+    const refs = GIT_MERGE.test(part) ? mergedRefs(part) : []
+    if (!onTeamBranch && refs.length > 0 && refs.every((ref) => TEAM_BRANCH.test(ref))) {
+      if (leadMergesToBranch) continue
+      return "Joining a team/ branch into the user's branch needs the user's permission (fork roadmap 0.28). Tell the user the team branch is ready and verified: they can merge it, ask Atlas (Tab), "
+        + "or allow you once and for all by typing /omo-team-merge on. Do not work around this refusal."
+    }
+    return "As team lead you join your members' branches only in an integration branch named team/<team name>: create it (git switch -c team/<name>), merge each member branch there and run the tests; "
+      + "push, pull, rebase and other commits stay with Atlas (Tab) (fork roadmap 0.28). Do not work around this refusal."
+  }
+  return undefined
+}
+
+/**
+ * Undefined when a member of a team led by a tab agent without git-committer may run this command; otherwise its
+ * refusal. Members commit on their own branch in their own git worktree, never in the project's main folder (the
+ * user's branch), and never publish (fork roadmap 0.28).
+ */
+export function teamMemberGitError(leadAgent: string | undefined, command: string, inLinkedWorktree: boolean): string | undefined {
   if (!tabAgentLacksCommitter(leadAgent)) return undefined
-  const parts = command.split(/&&|\|\||;|\n/).map((part) => part.trim())
-  const blocked = parts.some((part) => GIT_BRANCHING.test(part) || (GIT_WRITE.test(part) && !GIT_STOP.test(part)))
-  if (!blocked) return undefined
-  const label = TAB_AGENT_LABELS[getAgentConfigKey(leadAgent as string)] ?? leadAgent
-  return `Members of a team led by ${label} work in the shared folder on their own files: no git worktrees, new branches or commits (fork roadmap 0.28). `
-    + "Leave your changes uncommitted and report back to the team lead; the commit is handed to Atlas (Tab). Do not work around this refusal."
+  const parts = writingParts(command)
+  if (parts.length === 0) return undefined
+  if (parts.some((part) => GIT_PUBLISH.test(part))) return "Team members never push or pull; report back to the team lead (fork roadmap 0.28)."
+  if (inLinkedWorktree) return undefined
+  return "Team members commit only in their own git worktree on their own branch (git worktree add ../<name> -b <branch>), never in the project's main folder (fork roadmap 0.28). "
+    + "Move your work to your worktree, commit there and report the branch to the team lead."
 }
