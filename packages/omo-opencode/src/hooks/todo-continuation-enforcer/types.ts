@@ -5,6 +5,8 @@ export interface TodoContinuationEnforcerOptions {
   backgroundManager?: BackgroundManager
   skipAgents?: string[]
   isContinuationStopped?: (sessionID: string) => boolean
+  /** Nudge a tab agent that announced its next step and stopped (fork incident H58; switch: announce-continuation). */
+  announceContinuation?: boolean
 }
 
 export interface TodoContinuationEnforcer {
@@ -23,6 +25,10 @@ export interface Todo {
 }
 
 export interface SessionState {
+  /** Announce-and-stop nudges (fork incident H58): in a row without a tool call since, in the session, and the message count at the last one. */
+  announceNudgeConsecutive?: number
+  announceNudgeTotal?: number
+  announceNudgeAtLength?: number
   countdownTimer?: ReturnType<typeof setTimeout>
   countdownInterval?: ReturnType<typeof setInterval>
   isRecovering?: boolean

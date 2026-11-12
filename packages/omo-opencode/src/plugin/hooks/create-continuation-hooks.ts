@@ -68,6 +68,8 @@ export function createContinuationHooks(args: {
       createTodoContinuationEnforcer(ctx, {
           backgroundManager,
           isContinuationStopped: stopContinuationGuard?.isStopped,
+          // Fork incident H58: nudge a tab agent that announced its next step and stopped.
+          announceContinuation: isHookEnabled("announce-continuation"),
         }))
     : null
 

@@ -15,6 +15,7 @@ import { resolveLatestMessageInfo } from "./resolve-message-info"
 import type { SessionStateStore } from "./session-state"
 import { shouldStopForStagnation } from "./stagnation-detection"
 import { reportWorkStoppedWithClient } from "../../features/resume/work-stopped"
+import { maybeNudgeAnnouncedStep } from "./announce-continuation"
 import { getIncompleteCount } from "./todo"
 import type { MessageWithInfo, ResolvedMessageInfo, Todo } from "./types"
 
@@ -25,6 +26,8 @@ export async function handleSessionIdle(args: {
   backgroundManager?: BackgroundManager
   skipAgents?: string[]
   isContinuationStopped?: (sessionID: string) => boolean
+  /** Nudge a tab agent that announced its next step and stopped (fork incident H58). */
+  announceContinuation?: boolean
 }): Promise<void> {
   const {
     ctx,
@@ -33,6 +36,7 @@ export async function handleSessionIdle(args: {
     backgroundManager,
     skipAgents = DEFAULT_SKIP_AGENTS,
     isContinuationStopped,
+    announceContinuation = false,
   } = args
 
   log(`[${HOOK_NAME}] session.idle`, { sessionID })
@@ -128,6 +132,7 @@ export async function handleSessionIdle(args: {
   if (!todos || todos.length === 0) {
     sessionStateStore.resetContinuationProgress(sessionID)
     log(`[${HOOK_NAME}] No todos`, { sessionID })
+    if (announceContinuation) await maybeNudgeAnnouncedStep({ ctx, sessionID, messages: prefetchedMessages ?? [], state, isContinuationStopped })
     return
   }
 
