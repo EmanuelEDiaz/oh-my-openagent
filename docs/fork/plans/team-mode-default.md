@@ -89,3 +89,7 @@ en rojo primero y QA real. Trabajo parado a petición del usuario ("espera cierr
   off guardado en el `omo.jsonc` del sandbox y en el log; sesiones reales 557 → 557.
 - Queda: QA real de un equipo completo con modelo (tras la prueba del inventario, por la cuota compartida) y el banco
   encendido/apagado de 0.28.
+- 19-11-2026: suite completa en el ASUS (instalación real) frente a la base: los fallos compartidos son contaminación
+  entre pruebas en un solo proceso (pasan archivo por archivo); solo en esta rama, la auditoría de runtime Bun
+  (arreglada: `git-context` usa el adaptador `spawnSync`), el dist compilado antes del arreglo (pasa al recompilar) y la
+  auditoría de `mock.module` (pasa sola). Pendiente: equipo completo con modelo y banco encendido/apagado (cuota).
