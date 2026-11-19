@@ -4,6 +4,8 @@
  */
 import { isAbsolute, resolve } from "node:path"
 
+import { spawnSync } from "../../shared/bun-spawn-shim"
+
 /** The folder a shell command acts in: a leading `cd <dir> &&` or `git -C <dir>`, else the tool's working folder. */
 export function commandDirectory(command: string, baseDir: string): string {
   const unquote = (value: string): string => value.replace(/^(["'])(.*)\1$/, "$2")
@@ -16,8 +18,8 @@ export function commandDirectory(command: string, baseDir: string): string {
 }
 
 function git(dir: string, ...args: string[]): string | undefined {
-  const result = Bun.spawnSync(["git", ...args], { cwd: dir, stdout: "pipe", stderr: "ignore" })
-  return result.exitCode === 0 ? result.stdout.toString().trim() : undefined
+  const result = spawnSync(["git", ...args], { cwd: dir, stdout: "pipe", stderr: "ignore" })
+  return result.exitCode === 0 ? result.stdout?.toString().trim() : undefined
 }
 
 export function currentBranch(dir: string): string | undefined {
