@@ -81,3 +81,8 @@ catalogar. Es el caso que motivó el 0.27 y varias funciones del plugin.
   0.21 ×2) y en la Fase 5 (5.1/5.2). Segundo proyecto real: `codegenerator` (Python) en el primer hito. Cada hallazgo
   del plugin en esas sesiones se arregla en el momento con su test en rojo.
 
+- 19-11-2026, **decisión del usuario sobre la cuota**: con 60 min por tarea, la cuota gratis de Zen (~1 h al día, se
+  renueva hacia las 19:25 hora local) se agotó a mitad de la primera tarea dos días seguidos, sin resultados. Tope de
+  30 min por tarea en la suite del inventario (igual en base y tanda; si no acaba cuenta como fallo de la tarea) y las
+  ejecuciones con modelo se lanzan solo cuando el usuario lo dice, justo tras renovarse la cuota. Las pruebas pesadas
+  van al ASUS siempre que se pueda (esta PC está ocupada con otros agentes).
